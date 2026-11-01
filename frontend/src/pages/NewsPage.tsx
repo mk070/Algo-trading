@@ -45,9 +45,10 @@ export const NewsPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await apiClient.getNews(searchSymbol || undefined, 14);
-      setEvents(data || []);
+      setEvents(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error fetching news:', e);
+      setEvents([]);
     } finally {
       setLoading(false);
     }
@@ -60,11 +61,13 @@ export const NewsPage: React.FC = () => {
         apiClient.getMacroCalendar(),
         apiClient.getCoverageGaps(),
       ]);
-      setSourcesHealth(health || []);
-      setMacroData(macro || null);
-      setCoverageGaps(gaps || []);
+      setSourcesHealth(Array.isArray(health) ? health : []);
+      setMacroData(macro && !macro.detail ? macro : null);
+      setCoverageGaps(Array.isArray(gaps) ? gaps : []);
     } catch (e) {
       console.error('Error fetching source health:', e);
+      setSourcesHealth([]);
+      setCoverageGaps([]);
     }
   };
 
@@ -382,40 +385,46 @@ export const NewsPage: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-800 text-xs">
-              {sourcesHealth.map((src, idx) => (
-                <div key={idx} className="p-4 flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex flex-col gap-1 max-w-md">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-sm">{src.name}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">
-                        {src.market}
-                      </span>
+              {Array.isArray(sourcesHealth) && sourcesHealth.length > 0 ? (
+                sourcesHealth.map((src, idx) => (
+                  <div key={idx} className="p-4 flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex flex-col gap-1 max-w-md">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{src.name}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">
+                          {src.market}
+                        </span>
+                      </div>
+                      <span className="font-mono text-slate-500 text-[11px]">{src.source}</span>
+                      {src.note && <span className="text-slate-400 italic text-[11px]">{src.note}</span>}
                     </div>
-                    <span className="font-mono text-slate-500 text-[11px]">{src.source}</span>
-                    {src.note && <span className="text-slate-400 italic text-[11px]">{src.note}</span>}
+
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <div className="text-right">
+                        <span className="text-slate-500 block text-[10px]">Latency Class:</span>
+                        <span className="font-mono text-slate-300 font-semibold">{src.latency_class}</span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-slate-500 block text-[10px]">Median Latency:</span>
+                        <span className="font-mono text-slate-300 font-semibold">
+                          {src.median_latency_sec ? `${src.median_latency_sec}s` : 'N/A'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className={`px-2.5 py-1 rounded text-xs font-bold border ${getStatusBadge(src.status)}`}>
+                          {src.status}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div className="text-right">
-                      <span className="text-slate-500 block text-[10px]">Latency Class:</span>
-                      <span className="font-mono text-slate-300 font-semibold">{src.latency_class}</span>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-slate-500 block text-[10px]">Median Latency:</span>
-                      <span className="font-mono text-slate-300 font-semibold">
-                        {src.median_latency_sec ? `${src.median_latency_sec}s` : 'N/A'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className={`px-2.5 py-1 rounded text-xs font-bold border ${getStatusBadge(src.status)}`}>
-                        {src.status}
-                      </span>
-                    </div>
-                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No source health records available or backend server is starting up.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

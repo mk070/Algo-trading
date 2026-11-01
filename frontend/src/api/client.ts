@@ -128,24 +128,47 @@ export const apiClient = {
   },
 
   async getNews(symbol?: string, days: number = 14) {
-    const url = symbol ? `${API_BASE}/news?symbol=${symbol}&days=${days}` : `${API_BASE}/news?days=${days}`;
-    const res = await fetch(url);
-    return res.json();
+    try {
+      const url = symbol ? `${API_BASE}/news?symbol=${symbol}&days=${days}` : `${API_BASE}/news?days=${days}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   },
 
   async getNewsSourcesHealth() {
-    const res = await fetch(`${API_BASE}/news/sources/health`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/news/sources/health`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   },
 
   async getMacroCalendar() {
-    const res = await fetch(`${API_BASE}/news/macro`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/news/macro`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
   },
 
   async getCoverageGaps() {
-    const res = await fetch(`${API_BASE}/news/coverage-gaps`);
-    return res.json();
+    try {
+      const res = await fetch(`${API_BASE}/news/coverage-gaps`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
   },
 
   async getSettings() {

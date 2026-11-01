@@ -862,3 +862,4 @@ class CentralBankRssCollector:
                 )
             )
         return items
+
