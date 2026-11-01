@@ -1,0 +1,52 @@
+symbol,name,sector,industry
+RELIANCE,Reliance Industries Ltd,Energy,Oil & Gas Refining & Marketing
+TCS,Tata Consultancy Services Ltd,Information Technology,IT Services & Consulting
+HDFCBANK,HDFC Bank Ltd,Financial Services,Private Commercial Bank
+INFY,Infosys Ltd,Information Technology,IT Services & Consulting
+ICICIBANK,ICICI Bank Ltd,Financial Services,Private Commercial Bank
+BHARTIARTL,Bharti Airtel Ltd,Telecommunication,Telecom - Cellular & Fixed
+ITC,ITC Ltd,Fast Moving Consumer Goods,Cigarettes & Tobacco Products
+SBIN,State Bank of India,Financial Services,Public Commercial Bank
+LT,Larsen & Toubro Ltd,Construction,Civil Construction
+HINDUNILVR,Hindustan Unilever Ltd,Fast Moving Consumer Goods,Diversified FMCG
+BAJFINANCE,Bajaj Finance Ltd,Financial Services,Non Banking Financial Company (NBFC)
+KOTAKBANK,Kotak Mahindra Bank Ltd,Financial Services,Private Commercial Bank
+M&M,Mahindra & Mahindra Ltd,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+MARUTI,Maruti Suzuki India Ltd,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+SUNPHARMA,Sun Pharmaceutical Industries Ltd,Healthcare,Pharmaceuticals
+AXISBANK,Axis Bank Ltd,Financial Services,Private Commercial Bank
+TITAN,Titan Company Ltd,Consumer Durables,Gems Jewellery & Watches
+ASIANPAINT,Asian Paints Ltd,Consumer Durables,Paints
+TATAMOTORS,Tata Motors Ltd,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+ULTRACEMCO,UltraTech Cement Ltd,Construction Materials,Cement & Cement Products
+NTPC,NTPC Ltd,Power,Power Generation
+POWERGRID,Power Grid Corporation of India Ltd,Power,Power Transmission
+BAJAJFINSV,Bajaj Finserv Ltd,Financial Services,Holding Company
+ONGC,Oil & Natural Gas Corporation Ltd,Oil Gas & Consumable Fuels,Oil & Gas Exploration & Production
+ADANIENT,Adani Enterprises Ltd,Metals & Mining,Trading - Minerals
+TATASTEEL,Tata Steel Ltd,Metals & Mining,Iron & Steel
+COALINDIA,Coal India Ltd,Oil Gas & Consumable Fuels,Coal
+JSWSTEEL,JSW Steel Ltd,Metals & Mining,Iron & Steel
+HCLTECH,HCL Technologies Ltd,Information Technology,IT Services & Consulting
+WIPRO,Wipro Ltd,Information Technology,IT Services & Consulting
+DIVISLAB,Divi's Laboratories Ltd,Healthcare,Pharmaceuticals
+DRREDDY,Dr. Reddy's Laboratories Ltd,Healthcare,Pharmaceuticals
+CIPLA,Cipla Ltd,Healthcare,Pharmaceuticals
+APOLLOHOSP,Apollo Hospitals Enterprise Ltd,Healthcare,Hospital
+GRASIM,Grasim Industries Ltd,Construction Materials,Cement & Cement Products
+EICHERMOT,Eicher Motors Ltd,Automobile and Auto Components,2/3 Wheelers
+BPCL,Bharat Petroleum Corporation Ltd,Oil Gas & Consumable Fuels,Refining & Marketing
+BRITANNIA,Britannia Industries Ltd,Fast Moving Consumer Goods,Packaged Foods
+HEROMOTOCO,Hero MotoCorp Ltd,Automobile and Auto Components,2/3 Wheelers
+TECHM,Tech Mahindra Ltd,Information Technology,IT Services & Consulting
+INDUSINDBK,IndusInd Bank Ltd,Financial Services,Private Commercial Bank
+TATACONSUM,Tata Consumer Products Ltd,Fast Moving Consumer Goods,Tea & Coffee
+BAJAJ-AUTO,Bajaj Auto Ltd,Automobile and Auto Components,2/3 Wheelers
+SHREECEM,Shree Cement Ltd,Construction Materials,Cement
+NESTLEIND,Nestle India Ltd,Fast Moving Consumer Goods,Packaged Foods
+HDFCLIFE,HDFC Life Insurance Co Ltd,Financial Services,Life Insurance
+SBILIFE,SBI Life Insurance Co Ltd,Financial Services,Life Insurance
+VEDL,Vedanta Ltd,Metals & Mining,Diversified Metals
+TRENT,Trent Ltd,Consumer Services,Retailing
+BEL,Bharat Electronics Ltd,Capital Goods,Aerospace & Defense
+

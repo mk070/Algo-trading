@@ -1,0 +1,170 @@
+markets:
+  IN:
+    enabled: true
+    currency: INR
+    capital: 17500
+    index_symbol: "^NSEI"
+    universe: ["NIFTY100", "NIFTYMIDCAP150"]
+    min_avg_traded_value: 100000000      # 10 crore INR
+    min_price: 50
+    tick: 0.05
+    data_providers: ["angelone", "yfinance"]   # first available wins; falls back automatically
+    max_open_positions: 2
+    risk_per_trade_pct: 0.5
+    max_portfolio_heat_pct: 2
+    small_account_mode:               # explicit opt-in, higher risk
+      enabled: false
+      risk_per_trade_pct: 1.5
+      max_portfolio_heat_pct: 3
+    slippage_pct: 0.10
+  US:
+    enabled: true
+    currency: USD                          # CONFIRM with owner
+    capital: 17500
+    index_symbol: "^GSPC"
+    universe: ["SP500", "SP400"]
+    min_avg_traded_value: 20000000
+    min_price: 10
+    tick: 0.01
+    data_providers: ["alpaca", "yfinance"]   # alpaca = default real-time candidate
+    max_open_positions: 4
+    risk_per_trade_pct: 0.5
+    max_portfolio_heat_pct: 2
+    slippage_pct: 0.05
+
+risk:                               # fallbacks; per-market values above override
+  risk_per_trade_pct: 0.5
+  max_position_pct: 33
+  max_portfolio_heat_pct: 2
+  max_per_sector: 1
+  corr_threshold: 0.75
+  daily_new_trades_max: 2
+  max_atr_pct: 6.0
+  max_share_price_pct_of_capital: 25
+  max_cost_in_R: 0.25
+
+regime:
+  block_new_entries: true
+  caution_size_mult: 0.5
+
+screen:
+  rs_lookback_days: 126
+  rs_min_rank: 0.70
+  top_n_per_market: 6
+  valid_sessions: 1
+
+pullback:                           # Setup P: EXPERIMENTAL
+  enabled: false                    # no live alerts until validated out-of-sample
+  shadow_mode: true                 # still logs would-be signals + paper results
+  ema_len: 20
+  touch_tolerance: 1.01
+  rsi_len: 14
+  rsi_dip_below: 45
+  swing_low_bars: 7
+  trigger_atr_buffer: 0.1
+  stop_atr_buffer: 0.2
+  min_risk_atr: 1.0
+  max_risk_atr: 3.0
+  min_pullback_from_high55: 0.03
+
+trend_template:
+  sma_fast: 50
+  sma_mid: 150
+  sma_slow: 200
+  sma200_rising_bars: 21
+  min_above_52w_low: 1.30
+  max_below_52w_high: 0.25          # within 25% of 52-week high
+  prefer_below_52w_high_v: 0.15
+  rs_blend: [0.5, 0.5]              # ret63, ret126 weights
+  extension_ret21_max: 0.30
+  max_above_sma50: 1.25
+
+vcp:                                # Setup V
+  enabled: true
+  base_min_bars: 15
+  base_max_bars: 40
+  max_base_depth_pct: 20
+  atr_contraction_ratio: 0.85
+  min_contractions: 2
+  tight_5d_pct: 5
+  volume_dryup_ratio: 0.9
+  pivot_proximity_pct: 3
+  approach_pct: 1.5
+  trigger_atr_buffer: 0.1
+  entry_zone_atr: 0.5
+  stop_bars: 10
+  stop_atr_buffer: 0.2
+  min_risk_atr: 1.0
+  max_risk_atr: 2.5
+  max_stop_pct: 8
+  min_rr_to_resistance: 1.5
+  volume_pace_min: 1.5
+  confirm_timeframe_min: 15
+  require_contraction: true          # false = simple 55-day-high baseline for ablation
+  chase_limit_atr: 1.0
+
+exits:
+  breakeven_at_R: 1.0
+  trail_atr_mult: 3.0
+  partial_at_R: 2.0
+  partial_fraction: 0.5
+  trend_break_sma: 50
+  time_stop_sessions: 15
+  time_stop_min_R: 0.5
+
+news:
+  earnings_block_days: 7
+  earnings_warn_trading_days: 2
+  block_on_red: true
+  unknown_policy: warn              # warn | block : UNKNOWN is never treated as CLEAR
+  dedupe_window_hours: 48
+  max_source_age_min: 60            # a source not refreshed within this window makes coverage UNKNOWN
+  macro_event_caution: true
+  ai_summaries:
+    enabled: false                  # optional, off by default; never creates signals
+    monthly_budget_usd: 0
+
+monitor:
+  mode: websocket                   # websocket | polling (polling = fallback)
+  polling_interval_sec: 30
+  heartbeat_timeout_sec: 30
+  reconnect_backoff_sec: [1, 2, 5, 10, 30]
+  freshness:
+    websocket_tick_max_age_sec: 20
+    rest_quote_max_age_sec: 60
+    persistent_stale_alert_sec: 120
+    clock_skew_warn_sec: 2
+    delayed_feed_policy: informational_only   # delayed feeds never fire trigger alerts
+
+costs:                 # VERIFY against the owner's broker; these are editable presets
+  IN:
+    preset: zerodha                    # owner places orders on Zerodha
+    brokerage: {type: "flat", flat: 0} # Zerodha delivery brokerage is flat 0
+    stt_pct_buy: 0.1
+    stt_pct_sell: 0.1
+    exchange_txn_pct: 0.003
+    sebi_per_crore: 10
+    stamp_buy_pct: 0.015
+    dp_flat_per_scrip_sell: 13.5       # plus GST via gst_pct
+    gst_pct: 18
+  US:
+    commission_per_order: 0
+    regulatory_pct: 0.003
+    fx_spread_pct: 0.5                  # if funding from India; owner-specific
+    fixed_per_trade: 0
+
+tax:
+  enabled: false
+
+portfolio:
+  provider: kite_personal            # read-only
+  sync_interval_min: 5
+  capital_source: manual             # manual | kite_cash
+  swing_capital_cap: 17500
+  auto_track_unmatched_holdings: false
+  import_zerodha_csv: true          # tradebook / P&L / charges report import
+
+budget:
+  monthly_us_market_data_usd: 0
+  monthly_news_data_usd: 0
+

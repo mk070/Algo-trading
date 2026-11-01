@@ -1,0 +1,27 @@
+symbol,name,sector,industry
+AAPL,Apple Inc.,Information Technology,Consumer Electronics
+MSFT,Microsoft Corp.,Information Technology,Systems Software
+NVDA,NVIDIA Corp.,Information Technology,Semiconductors
+AMZN,Amazon.com Inc.,Consumer Discretionary,Broadline Retail
+GOOGL,Alphabet Inc. Cl A,Communication Services,Interactive Media & Services
+META,Meta Platforms Inc.,Communication Services,Interactive Media & Services
+TSLA,Tesla Inc.,Consumer Discretionary,Automobile Manufacturers
+BRK.B,Berkshire Hathaway Inc.,Financials,Multi-Sector Holdings
+JPM,JPMorgan Chase & Co.,Financials,Diversified Banks
+V,Visa Inc.,Financials,Transaction & Payment Processing Services
+UNH,UnitedHealth Group Inc.,Health Care,Managed Healthcare
+XOM,Exxon Mobil Corp.,Energy,Integrated Oil & Gas
+LLY,Eli Lilly and Co.,Health Care,Pharmaceuticals
+JNJ,Johnson & Johnson,Health Care,Pharmaceuticals
+WMT,Walmart Inc.,Consumer Staples,Hypermarkets & Supercenters
+PG,Procter & Gamble Co.,Consumer Staples,Household Products
+MA,Mastercard Inc.,Financials,Transaction & Payment Processing Services
+HD,Home Depot Inc.,Consumer Discretionary,Home Improvement Retail
+CVX,Chevron Corp.,Energy,Integrated Oil & Gas
+COST,Costco Wholesale Corp.,Consumer Staples,Consumer Staples Merchandise
+ABBV,AbbVie Inc.,Health Care,Biotechnology
+AMD,Advanced Micro Devices Inc.,Information Technology,Semiconductors
+CRM,Salesforce Inc.,Information Technology,Application Software
+ORCL,Oracle Corp.,Information Technology,Application Software
+NFLX,Netflix Inc.,Communication Services,Movies & Entertainment
+

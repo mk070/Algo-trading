@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  swing-platform:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: swing-algo-platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_TOKEN=${APP_TOKEN:-demo-token-change-in-prod}
+      - ENV=${ENV:-production}
+      - ANGELONE_API_KEY=${ANGELONE_API_KEY:-}
+      - ANGELONE_CLIENT_CODE=${ANGELONE_CLIENT_CODE:-}
+      - ANGELONE_PIN=${ANGELONE_PIN:-}
+      - ANGELONE_TOTP_SECRET=${ANGELONE_TOTP_SECRET:-}
+      - KITE_API_KEY=${KITE_API_KEY:-}
+      - KITE_API_SECRET=${KITE_API_SECRET:-}
+      - KITE_REDIRECT_URL=${KITE_REDIRECT_URL:-http://127.0.0.1:8000/api/portfolio/kite/callback}
+      - ALPACA_API_KEY=${ALPACA_API_KEY:-}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+
