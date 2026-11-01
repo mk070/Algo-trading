@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.db import get_db
+from app.db import check_db_health, get_db
 from app.engine.indicators import add_all_indicators
 from app.engine.regime import evaluate_market_regime
 from app.models import Alert, DailyBar, JobRun, SettingKV
@@ -25,12 +25,17 @@ router = APIRouter()
 def get_health(db: Session = Depends(get_db)):
     """Health check: provider status, last job runs, database connectivity."""
     providers = provider_manager.check_health()
-    last_jobs = (
-        db.query(JobRun)
-        .order_by(JobRun.started_at.desc())
-        .limit(10)
-        .all()
-    )
+    db_health = check_db_health()
+    try:
+        last_jobs = (
+            db.query(JobRun)
+            .order_by(JobRun.started_at.desc())
+            .limit(10)
+            .all()
+        )
+    except Exception as e:
+        logger.warning(f"Failed to fetch job runs in health check: {e}")
+        last_jobs = []
     job_summaries = [
         {
             "job": j.job,
@@ -43,11 +48,18 @@ def get_health(db: Session = Depends(get_db)):
     ]
 
     return {
-        "status": "HEALTHY",
-        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "status": "HEALTHY" if db_health.get("status") == "HEALTHY" else "DEGRADED",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "database": db_health,
         "providers": {k: v.model_dump() for k, v in providers.items()},
         "last_job_runs": job_summaries,
     }
+
+
+@router.get("/health/db")
+def get_database_health():
+    """Detailed database health monitoring endpoint for Neon PostgreSQL."""
+    return check_db_health()
 
 
 @router.get("/regime")

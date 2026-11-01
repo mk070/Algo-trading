@@ -169,8 +169,26 @@ class AppSettings(BaseSettings):
     app_token: str = Field(default="demo-token-change-in-prod", alias="APP_TOKEN")
     env: str = Field(default="development", alias="ENV")
     database_url: str = Field(
-        default=f"sqlite:///{DATA_DIR / 'swing_algo.db'}", alias="DATABASE_URL"
+        default="postgresql://neondb_owner:YOUR_PASSWORD@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require",
+        alias="DATABASE_URL"
     )
+
+    @property
+    def normalized_database_url(self) -> str:
+        """Converts postgres:// or postgresql:// to postgresql+psycopg2:// for SQLAlchemy.
+        Strictly rejects SQLite per architecture requirements.
+        """
+        url = (self.database_url or "").strip()
+        if not url or url.startswith("sqlite"):
+            raise ValueError(
+                "SQLite is strictly not supported. Neon PostgreSQL is the exclusive database platform. "
+                "Please configure a valid Neon PostgreSQL connection string in DATABASE_URL."
+            )
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return url
     
     # Angel One SmartAPI (Core Market Data)
     angelone_api_key: Optional[str] = Field(default=None, alias="ANGELONE_API_KEY")

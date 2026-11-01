@@ -1,23 +1,10 @@
 import datetime
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from app.db import Base
 from app.models import Position, Signal
 from app.providers.angelone_provider import AngelOneProvider, CandleBuilder
 from app.providers.base import Quote
 from app.scheduler.monitor import LiveBreakoutMonitor
-
-
-@pytest.fixture
-def mem_db():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    yield session
-    session.close()
 
 
 def test_candle_builder_15m_aggregation_and_confirmation():
@@ -271,6 +258,7 @@ def test_completed_15m_trigger_reevaluates_pipeline_to_buy_confirmed(mem_db, mon
     )
     from app.engine.pipeline import decision_pipeline
     monkeypatch.setattr(decision_pipeline, "evaluate", lambda **kwargs: mock_decision)
+    monkeypatch.setattr(provider_manager, "get_daily_bars", lambda *args, **kwargs: {"TCS": None})
 
     monitor.tick_market("IN", mem_db, current_time=t_9_30)
     mem_db.refresh(sig)

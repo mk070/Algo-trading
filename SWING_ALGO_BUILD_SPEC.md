@@ -1,7 +1,7 @@
 # SWING SIGNAL PLATFORM: BUILD SPEC FOR AN AI CODING AGENT
 
 > Hand this whole file to the coding agent (Claude Code, Cursor, etc.) as the single source of truth.
-> Stack: **Python 3.11+ (FastAPI)** backend, **React + TypeScript (Vite)** frontend, **SQLite**, free data sources only, free background hosting.
+> Stack: **Python 3.11+ (FastAPI)** backend, **React + TypeScript (Vite)** frontend, **Neon PostgreSQL** (exclusive database platform), free data sources only, free background hosting.
 > A working prototype of the signal logic exists in `swing_signals.py` (provided alongside). Port and extend it; do not discard its logic.
 > **v2:** integrates a second research pass (Minervini-style trend template, VCP/tight-base breakouts, signal states, 15-minute confirmation, correlation limits, US data providers). See Section 21 for what changed and why.
 
@@ -386,25 +386,32 @@ swing-platform/
 
 ---
 
-## 8. DATABASE SCHEMA (SQLite)
+## 8. DATABASE SCHEMA (Neon PostgreSQL)
 
-- `instruments(id, symbol, market, name, sector, industry, provider_token, active, added_at)`
+Neon PostgreSQL is the sole application database from day one (strictly no SQLite support, no dual adapters, no planned future database migration). Configured via `DATABASE_URL` with connection pooling (`QueuePool`, `pool_size=10`, `max_overflow=20`, `pool_recycle=300`, `pool_pre_ping=True` to seamlessly survive serverless autosuspend/wakeups), transient retry handling (`tenacity`), transaction management context, timezone-aware UTC timestamps (`TIMESTAMPTZ`), and reviewed Alembic migrations (`backend/alembic/versions/`). Automated tests use isolated rollback transaction fixtures guaranteeing actual trading records are never deleted or modified.
+
+- `instruments(id SERIAL PRIMARY KEY, symbol, market, name, sector, industry, provider_token, active, added_at TIMESTAMPTZ)`
 - `bars_daily(symbol, date, open, high, low, close, adj_close, volume, source, PRIMARY KEY(symbol,date))`
-- `scans(id, market, run_at, session_date, regime, regime_detail_json, universe_size, passed_filters, data_warnings_json)`
-- `signals(id, scan_id, symbol, market, setup, trigger, entry_zone_high, stop, target1, qty, risk_amount, cost_estimate, cost_in_r, rs_rank, score, atr, gap95, reasons_json, news_flags_json, state[WATCHLIST|APPROACHING|TRIGGERED_PROVISIONAL|TRIGGERED_CONFIRMED|INVALIDATED|EXTENDED|EXPIRED|SKIPPED], valid_until, created_at)`
-- `positions(id, symbol, market, source[MANUAL|KITE], tracked_as_swing, signal_id NULL, mode[LIVE|PAPER], entry_date, entry_price, qty, initial_stop, active_stop, target1, status[OPEN|CLOSED], notes)`
-- `fills(id, position_id, side[BUY|SELL], date, price, qty, fees_total, fees_json)`
-- `journal(id, position_id, exit_date, exit_reason, pnl_amount, pnl_pct, r_multiple, holding_days, mae, mfe, tags, note)`
-- `alerts(id, ts, type[BUY|SELL|SELL_HALF|CANCEL|SKIP|NEWS|DATA|SYSTEM], symbol, market, title, body, payload_json, delivered_telegram, acknowledged)`
-- `news_events(id, symbol, source, source_id, title, url, published_at, ingested_at, severity, category, dedupe_key, canonical_event_id, ai_summary NULL, raw_json)`
-- `news_coverage(scan_id, symbol, status[CLEAR|REVIEW|BLOCKED|UNKNOWN], sources_checked_json, checked_at)`
-- `macro_events(id, ts, region, title, importance, source)`
-- `imported_reports(id, kind[TRADEBOOK|PNL|CHARGES], file_hash, imported_at, row_count)` and `report_trades(report_id, symbol, side, qty, price, trade_date, charges_json)`
-- `backtest_runs(id, created_at, config_json, universe, start, end, metrics_json, status)` and `backtest_trades(run_id, symbol, setup, entry_date, entry_price, exit_date, exit_price, exit_reason, qty, pnl, r_multiple, costs)`
-- `broker_snapshots(id, ts, broker, kind[HOLDINGS|POSITIONS|MARGINS|TRADES|ORDERS], payload_json)`
-- `settings(key, value_json)`, `job_runs(id, job, started_at, finished_at, status, detail)`
+- `scans(id SERIAL PRIMARY KEY, market, run_at TIMESTAMPTZ, session_date, regime, regime_detail_json, universe_size, passed_filters, data_warnings_json)`
+- `signals(id SERIAL PRIMARY KEY, scan_id FK, symbol, market, setup, trigger, entry_zone_high, stop, target1, qty, risk_amount, cost_estimate, cost_in_r, rs_rank, score, atr, gap95, reasons_json, news_flags_json, state[WATCHLIST|APPROACHING|TRIGGERED_PROVISIONAL|TRIGGERED_CONFIRMED|INVALIDATED|EXTENDED|EXPIRED|SKIPPED], valid_until, created_at TIMESTAMPTZ)`
+- `positions(id SERIAL PRIMARY KEY, symbol, market, source[MANUAL|KITE], tracked_as_swing, signal_id FK, mode[LIVE|PAPER], entry_date, entry_price, qty, initial_stop, active_stop, target1, status[OPEN|CLOSED], notes, created_at TIMESTAMPTZ)`
+- `fills(id SERIAL PRIMARY KEY, position_id FK, side[BUY|SELL], date, price, qty, fees_total, fees_json)`
+- `journal(id SERIAL PRIMARY KEY, position_id FK, symbol, market, entry_date, entry_price, exit_date, exit_price, qty, exit_reason, pnl_amount, pnl_pct, r_multiple, holding_days, fees_total, mae, mfe, tags, note)`
+- `alerts(id SERIAL PRIMARY KEY, ts TIMESTAMPTZ, type[BUY|SELL|SELL_HALF|CANCEL|SKIP|NEWS|DATA|SYSTEM], symbol, market, title, body, payload_json, delivered_telegram, acknowledged, retry_count, last_reminder_ts TIMESTAMPTZ)`
+- `news_events(id SERIAL PRIMARY KEY, symbol, source, source_id, title, url, published_at TIMESTAMPTZ, ingested_at TIMESTAMPTZ, severity, category, dedupe_key, canonical_event_id, ai_summary, raw_json, match_confidence, is_unverified, syndication_cluster_id, materiality, summary, price_change_day_pct, price_atr_multiple, analyst_action_json)`
+- `news_source_state(source PRIMARY KEY, last_polled_at TIMESTAMPTZ, consecutive_failures, last_successful_poll_at TIMESTAMPTZ, error_message, is_healthy)`
+- `news_coverage_gaps(id SERIAL PRIMARY KEY, source, market, symbol, error_message, detected_at TIMESTAMPTZ, resolved_at TIMESTAMPTZ)`
+- `earnings_filings(id SERIAL PRIMARY KEY, symbol, market, period_type, period_ended, filing_date, revenue, operating_profit, net_profit, eps, currency, source_name, source_url, consensus_eps, consensus_source, severity, flags_json, ai_summary, created_at TIMESTAMPTZ)`
+- `news_coverage(id SERIAL PRIMARY KEY, scan_id FK, symbol, status[CLEAR|REVIEW|BLOCKED|UNKNOWN], sources_checked_json, checked_at TIMESTAMPTZ)`
+- `macro_events(id SERIAL PRIMARY KEY, ts TIMESTAMPTZ, region, title, importance, source)`
+- `imported_reports(id SERIAL PRIMARY KEY, kind[TRADEBOOK|PNL|CHARGES], file_hash UNIQUE, imported_at TIMESTAMPTZ, row_count)` and `report_trades(id SERIAL PRIMARY KEY, report_id FK, symbol, side, qty, price, trade_date, charges_json)`
+- `backtest_runs(id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ, config_json, universe, start_date, end_date, metrics_json, status)` and `backtest_trades(id SERIAL PRIMARY KEY, run_id FK, symbol, setup, entry_date, entry_price, exit_date, exit_price, exit_reason, qty, pnl, r_multiple, costs)`
+- `broker_snapshots(id SERIAL PRIMARY KEY, ts TIMESTAMPTZ, broker, kind[HOLDINGS|POSITIONS|MARGINS|TRADES|ORDERS], payload_json)`
+- `settings_kv(key PRIMARY KEY, value_json, updated_at TIMESTAMPTZ)`, `job_runs(id SERIAL PRIMARY KEY, job, started_at TIMESTAMPTZ, finished_at TIMESTAMPTZ, status, detail)`
+- `decision_audits(id SERIAL PRIMARY KEY, symbol, market, asof_date, mode, final_decision, setup, trigger, stop, target1, qty, risk_amount, cost_in_r, config_hash, code_version, data_source, created_at TIMESTAMPTZ)`
+- `decision_stage_results(id SERIAL PRIMARY KEY, audit_id FK, stage_name, status, checks_json, rejection_reasons_json)`
 
-Add migrations (Alembic) and a nightly SQLite file backup job (copy to `data/backups/`, keep 14).
+Alembic migrations (`backend/alembic/`) manage all schema evolution. Point-in-time database snapshot backup and restore procedures are provided via `backend/app/db_backup.py` and scheduled nightly (`job_db_backup`). Database health and connection pool metrics are monitored continuously at `/api/health/db`.
 
 ---
 
@@ -809,10 +816,12 @@ budget:
 - **Overextension guard instead of a raw "top 30% monthly gainers" filter.**
 - **India risk per trade is higher than the US default** because fixed delivery charges make 0.5% unworkable on a ~INR 17,500 account (Section 4.3). If the owner dislikes that risk level, run India in paper mode until capital is larger.
 - **Intraday confirmation cannot be fully backtested with free data** (Section 12.5); it is validated in paper/forward testing.
-- **Database:** SQLite for v1 (single user, free hosting, small data). PostgreSQL/TimescaleDB is a later upgrade if data volume or concurrency grows. The frontend stays React (Vite); Next.js is optional, not required.
+- **Database:** Neon PostgreSQL from day one. Built directly for the intended production PostgreSQL environment with connection pooling, serverless pre-ping/reconnect handling, and Alembic migrations. SQLite support and dual database adapters are explicitly excluded.
 - **Paid data/news subscriptions are deferred** until the owner's US broker and actual needs are confirmed.
 - **Regulatory note:** retail algorithmic-trading rules and broker API conditions (including static-IP and order-tagging requirements for API order placement) have been changing; the app is signal-only and never calls order APIs. Re-verify the broker's current API terms before using its market-data API.
 
 **v2.1 (broker roles):** India market data from Angel One SmartAPI (historical candles, live quotes, WebSocket) with yfinance fallback; India account data from the free Zerodha Kite Connect Personal tier, strictly read-only (holdings, positions, funds, trades), with a daily manual login because the access token expires each day. The India cost preset now assumes Zerodha for execution; confirm current charges because published figures differ. Kite Personal has no historical or live-quote APIs, so it is never a price source.
 
 **v2.2 (review corrections):** Angel One and Zerodha promoted to core integrations; yfinance demoted to fallback; WebSocket monitoring with strict freshness limits replaces 5-minute polling (the old 20-minute stale threshold was far too loose for breakouts); explicit news timestamps, de-duplication and coverage statuses with UNKNOWN never treated as clear; licensed-news and optional AI-summary extension points with guardrails; live valuation with source provenance; Zerodha CSV import supported from v1; Setup V is the only live setup at launch with Setup P in shadow mode; risk baseline returned to a conservative 0.5% per trade and 2% open risk for both markets, with a higher-risk India "small-account mode" only as an explicit opt-in; unconfirmed decisions (capital, US provider, budgets) kept configurable.
+
+**v2.4 (Neon PostgreSQL Mandate):** Neon PostgreSQL is established as the sole application database from the beginning. No SQLite support, no secondary adapters, and no migration paths from SQLite. All models standardized with `TIMESTAMPTZ`, Alembic handles reviewed migrations, connection pooling is configured with `QueuePool` and `pool_pre_ping=True` for Neon serverless wakeups, and test suites utilize isolated rollback fixtures to guarantee actual trading records are never deleted or modified.

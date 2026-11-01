@@ -15,7 +15,7 @@
 - **Live Portfolio Valuation & Provenance:** Broker-reported values (Zerodha snapshot) and live calculated values (Angel One LTP) displayed side by side with timestamps and source tags.
 - **Safety News & Corporate Disclosures Filter:** Deterministic keyword severity classifier (RED, AMBER, GREEN), earnings blackout guard, and deduplication.
 - **Backtesting & Acceptance Gates:** Event-driven daily simulation strictly enforcing Section 12.2 conservative fill rules, Monte Carlo simulations (1,000 iterations), and out-of-sample acceptance criteria.
-- **Modern Full-Stack Architecture:** Python 3.11+ (FastAPI, SQLAlchemy, SQLite WAL, APScheduler) backend paired with React 18, TypeScript, Vite, and Tailwind CSS.
+- **Modern Full-Stack Architecture:** Python 3.11+ (FastAPI, SQLAlchemy, Neon PostgreSQL, APScheduler) backend paired with React 18, TypeScript, Vite, and Tailwind CSS.
 
 ---
 
@@ -27,7 +27,7 @@
 | **Node.js** | `v20.x` or `v24.x` | Runtime for Vite and React frontend |
 | **npm** | `v10.x` or `v11.x` | Frontend package manager |
 | **uv** | `0.11+` | Ultra-fast Python package installer & virtualenv manager |
-| **Database** | SQLite (bundled) | Stored at `data/swing_algo.db` with WAL mode enabled |
+| **Database** | Neon PostgreSQL | Serverless PostgreSQL with `sslmode=require` |
 
 ---
 
@@ -46,14 +46,29 @@ cd "d:\web development\saas-projects\Algo-trading"
 & "$env:USERPROFILE\.local\bin\uv.exe" pip install --python backend\.venv\Scripts\python.exe -r backend\pyproject.toml
 ```
 
-### B. Setup Environment Variables
+### B. Setup Environment Variables & Neon Database
 
 ```powershell
 # Copy the example environment template
 Copy-Item .env.example .env
+
+# Edit .env and set your Neon PostgreSQL connection string:
+# DATABASE_URL=postgresql://neondb_owner:YOUR_PASSWORD@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require
 ```
 
-### C. Install & Build Frontend
+### C. Apply Database Migrations (Neon PostgreSQL)
+
+All database schema migrations are managed via Alembic:
+
+```powershell
+# Apply all reviewed schema migrations to your Neon database
+backend\.venv\Scripts\alembic.exe upgrade head
+
+# Generate SQL DDL offline without executing
+backend\.venv\Scripts\alembic.exe upgrade --sql head
+```
+
+### D. Install & Build Frontend
 
 ```powershell
 # Install npm dependencies
@@ -205,7 +220,7 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 |---|---|---|---|
 | `APP_TOKEN` | Bearer token for API protection | Optional (Dev) | User-defined secret |
 | `ENV` | `development` or `production` | Optional | Application setting |
-| `DATABASE_URL` | SQLite or PostgreSQL connection string | Optional | `sqlite:///data/swing_algo.db` |
+| `DATABASE_URL` | Neon PostgreSQL connection string (`sslmode=require`) | Required | Neon Console (`postgresql://neondb_owner:***@...`) |
 | `ANGELONE_API_KEY` | Angel One SmartAPI key | Required for IN Live | SmartAPI Developer Portal |
 | `ANGELONE_CLIENT_CODE` | Angel One login client code | Required for IN Live | Angel One account |
 | `ANGELONE_PIN` | Angel One trading PIN | Required for IN Live | Angel One account |

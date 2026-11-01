@@ -41,7 +41,7 @@ class ProviderManager:
         results: Dict[str, pd.DataFrame] = {}
         missing_symbols = list(symbols)
 
-        # 1. Try reading from SQLite cache if DB session is provided
+        # 1. Try reading from PostgreSQL cache if DB session is provided
         if db is not None:
             cached_dfs = {}
             for sym in symbols:

@@ -148,14 +148,10 @@ def job_poll_macro_calendar(db):
 
 
 def job_db_backup(db):
-    backup_dir = DATA_DIR / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    db_file = DATA_DIR / "swing_algo.db"
-    if db_file.exists():
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        target = backup_dir / f"swing_algo_backup_{timestamp}.db"
-        shutil.copy2(db_file, target)
-        logger.info(f"Nightly DB backup created at {target}")
+    """Nightly point-in-time snapshot backup of Neon PostgreSQL database."""
+    from app.db_backup import create_database_backup
+    res = create_database_backup(db=db)
+    logger.info(f"Nightly database backup completed: {res.get('file')} ({res.get('total_rows')} rows)")
 
 
 def start_scheduler():

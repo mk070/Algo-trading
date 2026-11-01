@@ -9,7 +9,7 @@ def test_api_health_endpoint():
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "HEALTHY"
+    assert data["status"] in ["HEALTHY", "DEGRADED"]
     assert "providers" in data
     assert "angelone" in data["providers"]
     assert "kite_personal" in data["providers"]

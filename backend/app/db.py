@@ -1,69 +1,134 @@
-import os
-from pathlib import Path
+import logging
+import time
+from contextlib import contextmanager
+from typing import Any, Dict, Generator, Optional
+
+import psycopg2
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.exc import DatabaseError, OperationalError
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.pool import QueuePool
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from app.settings import settings, DATA_DIR
+from app.settings import settings
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-db_path = DATA_DIR / "swing_algo.db"
-DATABASE_URL = f"sqlite:///{db_path}"
+logger = logging.getLogger(__name__)
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=False,
-)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
+# Base declarative class for all SQLAlchemy ORM models
 Base = declarative_base()
 
 
-def get_db():
+def get_neon_engine():
+    """Builds and returns a resilient SQLAlchemy Engine configured specifically for
+    Neon Serverless PostgreSQL.
+    Key configurations:
+    - pool_pre_ping=True: transparently reconnects after Neon autosuspend/idle timeouts.
+    - pool_recycle=300: recycles sockets every 5 minutes to prevent stale PgBouncer/gateway connections.
+    - QueuePool with controlled pool_size and max_overflow.
+    """
+    database_url = settings.normalized_database_url
+
+    engine_kwargs = {
+        "poolclass": QueuePool,
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30.0,
+        "pool_recycle": 300,  # 5 minutes for serverless compute idle windows
+        "pool_pre_ping": True,  # Ping SELECT 1 before borrowing from pool
+        "echo": False,
+    }
+
+    # Pass connect_args for sslmode if not already in URL query string
+    if "sslmode" not in database_url and not database_url.startswith("sqlite"):
+        engine_kwargs["connect_args"] = {"sslmode": "require"}
+
+    return create_engine(database_url, **engine_kwargs)
+
+
+# Initialize singleton engine and sessionmaker
+engine = get_neon_engine()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+# Transient connection error retry decorator
+retry_db_operation = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=3.0),
+    retry=retry_if_exception_type((OperationalError, DatabaseError, psycopg2.OperationalError)),
+    reraise=True,
+)
+
+
+@contextmanager
+def transaction_context(session: Optional[Session] = None) -> Generator[Session, None, None]:
+    """Context manager providing clean transaction management with automatic
+    commit on success and rollback on any exception.
+    """
+    sess = session or SessionLocal()
+    try:
+        yield sess
+        sess.commit()
+    except Exception as e:
+        sess.rollback()
+        logger.error(f"Transaction failed and was rolled back: {e}")
+        raise
+    finally:
+        if session is None:
+            sess.close()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI dependency for database session lifecycle management with transactional safety."""
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
 
-def init_db():
-    from app import models  # noqa: F401
-    Base.metadata.create_all(bind=engine)
-    # Automatic SQLite migration for new columns on existing tables
+def check_db_health() -> Dict[str, Any]:
+    """Checks database connectivity, latency, pool status, and PostgreSQL engine details."""
+    t0 = time.time()
     try:
         with engine.connect() as conn:
-            # Check news_events columns
-            result = conn.execute(text("PRAGMA table_info(news_events)"))
-            existing_cols = {row[1] for row in result.fetchall()}
-            if existing_cols:
-                if "match_confidence" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN match_confidence VARCHAR(20) DEFAULT 'EXACT_NAME'"))
-                if "is_unverified" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN is_unverified BOOLEAN DEFAULT 0"))
-                if "syndication_cluster_id" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN syndication_cluster_id VARCHAR(100)"))
-                if "materiality" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN materiality VARCHAR(20) DEFAULT 'LOW'"))
-                if "summary" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN summary TEXT"))
-                if "price_change_day_pct" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN price_change_day_pct FLOAT"))
-                if "price_atr_multiple" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN price_atr_multiple FLOAT"))
-                if "analyst_action_json" not in existing_cols:
-                    conn.execute(text("ALTER TABLE news_events ADD COLUMN analyst_action_json TEXT"))
+            conn.execute(text("SELECT 1;"))
+            latency_ms = round((time.time() - t0) * 1000.0, 2)
+            version_str = conn.execute(text("SELECT version();")).scalar()
 
-            # Check alerts columns
-            result = conn.execute(text("PRAGMA table_info(alerts)"))
-            alert_cols = {row[1] for row in result.fetchall()}
-            if alert_cols:
-                if "retry_count" not in alert_cols:
-                    conn.execute(text("ALTER TABLE alerts ADD COLUMN retry_count INTEGER DEFAULT 0"))
-                if "last_reminder_ts" not in alert_cols:
-                    conn.execute(text("ALTER TABLE alerts ADD COLUMN last_reminder_ts DATETIME"))
-            conn.commit()
-    except Exception:
-        pass
+        pool = engine.pool
+        return {
+            "status": "HEALTHY",
+            "latency_ms": latency_ms,
+            "database": "Neon PostgreSQL",
+            "version": version_str.split(",")[0] if version_str else "PostgreSQL",
+            "pool": {
+                "size": pool.size() if hasattr(pool, "size") else 10,
+                "checkedin": pool.checkedin() if hasattr(pool, "checkedin") else 0,
+                "checkedout": pool.checkedout() if hasattr(pool, "checkedout") else 0,
+                "overflow": pool.overflow() if hasattr(pool, "overflow") else 0,
+            },
+            "pre_ping": True,
+            "recycle_sec": 300,
+        }
+    except Exception as e:
+        return {
+            "status": "DOWN",
+            "latency_ms": round((time.time() - t0) * 1000.0, 2),
+            "database": "Neon PostgreSQL",
+            "error": str(e),
+        }
 
+
+def init_db():
+    """Initializes PostgreSQL schema directly for the intended production environment."""
+    from app import models  # noqa: F401
+    logger.info("Initializing Neon PostgreSQL database schema...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Neon PostgreSQL schema created or verified successfully.")
+    except Exception as e:
+        logger.warning(f"Could not connect to Neon PostgreSQL during init_db: {e}")

@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import (
     Column,
     Integer,
+    BigInteger,
     String,
     Float,
     Boolean,
@@ -12,9 +13,15 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     ForeignKey,
     Index,
+    func,
 )
 from sqlalchemy.orm import relationship
 from app.db import Base
+
+
+def utc_now() -> datetime.datetime:
+    """Helper returning timezone-aware current UTC datetime."""
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 class Instrument(Base):
@@ -28,7 +35,7 @@ class Instrument(Base):
     industry = Column(String(100), nullable=True)
     provider_token = Column(String(50), nullable=True)  # Angel One token, etc.
     active = Column(Boolean, default=True)
-    added_at = Column(DateTime, default=datetime.datetime.utcnow)
+    added_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class DailyBar(Base):
@@ -55,7 +62,7 @@ class Scan(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     market = Column(String(10), nullable=False)  # IN, US
-    run_at = Column(DateTime, default=datetime.datetime.utcnow)
+    run_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     session_date = Column(Date, nullable=False)
     regime = Column(String(20), nullable=False)  # Bullish, Caution, Weak
     regime_detail_json = Column(Text, nullable=True)
@@ -91,7 +98,7 @@ class Signal(Base):
         default="WATCHLIST",
     )  # WATCHLIST, APPROACHING, TRIGGERED_PROVISIONAL, TRIGGERED_CONFIRMED, INVALIDATED, EXTENDED, EXPIRED, SKIPPED
     valid_until = Column(Date, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class Position(Base):
@@ -112,7 +119,7 @@ class Position(Base):
     target1 = Column(Float, nullable=False)
     status = Column(String(20), default="OPEN")  # OPEN, CLOSED
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class Fill(Base):
@@ -156,7 +163,7 @@ class Alert(Base):
     __tablename__ = "alerts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts = Column(DateTime, default=datetime.datetime.utcnow)
+    ts = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     type = Column(
         String(30), nullable=False
     )  # BUY, SELL, SELL_HALF, CANCEL, SKIP, NEWS, DATA, SYSTEM
@@ -168,7 +175,7 @@ class Alert(Base):
     delivered_telegram = Column(Boolean, default=False)
     acknowledged = Column(Boolean, default=False)
     retry_count = Column(Integer, default=0)
-    last_reminder_ts = Column(DateTime, nullable=True)
+    last_reminder_ts = Column(DateTime(timezone=True), nullable=True)
 
 
 class NewsEvent(Base):
@@ -180,8 +187,8 @@ class NewsEvent(Base):
     source_id = Column(String(100), nullable=True)
     title = Column(String(500), nullable=False)
     url = Column(String(500), nullable=True)
-    published_at = Column(DateTime, nullable=False)
-    ingested_at = Column(DateTime, default=datetime.datetime.utcnow)
+    published_at = Column(DateTime(timezone=True), nullable=False)
+    ingested_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     severity = Column(String(20), default="GREEN")  # RED, AMBER, GREEN
     category = Column(String(50), nullable=True)
     dedupe_key = Column(String(100), nullable=False, index=True)
@@ -206,12 +213,12 @@ class NewsSourceState(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source = Column(String(50), nullable=False, unique=True, index=True)
     latency_class = Column(String(30), nullable=False, default="near-real-time")  # near-real-time, delayed, periodic/batch, unavailable
-    last_attempt_at = Column(DateTime, nullable=True)
-    last_success_at = Column(DateTime, nullable=True)
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
     etag = Column(String(100), nullable=True)
     last_modified = Column(String(100), nullable=True)
-    backoff_until = Column(DateTime, nullable=True)
+    backoff_until = Column(DateTime(timezone=True), nullable=True)
     items_last_poll = Column(Integer, default=0)
     median_latency_sec = Column(Float, default=0.0)
     status = Column(String(20), default="HEALTHY")  # HEALTHY, DEGRADED, DOWN, UNAVAILABLE
@@ -236,8 +243,8 @@ class NewsCoverageGap(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     source = Column(String(50), nullable=False, index=True)
-    gap_start = Column(DateTime, nullable=False)
-    gap_end = Column(DateTime, nullable=True)
+    gap_start = Column(DateTime(timezone=True), nullable=False)
+    gap_end = Column(DateTime(timezone=True), nullable=True)
     duration_sec = Column(Float, default=0.0)
     status = Column(String(20), default="RECORDED")  # RECORDED, RESOLVED
     notes = Column(Text, nullable=True)
@@ -264,7 +271,7 @@ class EarningsFiling(Base):
     severity = Column(String(20), default="CLEAR")
     flags_json = Column(Text, nullable=True)
     ai_summary = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class NewsCoverage(Base):
@@ -275,14 +282,14 @@ class NewsCoverage(Base):
     symbol = Column(String(50), nullable=False, index=True)
     status = Column(String(20), default="UNKNOWN")  # CLEAR, REVIEW, BLOCKED, UNKNOWN
     sources_checked_json = Column(Text, nullable=True)
-    checked_at = Column(DateTime, default=datetime.datetime.utcnow)
+    checked_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class MacroEvent(Base):
     __tablename__ = "macro_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts = Column(DateTime, nullable=False)
+    ts = Column(DateTime(timezone=True), nullable=False)
     region = Column(String(10), nullable=False)  # IN, US
     title = Column(String(200), nullable=False)
     importance = Column(String(20), default="HIGH")  # HIGH, MEDIUM, LOW
@@ -295,7 +302,7 @@ class ImportedReport(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     kind = Column(String(50), nullable=False)  # TRADEBOOK, PNL, CHARGES
     file_hash = Column(String(100), unique=True, nullable=False)
-    imported_at = Column(DateTime, default=datetime.datetime.utcnow)
+    imported_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     row_count = Column(Integer, default=0)
 
 
@@ -316,7 +323,7 @@ class BacktestRun(Base):
     __tablename__ = "backtest_runs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     config_json = Column(Text, nullable=True)
     universe = Column(String(100), nullable=False)
     start_date = Column(Date, nullable=False)
@@ -347,7 +354,7 @@ class BrokerSnapshot(Base):
     __tablename__ = "broker_snapshots"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ts = Column(DateTime, default=datetime.datetime.utcnow)
+    ts = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     broker = Column(String(50), nullable=False)  # ZERODHA_KITE, ANGEL_ONE
     kind = Column(String(50), nullable=False)  # HOLDINGS, POSITIONS, MARGINS, TRADES, ORDERS
     payload_json = Column(Text, nullable=False)
@@ -358,7 +365,7 @@ class SettingKV(Base):
 
     key = Column(String(100), primary_key=True)
     value_json = Column(Text, nullable=False)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class JobRun(Base):
@@ -366,8 +373,8 @@ class JobRun(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     job = Column(String(100), nullable=False)
-    started_at = Column(DateTime, default=datetime.datetime.utcnow)
-    finished_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(20), default="RUNNING")  # RUNNING, SUCCESS, FAILED
     detail = Column(Text, nullable=True)
 
@@ -391,7 +398,7 @@ class DecisionAudit(Base):
     config_hash = Column(String(64), nullable=True)
     code_version = Column(String(20), default="2.3")
     data_source = Column(String(50), default="ANGEL_ONE")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class DecisionStageResult(Base):
@@ -403,5 +410,3 @@ class DecisionStageResult(Base):
     status = Column(String(20), nullable=False)  # PASS, BLOCK, WAIT
     checks_json = Column(Text, nullable=False)
     rejection_reasons_json = Column(Text, nullable=True)
-
-
