@@ -196,9 +196,18 @@ class AppSettings(BaseSettings):
     telegram_bot_token: Optional[str] = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = Field(default=None, alias="TELEGRAM_CHAT_ID")
 
+    # News & Regulatory Disclosures
+    sec_user_agent: str = Field(
+        default="AlgoTrading Research research@example.com",
+        alias="SEC_USER_AGENT"
+    )
+    finnhub_api_key: Optional[str] = Field(default=None, alias="FINNHUB_API_KEY")
+
     # Strategy / Risk / Engine configs from YAML
     strategy_config: Dict[str, Any] = Field(default_factory=dict)
     news_rules: Dict[str, Any] = Field(default_factory=dict)
+    news_sources: Dict[str, Any] = Field(default_factory=dict)
+    macro_calendar: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
@@ -216,6 +225,16 @@ class AppSettings(BaseSettings):
         if news_rules_file.exists():
             with open(news_rules_file, "r", encoding="utf-8") as f:
                 self.news_rules = yaml.safe_load(f) or {}
+
+        news_sources_file = CONFIG_DIR / "news_sources.yaml"
+        if news_sources_file.exists():
+            with open(news_sources_file, "r", encoding="utf-8") as f:
+                self.news_sources = yaml.safe_load(f) or {}
+
+        macro_cal_file = CONFIG_DIR / "macro_calendar.yaml"
+        if macro_cal_file.exists():
+            with open(macro_cal_file, "r", encoding="utf-8") as f:
+                self.macro_calendar = yaml.safe_load(f) or {}
 
     def get_market_config(self, market: str) -> MarketConfig:
         mkts = self.strategy_config.get("markets", {})
@@ -258,6 +277,12 @@ class AppSettings(BaseSettings):
     def get_portfolio_config(self) -> PortfolioConfig:
         p = self.strategy_config.get("portfolio", {})
         return PortfolioConfig(**p) if p else PortfolioConfig()
+
+    def get_news_sources_config(self) -> Dict[str, Any]:
+        return self.news_sources.get("sources", {})
+
+    def get_macro_calendar(self) -> Dict[str, Any]:
+        return self.macro_calendar
 
 
 settings = AppSettings()

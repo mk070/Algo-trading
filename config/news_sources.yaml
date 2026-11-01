@@ -1,0 +1,104 @@
+# Approved Free News and Event Sources Configuration
+# Strict adherence to Section 1 & 5 of SWING_ALGO_BUILD_SPEC.md
+# No scraping, no paid services, honest User-Agents, fair-access rate limits.
+
+sources:
+  nse_rss:
+    enabled: true
+    name: "NSE Official RSS Feeds"
+    base_url: "https://nsearchives.nseindia.com/content/RSS/"
+    feeds:
+      announcements: "Announcements.xml"
+      board_meetings: "Board_Meetings.xml"
+      corporate_actions: "Corporate_action.xml"
+      financial_results: "Financial_Results.xml"
+      insider_trading: "Insider_Trading.xml"
+    poll_interval_sec: 300  # 5 min (matches ~5m feed TTL)
+    latency_class: "periodic/batch"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://www.nseindia.com/terms-of-use"
+    note: "Official syndication XML feeds. Polled strictly at or above feed TTL. No automated website scraping."
+
+  bse_rss:
+    enabled: false
+    name: "BSE Corporate Announcements"
+    status: "UNAVAILABLE"
+    latency_class: "unavailable"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    note: "No sanctioned machine-readable open feed exists without web scraping. Automated scraping is prohibited by BSE terms. Marked UNAVAILABLE."
+
+  sec_edgar:
+    enabled: true
+    name: "SEC EDGAR Submissions API & 8-K"
+    base_url: "https://data.sec.gov"
+    submissions_endpoint: "https://data.sec.gov/submissions/CIK{cik}.json"
+    poll_interval_sec: 180  # 3 min during market hours
+    rate_limit_rps: 10      # SEC fair access limit is <= 10 req/sec
+    latency_class: "near-real-time"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://www.sec.gov/os/accessing-edgar-data"
+    note: "Free official SEC EDGAR submissions API with User-Agent declaration and conditional ETag/If-Modified-Since requests."
+
+  gdelt_doc:
+    enabled: true
+    name: "GDELT DOC 2.0 API"
+    base_url: "https://api.gdeltproject.org/api/v2/doc/doc"
+    max_records_per_query: 250
+    rolling_window_months: 3
+    request_spacing_sec: 6   # 5-6s pacing between calls
+    retry_429_backoff_sec: 15
+    poll_intervals:
+      P0: 900   # 15 min for open positions & planned trades
+      P1: 1800  # 30 min for shortlisted signals
+      P2: 3600  # 60 min for general watchlist
+    latency_class: "near-real-time"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://www.gdeltproject.org/about.html"
+    note: "Free article metadata discovery. No full article text. Paced at >=6s to respect shared API limits."
+
+  finnhub:
+    enabled: true
+    name: "Finnhub Free Tier (US)"
+    base_url: "https://finnhub.io/api/v1"
+    free_endpoints:
+      - "/company-news"
+      - "/news"
+    rate_limit_cpm: 60       # 60 calls/min limit
+    latency_class: "near-real-time"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://finnhub.io/terms-of-service"
+    note: "Free tier for personal non-commercial use. Paid endpoints strictly excluded. Gracefully disabled if FINNHUB_API_KEY is unset."
+
+  rbi_rss:
+    enabled: true
+    name: "RBI Monetary Policy & Press Releases"
+    url: "https://rbi.org.in/pressreleases_rss.xml"
+    poll_interval_sec: 1800  # 30 min
+    latency_class: "periodic/batch"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://rbi.org.in/Scripts/AboutUsDisplay.aspx?pg=Terms.htm"
+    note: "Official Reserve Bank of India notifications and policy decisions feed."
+
+  fed_rss:
+    enabled: true
+    name: "Federal Reserve Monetary Policy & Speeches"
+    url: "https://www.federalreserve.gov/feeds/press_all.xml"
+    poll_interval_sec: 1800  # 30 min
+    latency_class: "periodic/batch"
+    terms_reviewed: true
+    reviewed_on: "2026-11-01"
+    terms_url: "https://www.federalreserve.gov/feeds.htm"
+    note: "Official US Federal Reserve press releases, FOMC statements and speeches."
+
+  publisher_rss:
+    enabled: false
+    name: "Third-Party Publisher RSS Feeds"
+    terms_reviewed: false
+    reviewed_on: null
+    note: "Disabled by default. Specific publisher feeds must be individually reviewed for syndication terms before enabling."

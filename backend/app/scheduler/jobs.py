@@ -6,8 +6,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
 from app.db import SessionLocal
+from app.engine.newsfilter import news_engine
 from app.engine.planner import planner
-from app.models import JobRun
+from app.models import JobRun, NewsSourceState
 from app.notify.dispatcher import dispatcher
 from app.providers.manager import provider_manager
 from app.scheduler.monitor import live_monitor
@@ -82,6 +83,70 @@ def job_kite_sync(db):
         provider_manager.kite.positions()
 
 
+def job_poll_news_p0(db):
+    """Priority 0 news polling (every 15 min): NSE Corporate Announcements & Results."""
+    logger.info("Executing P0 news poll (NSE Announcements & Financial Results)...")
+    for feed_key in ("Corporate_announcements", "Financial_Results"):
+        res = news_engine.nse_collector.fetch_feed(feed_key)
+        news_engine.update_source_health(
+            source="nse_rss",
+            success=res.success,
+            latency_sec=res.latency_sec,
+            error=res.error,
+            items_count=len(res.items),
+            etag=res.etag,
+            last_modified=res.last_modified,
+            db=db,
+        )
+        if res.success:
+            for item in res.items:
+                news_engine.ingest_raw_item(item, db=db)
+
+
+def job_poll_news_p1(db):
+    """Priority 1 news polling (every 30 min): Board Meetings & Corporate Actions."""
+    logger.info("Executing P1 news poll (NSE Board Meetings & Actions)...")
+    for feed_key in ("Board_Meetings", "Corp_action"):
+        res = news_engine.nse_collector.fetch_feed(feed_key)
+        if res.success:
+            for item in res.items:
+                news_engine.ingest_raw_item(item, db=db)
+
+
+def job_poll_macro_calendar(db):
+    """Macro event poll (every 6 hours): Central Bank policy releases."""
+    logger.info("Executing macro news poll (RBI and Fed Press Releases)...")
+    rbi_res = news_engine.central_bank_collector.fetch_rbi_news()
+    news_engine.update_source_health(
+        source="rbi_rss",
+        success=rbi_res.success,
+        latency_sec=rbi_res.latency_sec,
+        error=rbi_res.error,
+        items_count=len(rbi_res.items),
+        etag=rbi_res.etag,
+        last_modified=rbi_res.last_modified,
+        db=db,
+    )
+    if rbi_res.success:
+        for item in rbi_res.items:
+            news_engine.ingest_raw_item(item, db=db)
+
+    fed_res = news_engine.central_bank_collector.fetch_fed_news()
+    news_engine.update_source_health(
+        source="fed_rss",
+        success=fed_res.success,
+        latency_sec=fed_res.latency_sec,
+        error=fed_res.error,
+        items_count=len(fed_res.items),
+        etag=fed_res.etag,
+        last_modified=fed_res.last_modified,
+        db=db,
+    )
+    if fed_res.success:
+        for item in fed_res.items:
+            news_engine.ingest_raw_item(item, db=db)
+
+
 def job_db_backup(db):
     backup_dir = DATA_DIR / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -111,6 +176,24 @@ def start_scheduler():
             log_job_execution("live_monitor_IN", job_live_monitor_in),
             IntervalTrigger(seconds=30),
             id="live_monitor_IN",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("news_poll_P0", job_poll_news_p0),
+            IntervalTrigger(minutes=15),
+            id="news_poll_P0",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("news_poll_P1", job_poll_news_p1),
+            IntervalTrigger(minutes=30),
+            id="news_poll_P1",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("macro_poll", job_poll_macro_calendar),
+            IntervalTrigger(hours=6),
+            id="macro_poll",
             replace_existing=True,
         )
         scheduler.add_job(

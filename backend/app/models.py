@@ -167,6 +167,8 @@ class Alert(Base):
     payload_json = Column(Text, nullable=True)
     delivered_telegram = Column(Boolean, default=False)
     acknowledged = Column(Boolean, default=False)
+    retry_count = Column(Integer, default=0)
+    last_reminder_ts = Column(DateTime, nullable=True)
 
 
 class NewsEvent(Base):
@@ -174,7 +176,7 @@ class NewsEvent(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(50), nullable=False, index=True)
-    source = Column(String(50), nullable=False)  # NSE, BSE, SEC_EDGAR, RSS
+    source = Column(String(50), nullable=False)  # nse_rss, sec_edgar, gdelt_doc, finnhub, rbi_rss, fed_rss
     source_id = Column(String(100), nullable=True)
     title = Column(String(500), nullable=False)
     url = Column(String(500), nullable=True)
@@ -186,6 +188,83 @@ class NewsEvent(Base):
     canonical_event_id = Column(String(100), nullable=True)
     ai_summary = Column(Text, nullable=True)
     raw_json = Column(Text, nullable=True)
+
+    # v2 enhancements
+    match_confidence = Column(String(20), default="EXACT_NAME")  # EXACT_NAME, ALIAS, TICKER_ONLY
+    is_unverified = Column(Boolean, default=False)  # True if rumour/hedged language
+    syndication_cluster_id = Column(String(100), nullable=True, index=True)  # Wire cluster dedupe
+    materiality = Column(String(20), default="LOW")  # HIGH, MEDIUM, LOW
+    summary = Column(Text, nullable=True)  # Deterministic extractive summary
+    price_change_day_pct = Column(Float, nullable=True)  # Day's price move %
+    price_atr_multiple = Column(Float, nullable=True)  # Move in ATR multiples
+    analyst_action_json = Column(Text, nullable=True)  # Extracted brokerage action details
+
+
+class NewsSourceState(Base):
+    __tablename__ = "news_source_state"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(50), nullable=False, unique=True, index=True)
+    latency_class = Column(String(30), nullable=False, default="near-real-time")  # near-real-time, delayed, periodic/batch, unavailable
+    last_attempt_at = Column(DateTime, nullable=True)
+    last_success_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    etag = Column(String(100), nullable=True)
+    last_modified = Column(String(100), nullable=True)
+    backoff_until = Column(DateTime, nullable=True)
+    items_last_poll = Column(Integer, default=0)
+    median_latency_sec = Column(Float, default=0.0)
+    status = Column(String(20), default="HEALTHY")  # HEALTHY, DEGRADED, DOWN, UNAVAILABLE
+
+
+class CompanyRelationship(Base):
+    __tablename__ = "company_relationships"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    watched_symbol = Column(String(50), nullable=False, index=True)
+    related_entity = Column(String(100), nullable=False, index=True)
+    relationship_type = Column(String(30), nullable=False)  # SUBSIDIARY, PARENT, KEY_CUSTOMER, SUPPLIER, COMPETITOR
+    evidence_url = Column(String(500), nullable=True)
+    evidence_note = Column(Text, nullable=True)
+    last_reviewed = Column(Date, nullable=False)
+    confidence = Column(Float, default=1.0)
+    status = Column(String(20), default="ACTIVE")  # ACTIVE, INACTIVE
+
+
+class NewsCoverageGap(Base):
+    __tablename__ = "news_coverage_gaps"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source = Column(String(50), nullable=False, index=True)
+    gap_start = Column(DateTime, nullable=False)
+    gap_end = Column(DateTime, nullable=True)
+    duration_sec = Column(Float, default=0.0)
+    status = Column(String(20), default="RECORDED")  # RECORDED, RESOLVED
+    notes = Column(Text, nullable=True)
+
+
+class EarningsFiling(Base):
+    __tablename__ = "earnings_filings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    market = Column(String(10), nullable=False, default="IN")
+    period_type = Column(String(20), nullable=False)
+    period_ended = Column(Date, nullable=False)
+    filing_date = Column(Date, nullable=False)
+    revenue = Column(Float, nullable=False)
+    operating_profit = Column(Float, nullable=True)
+    net_profit = Column(Float, nullable=False)
+    eps = Column(Float, nullable=False)
+    currency = Column(String(10), default="INR")
+    source_name = Column(String(50), nullable=False)
+    source_url = Column(String(500), nullable=False)
+    consensus_eps = Column(Float, nullable=True)
+    consensus_source = Column(String(50), nullable=True)
+    severity = Column(String(20), default="CLEAR")
+    flags_json = Column(Text, nullable=True)
+    ai_summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class NewsCoverage(Base):

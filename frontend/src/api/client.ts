@@ -133,6 +133,21 @@ export const apiClient = {
     return res.json();
   },
 
+  async getNewsSourcesHealth() {
+    const res = await fetch(`${API_BASE}/news/sources/health`);
+    return res.json();
+  },
+
+  async getMacroCalendar() {
+    const res = await fetch(`${API_BASE}/news/macro`);
+    return res.json();
+  },
+
+  async getCoverageGaps() {
+    const res = await fetch(`${API_BASE}/news/coverage-gaps`);
+    return res.json();
+  },
+
   async getSettings() {
     const res = await fetch(`${API_BASE}/settings`);
     return res.json();

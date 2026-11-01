@@ -148,25 +148,46 @@ We utilize the **FREE Personal tier** of Kite Connect.
 
 ---
 
-## 6. News & Corporate Announcements Engine
+## 6. Free-Only News, Regulatory Disclosures & Event Engine (v2.3)
 
-The news module acts as a **safety layer** to prevent entries during high-risk events and blackout periods. It never generates BUY signals from headlines.
+The news module operates strictly as a **downward safety gate**. It flags risks, blocks entries before hazardous binary events, and enforces earnings blackouts. Per the **Isolation Invariant**, news, rumours, sentiment, or LLM summaries can **never** trigger a BUY signal, change position sizing, move stop-losses, or alter profit targets.
 
-### Sources Integrated
-- **India:** Official NSE Corporate Announcements, BSE Disclosures, Board Meetings, and Results Calendars.
-- **US:** SEC EDGAR 8-K filings and earnings calendars.
+### Sanctioned Free Sources Matrix (Zero Scraping, Zero Mandatory Paid APIs)
 
-### Deterministic Keyword Classifications (`config/news_rules.yaml`)
-- **RED (Critical Risk - Blocks Entry & Alerts Open Positions):**
-  - Fraud, forensic audit, SEBI penalties/orders, statutory auditor resignations, sudden CFO/CEO resignations, debt default, rating downgrades, promoter pledge invocations.
-- **AMBER (Caution - Flags for Manual Review):**
-  - Fund-raise (QIP, preferential issue), board meetings for financial results, non-sudden managerial changes, litigation disputes.
-- **GREEN (Informational):**
-  - Order wins, contract awards, share buybacks, dividends, rating upgrades, capacity expansions.
+| Purpose | Source | Access / Transport | Latency Class | Verified Terms & Compliance |
+|---|---|---|---|---|
+| **India Exchange Disclosures** | **NSE Official RSS Feeds** (`Corporate_announcements.xml`, `Board_Meetings.xml`, `Corp_action.xml`, `Financial_Results.xml`) | RSS 2.0 over HTTPS (`nsearchives.nseindia.com/content/RSS/`) | `near-real-time` (5-15 min) | NSE publishes these for syndication; polled at 5-15 min frequency matching TTL. **Zero web scraping of `nseindia.com` or private JSON endpoints.** |
+| **India Disclosures (BSE)** | BSE Official Portal | Marked `UNAVAILABLE` | `unavailable` | BSE publishes no sanctioned machine-readable feed without browser scraping. Scraping BSE is strictly prohibited by compliance policy. |
+| **US Corporate Disclosures** | **SEC EDGAR Submissions API** (`CIK{cik}.json`) & 8-K documents | REST JSON / HTML (`data.sec.gov`, `sec.gov`) | `near-real-time` (minutes) | Free, no API key required. Declares honest `SEC_USER_AGENT` per SEC Fair Access policy. Paced $\le 10$ req/s. |
+| **Broad Business News Discovery** | **GDELT DOC 2.0 API** | REST JSON (`api.gdeltproject.org`) | `periodic/batch` (~15 min index update) | Free, no API key required. Polled at polite $\ge 6$s pacing per IP. Queries by full company name and verified aliases. |
+| **US Company News (Supplementary)** | **Finnhub Stock API** (`/company-news`) | REST JSON (`finnhub.io`) | `near-real-time` (minutes) | Optional free tier (60 req/min). If `FINNHUB_API_KEY` is unset, engine operates seamlessly in keyless mode. |
+| **Macro Policy Announcements** | **RBI & US Federal Reserve RSS Feeds** | Official RSS XML | `periodic/batch` (6 hours) | Official public central bank press release feeds. |
 
-### Earnings Blackout Rules
-- Blocks new setup triggers if earnings or quarterly results are scheduled within `earnings_block_days` (default 7 calendar days).
-- Alerts open positions 2 trading days prior to scheduled results.
+### Empirical Latency Classes (Honesty Invariant)
+The platform never mislabels internet news as "real-time":
+- **`near-real-time`:** Disclosures indexed and fetched within minutes of publication (NSE RSS, SEC EDGAR, Finnhub).
+- **`delayed`:** Data subject to exchange transmission delays.
+- **`periodic/batch`:** Aggregated news discovery updated on batch cycles of 15 to 60 minutes (GDELT DOC 2.0).
+- **`unavailable`:** Source channels that have no sanctioned feed without prohibited scraping (BSE).
+
+### Intelligence & Disambiguation Modules
+1. **Entity Resolution & Ticker Collision Guard:**
+   - Disambiguates common ticker collisions (e.g., `TCS` = "Tax Collected at Source", `BEL` = "Belgium") using strict company name matching and legal entity normalization. Bare short ticker matches route to `TICKER_ONLY` for manual review, never confirmed relevance.
+2. **Wire Syndication Clustering:**
+   - Detects wire agency attribution (Reuters, PTI, ANI, IANS, Bloomberg, PR Newswire) and clusters identical syndicated stories across publishers into a single cluster ID.
+3. **Rumour & Hedged Language Classifier:**
+   - Flags speculative phrases ("sources said", "reportedly", "people familiar", "mulls", "unconfirmed") as `UNVERIFIED RUMOUR`. Official regulatory filings are never flagged as rumour.
+4. **Analyst Action Extractor (Strict Null Rule):**
+   - Parses brokerage upgrades, downgrades, and target prices. If a field is not explicitly present in the text, it remains strictly `null` (None). Never synthesizes or hallucinates ratings.
+5. **Deterministic Materiality Evaluator:**
+   - Computes score via $\text{Materiality} = \text{Category Weight} \times \text{Source Authority} \times \text{Recency Decay} \times \text{Price Reaction}$ to categorize items as `HIGH`, `MEDIUM`, or `LOW`.
+6. **Rule 11 (Strict Unknown Policy):**
+   - Missing data, stale sources (&gt;60m), offline coverage gaps, or unmonitored markets return `UNKNOWN`, **never** `CLEAR`.
+
+### Running News Engine Tests
+```powershell
+backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
+```
 
 ---
 

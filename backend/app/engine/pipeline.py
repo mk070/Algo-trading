@@ -494,7 +494,7 @@ class DecisionPipeline:
             target1=target1 if chosen_cand else None,
             qty=sizing.qty if sizing.passed else 0,
             risk_amount=sizing.risk_amount if sizing.passed else 0.0,
-            cost_in_r=cost_breakdown.cost_in_r if cost_breakdown else 0.0,
+            cost_in_r=sizing.cost_breakdown.cost_in_r if (sizing and sizing.cost_breakdown) else 0.0,
             stages=stages,
             all_rejection_reasons=all_rejections,
             config_hash=config_hash,

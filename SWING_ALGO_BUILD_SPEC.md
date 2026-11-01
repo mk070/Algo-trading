@@ -217,13 +217,16 @@ Options for the owner, in order of preference: (1) run India in **paper mode** (
 ## 5. NEWS AND EVENT FILTER (SAFETY LAYER, NOT A SIGNAL SOURCE)
 
 News is used to **avoid blow-ups and add context**. Do not generate buy signals from headlines.
+**Isolation Invariant:** News, rumors, sentiment, and AI summaries may only BLOCK or flag REVIEW. They can NEVER generate a BUY signal, change position sizing, modify stops, or alter profit targets.
 
-### 5.1 Data to collect
-- India: NSE/BSE **corporate announcements**, **results calendar**, **board meetings**, **corporate actions** (dividend, split, bonus, buyback, demerger). Use free Python wrappers that read the exchanges' own public endpoints (e.g. `dalal`, `india-corp-actions`, `BseIndiaApi`) behind a provider interface. These are unofficial and can break or get rate-limited: cache, throttle (respect each library's limits), and fail soft. NSE needs cookie-primed sessions.
-- US: **earnings dates** (free sources such as yfinance's calendar data, with a fallback to Nasdaq/other free calendars), **SEC EDGAR** filings (official, free; requires a descriptive `User-Agent` header with contact email and a request-rate limit of at most 10 requests/second; verify current rules) for 8-K events.
-- NSE also publishes RSS feeds for announcements; check them as a lightweight alternative or complement to the wrappers.
-- Avoid free tiers of generic news APIs for live signals (some delay articles by about 24 hours). Paid real-time news (for example Benzinga via a data vendor, listed around USD 99/month) is **out of scope for v1**; add it only if paper trading shows losses caused by news the free sources missed.
-- Optional context headlines: Google News RSS / publisher RSS per symbol, displayed only, never used for triggers.
+### 5.1 Approved Free Data Sources & Terms Compliance
+- **Compliance Policy:** Automated scraping of exchange web pages (e.g. `nseindia.com`, `bseindia.com`), cookie-primed scraping sessions, or unofficial web scrapers (`dalal`, `india-corp-actions`, `BseIndiaApi`) are **strictly prohibited** by exchange terms of use. The platform exclusively uses sanctioned syndication channels and public APIs.
+- **India Disclosures (NSE):** Official NSE RSS feeds (`Corporate_announcements.xml`, `Board_Meetings.xml`, `Corp_action.xml`, `Financial_Results.xml`) hosted under `https://nsearchives.nseindia.com/content/RSS/`. Polled at 5-15 min frequency respecting feed TTL.
+- **India Disclosures (BSE):** BSE publishes no sanctioned machine-readable feed without browser scraping. BSE coverage is explicitly documented and reported as `UNAVAILABLE` (never scraped).
+- **US Disclosures (SEC EDGAR):** Official SEC EDGAR Submissions API (`https://data.sec.gov/submissions/CIK{cik}.json`) and 8-K documents. Free, no API key required. Declares honest `SEC_USER_AGENT` per SEC Fair Access policy. Paced $\le 10$ req/s.
+- **Broad News Discovery (GDELT DOC 2.0 API):** Free, no API key required (`https://api.gdeltproject.org/api/v2/doc/doc`). Queries by verified company names and aliases, polled with $\ge 6$s rate pacing.
+- **Supplementary US News (Finnhub):** Free company news endpoint. Optional. If `FINNHUB_API_KEY` is unset, the engine operates seamlessly in free keyless mode.
+- **Macro Policy Releases (Central Banks):** Official RSS feeds from the Reserve Bank of India (`https://www.rbi.org.in/rss/pressreleases.xml`) and the US Federal Reserve (`https://www.federalreserve.gov/feeds/press_monetary.xml`).
 
 ### 5.2 Rules (deterministic keyword + calendar logic; no LLM needed in v1)
 - **Earnings blackout:** block new entries if results/earnings fall within `earnings_block_days` (default 7 calendar days) after the signal date. For open positions, alert 2 trading days before results.
@@ -234,26 +237,33 @@ News is used to **avoid blow-ups and add context**. Do not generate buy signals 
 - Corporate-action safety: detect splits/bonuses and verify price series is adjusted; re-pull history for the symbol when an action occurs.
 - Each signal and position page shows a **News & Events** panel (last 14 days) with severity chips.
 
-### 5.3 Future (not v1)
-Optional LLM summarization of filings behind a feature flag; sentiment is never a trade trigger.
+### 5.3 Intelligence, Disambiguation & Syndication Modules (v2.3)
+- **Entity Resolution & Ticker Collision Guard:** Disambiguates common words/tickers (e.g., `TCS` = "Tax Collected at Source", `BEL` = "Belgium") using legal entity name normalization. Short bare tickers route to `TICKER_ONLY` for manual review, never confirmed relevance.
+- **Wire Syndication Clustering:** Detects wire agency attribution (Reuters, PTI, ANI, IANS, Bloomberg, PR Newswire) and clusters identical syndicated stories across publishers into a single cluster ID.
+- **Rumour & Hedged Language Classifier:** Flags speculative phrases ("sources said", "reportedly", "people familiar", "mulls", "unconfirmed") as `UNVERIFIED RUMOUR`. Official regulatory filings are never flagged as rumour.
+- **Analyst Action Extractor (Strict Null Rule):** Parses brokerage upgrades, downgrades, and target prices. If a field is not explicitly present in the text, it remains strictly `null` (None). Never synthesizes or hallucinates ratings.
+- **Deterministic Materiality Evaluator:** Computes score via $\text{Materiality} = \text{Category Weight} \times \text{Source Authority} \times \text{Recency Decay} \times \text{Price Reaction}$ to categorize items as `HIGH`, `MEDIUM`, or `LOW`.
+- **Contextual Price Reaction:** Computes day's % price move and ATR multiple to show whether market has already priced the news.
+- **Extractive Summarizer:** Deterministic 2-sentence extractive summary interface combining headline and first non-redundant sentence. Zero hallucination risk.
 
 ### 5.4 News data model, de-duplication and coverage status
-- **Timestamps:** store `published_at` (original publication time from the source, converted to UTC) separately from `ingested_at` (when our system saw it). Alerts and the UI show both; latency = `ingested_at - published_at` is logged per source to measure how stale each feed is.
-- **De-duplication:** the same event often appears on NSE, BSE and in publisher articles. Compute a `dedupe_key` from normalised symbol + normalised subject/title tokens + a time bucket (default window `news.dedupe_window_hours`), with a fuzzy-match fallback (e.g. token-set similarity or simhash). Group duplicates under one `canonical_event_id`, keep every original source link, and count each event once for severity and alerts.
+- **Timestamps & Latency Classes:** store `published_at` separately from `ingested_at`. Use 4 empirical latency classes (`near-real-time`, `delayed`, `periodic/batch`, `unavailable`). Never label internet feeds as "real-time".
+- **De-duplication:** normalized token + time bucket deduplication key (`dedupe_key`), combined with wire syndication cluster ID (`syndication_cluster_id`).
 - **Coverage status per symbol per scan (stored in `news_coverage`):**
 
 | Status | Meaning |
 |---|---|
-| `CLEAR` | All required sources were fetched successfully within `max_source_age_min`, the earnings/results date is known and outside the blackout window, and no AMBER/RED flags exist |
-| `REVIEW` | AMBER flags, an upcoming result inside the warning window, or partial source coverage; the owner must read the items before buying |
-| `BLOCKED` | RED flag or earnings blackout; no entry signal is raised |
-| `UNKNOWN` | A required source failed, is stale, or does not cover this symbol/market (for example US news when only EDGAR is wired), or the results date cannot be determined. **UNKNOWN is never shown or treated as CLEAR.** |
+| `CLEAR` | All required sources were fetched successfully within `max_source_age_min`, no offline coverage gaps exist, the earnings/results date is known and outside the blackout window, and no AMBER/RED flags exist. |
+| `REVIEW` | AMBER flags, an upcoming result inside the warning window, macro caution window, unverified rumour, or partial source coverage; the owner must read the items before buying. |
+| `BLOCKED` | RED flag or earnings blackout; no entry signal is raised. |
+| `UNKNOWN` | A required source failed, is stale (>60m), unconfigured, or an offline coverage gap was recorded during market hours. **UNKNOWN is NEVER shown or treated as CLEAR.** |
 
 - `news.unknown_policy`: `warn` (default; signal is allowed but carries a prominent "NEWS UNKNOWN: REVIEW MANUALLY" flag and a ranking penalty) or `block`.
 - Every BUY alert and signal card shows the coverage status, which sources were checked, and when.
 
-### 5.5 Future integration: licensed financial, sector and macro news
-Define a `NewsProvider` interface (`fetch(symbols, since) -> list[NewsItem]`, normalised to the model above, with `published_at`, `source`, `url`, `symbols`, `sector`, `category`) so a licensed Indian/US financial-news feed can be plugged in later without engine changes. Add a `MacroEvent` table (central-bank decisions, inflation/jobs data, major scheduled events with importance and timestamp); with `news.macro_event_caution=true`, high-importance macro days show a caution banner and can downgrade entries to REVIEW. Paid providers are **deferred** until the owner sets a budget (`budget.monthly_news_data_usd`) and paper trading shows the free sources miss material events.
+### 5.5 Macroeconomic Event Calendar (2026)
+- Versioned calendar in `config/macro_calendar.yaml` with RBI MPC and US FOMC meeting dates.
+- Automated caution window flags trades within `caution_window_trading_days` (default 1 trading day) as `REVIEW` with clear macro caution banners.
 
 ### 5.6 Optional AI summaries (off by default; never a signal source)
 - Purpose: short summaries and category suggestions for official filings and articles, to save reading time.

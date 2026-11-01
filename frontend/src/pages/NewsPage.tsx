@@ -1,11 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { AlertOctagon, AlertTriangle, CheckCircle2, Clock, ExternalLink, FileSpreadsheet, Filter, Info, Newspaper, Search, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileSpreadsheet,
+  Filter,
+  Info,
+  Layers,
+  Newspaper,
+  Radio,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 import { apiClient } from '../api/client';
 import { EarningsAnalysisResult } from '../types';
 
 export const NewsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'DISCLOSURES' | 'EARNINGS'>('DISCLOSURES');
+  const [activeTab, setActiveTab] = useState<'DISCLOSURES' | 'SOURCES' | 'EARNINGS'>('DISCLOSURES');
   const [events, setEvents] = useState<any[]>([]);
+  const [sourcesHealth, setSourcesHealth] = useState<any[]>([]);
+  const [macroData, setMacroData] = useState<any>(null);
+  const [coverageGaps, setCoverageGaps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchSymbol, setSearchSymbol] = useState('');
@@ -28,6 +53,21 @@ export const NewsPage: React.FC = () => {
     }
   };
 
+  const fetchSourcesHealth = async () => {
+    try {
+      const [health, macro, gaps] = await Promise.all([
+        apiClient.getNewsSourcesHealth(),
+        apiClient.getMacroCalendar(),
+        apiClient.getCoverageGaps(),
+      ]);
+      setSourcesHealth(health || []);
+      setMacroData(macro || null);
+      setCoverageGaps(gaps || []);
+    } catch (e) {
+      console.error('Error fetching source health:', e);
+    }
+  };
+
   const fetchEarnings = async () => {
     if (!earningsSymbol) return;
     try {
@@ -46,7 +86,9 @@ export const NewsPage: React.FC = () => {
   }, [searchSymbol]);
 
   useEffect(() => {
-    if (activeTab === 'EARNINGS') {
+    if (activeTab === 'SOURCES') {
+      fetchSourcesHealth();
+    } else if (activeTab === 'EARNINGS') {
       fetchEarnings();
     }
   }, [activeTab, earningsMarket]);
@@ -67,10 +109,36 @@ export const NewsPage: React.FC = () => {
     }
   };
 
+  const getMaterialityBadge = (mat: string) => {
+    switch (mat) {
+      case 'HIGH':
+        return 'bg-rose-900/60 text-rose-200 border-rose-700';
+      case 'MEDIUM':
+        return 'bg-amber-900/60 text-amber-200 border-amber-700';
+      default:
+        return 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'HEALTHY':
+        return 'bg-emerald-950 text-emerald-300 border-emerald-800';
+      case 'DEGRADED':
+        return 'bg-amber-950 text-amber-300 border-amber-800';
+      case 'UNAVAILABLE':
+        return 'bg-slate-800 text-slate-400 border-slate-700';
+      case 'OPTIONAL_UNSET':
+        return 'bg-blue-950 text-blue-300 border-blue-800';
+      default:
+        return 'bg-rose-950 text-rose-300 border-rose-800';
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {/* Top Segmented Mode Selector */}
-      <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
+      <div className="flex items-center gap-3 border-b border-slate-800 pb-3 flex-wrap">
         <button
           onClick={() => setActiveTab('DISCLOSURES')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
@@ -79,6 +147,15 @@ export const NewsPage: React.FC = () => {
         >
           <Newspaper className="w-4 h-4" />
           Exchange Disclosures & News
+        </button>
+        <button
+          onClick={() => setActiveTab('SOURCES')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'SOURCES' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white bg-slate-900'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          Free Source Health & Compliance
         </button>
         <button
           onClick={() => setActiveTab('EARNINGS')}
@@ -91,7 +168,7 @@ export const NewsPage: React.FC = () => {
         </button>
       </div>
 
-      {activeTab === 'DISCLOSURES' ? (
+      {activeTab === 'DISCLOSURES' && (
         <>
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -105,7 +182,7 @@ export const NewsPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <input
                 type="text"
                 placeholder="Search symbol (e.g. RELIANCE)..."
@@ -130,12 +207,16 @@ export const NewsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Policy Reminder */}
+          {/* Compliance & Safety Notice */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-xs text-slate-300 flex items-start gap-3">
             <ShieldAlert className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-            <div>
-              <strong className="text-white block mb-0.5">Safety Rule 11 (Unknown is not clear):</strong>
-              RED events (fraud, auditor resignation, default, regulatory penalty) immediately block entry triggers and alert if held. AMBER events require manual reading. Missing data is marked UNKNOWN, never CLEAR.
+            <div className="space-y-1">
+              <div>
+                <strong className="text-white">Rule 11 (Unknown is not clear):</strong> Missing, stale (&gt;60m), or offline coverage marks stocks as <span className="font-mono text-amber-400 font-bold">UNKNOWN</span>, never <span className="font-mono text-emerald-400 font-bold">CLEAR</span>.
+              </div>
+              <div className="text-slate-400">
+                Isolation Invariant: News and sentiment can only BLOCK or flag REVIEW. They never generate BUY signals, modify sizing, or alter stops.
+              </div>
             </div>
           </div>
 
@@ -155,9 +236,9 @@ export const NewsPage: React.FC = () => {
             ) : (
               <div className="divide-y divide-slate-800">
                 {filteredEvents.map((e, idx) => (
-                  <div key={idx} className="p-4 hover:bg-slate-850 transition-colors flex flex-col gap-2">
+                  <div key={idx} className="p-4 hover:bg-slate-850 transition-colors flex flex-col gap-2.5">
                     <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-white text-sm">{e.symbol}</span>
                         <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[11px] border border-slate-700">
                           {e.source}
@@ -165,17 +246,71 @@ export const NewsPage: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${getSeverityBadge(e.severity)}`}>
                           {e.severity}
                         </span>
-                        {e.category && (
-                          <span className="text-slate-400 text-xs italic">({e.category})</span>
+                        {e.materiality && (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getMaterialityBadge(e.materiality)}`}>
+                            {e.materiality} Materiality
+                          </span>
+                        )}
+                        {e.is_unverified ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 flex items-center gap-1">
+                            <Radio className="w-2.5 h-2.5" /> UNVERIFIED RUMOUR
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-800 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> OFFICIAL FILING
+                          </span>
+                        )}
+                        {e.syndication_cluster_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 font-mono">
+                            Wire Cluster: {e.syndication_cluster_id.slice(-8)}
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[11px]">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{new Date(e.published_at).toLocaleString('en-IN')}</span>
+
+                      <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
+                        {e.price_change_day_pct !== null && e.price_change_day_pct !== undefined && (
+                          <span className={`px-2 py-0.5 rounded font-bold border ${
+                            e.price_change_day_pct >= 0
+                              ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                              : 'text-rose-400 bg-rose-950 border-rose-800'
+                          }`}>
+                            Day: {e.price_change_day_pct >= 0 ? '+' : ''}{e.price_change_day_pct}%
+                            {e.price_atr_multiple ? ` (${e.price_atr_multiple}x ATR)` : ''}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1 text-slate-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{new Date(e.published_at).toLocaleString('en-IN')}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-200 font-medium">{e.title}</p>
+                    <p className="text-xs text-slate-200 font-semibold">{e.title}</p>
+
+                    {e.summary && e.summary !== e.title && (
+                      <p className="text-xs text-slate-400 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                        {e.summary}
+                      </p>
+                    )}
+
+                    {/* Brokerage Analyst Action card if present */}
+                    {e.analyst_action && e.analyst_action.brokerage && (
+                      <div className="p-2.5 bg-indigo-950/40 border border-indigo-900/60 rounded-lg text-xs flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-indigo-300 font-bold">{e.analyst_action.brokerage}</span>
+                          <span className="text-slate-400">Action:</span>
+                          <span className="font-mono text-white font-bold">{e.analyst_action.action || 'RATING'}</span>
+                        </div>
+                        <div className="flex items-center gap-3 font-mono text-[11px]">
+                          {e.analyst_action.new_rating && (
+                            <span className="text-emerald-400">Rating: {e.analyst_action.new_rating}</span>
+                          )}
+                          {e.analyst_action.new_target && (
+                            <span className="text-cyan-300">Target: {e.analyst_action.new_target}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {e.url && (
                       <div>
@@ -185,7 +320,7 @@ export const NewsPage: React.FC = () => {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
                         >
-                          Official Exchange Filing <ExternalLink className="w-3 h-3" />
+                          View Official Disclosure Source <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
                     )}
@@ -195,8 +330,125 @@ export const NewsPage: React.FC = () => {
             )}
           </div>
         </>
-      ) : (
-        /* Earnings Analyst Section (Spec 5.7) */
+      )}
+
+      {activeTab === 'SOURCES' && (
+        <div className="flex flex-col gap-6">
+          {/* Header */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-400" />
+              Sanctioned Free News Sources & Compliance Health
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Strict compliance: Zero web scraping of prohibited endpoints. RSS syndication and official public APIs only.
+            </p>
+          </div>
+
+          {/* BSE Policy Banner */}
+          <div className="p-4 bg-slate-900 border border-amber-900/60 rounded-xl text-xs text-amber-200 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-white block mb-0.5">BSE India Policy Notice:</strong>
+              BSE does not provide a sanctioned machine-readable RSS syndication feed without browser scraping. Automated scraping of exchange website portals violates terms of use. BSE coverage is explicitly marked <span className="font-mono text-amber-400 font-bold">UNAVAILABLE</span> (never scraped). Indian regulatory disclosures are served via official NSE RSS feeds (<span className="font-mono text-xs">nsearchives.nseindia.com</span>).
+            </div>
+          </div>
+
+          {/* Offline Coverage Gaps Banner if any */}
+          {coverageGaps.length > 0 && (
+            <div className="p-4 bg-rose-950/50 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-start gap-3">
+              <WifiOff className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-white block mb-0.5">Offline Coverage Gaps Recorded:</strong>
+                <ul className="list-disc pl-4 space-y-0.5 mt-1">
+                  {coverageGaps.map((g, idx) => (
+                    <li key={idx}>
+                      {g.source}: Started at {g.gap_start} ({Math.round(g.duration_sec)}s downtime). Status: {g.status}.
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-slate-400 mt-1 text-[11px]">
+                  During coverage gaps, symbols default to UNKNOWN to guarantee zero trades on blind data.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Sources Health Table */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">Configured Free Sources</h2>
+              <span className="text-xs text-slate-500">Live Health Monitoring</span>
+            </div>
+
+            <div className="divide-y divide-slate-800 text-xs">
+              {sourcesHealth.map((src, idx) => (
+                <div key={idx} className="p-4 flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex flex-col gap-1 max-w-md">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">{src.name}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono text-[10px]">
+                        {src.market}
+                      </span>
+                    </div>
+                    <span className="font-mono text-slate-500 text-[11px]">{src.source}</span>
+                    {src.note && <span className="text-slate-400 italic text-[11px]">{src.note}</span>}
+                  </div>
+
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="text-right">
+                      <span className="text-slate-500 block text-[10px]">Latency Class:</span>
+                      <span className="font-mono text-slate-300 font-semibold">{src.latency_class}</span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-slate-500 block text-[10px]">Median Latency:</span>
+                      <span className="font-mono text-slate-300 font-semibold">
+                        {src.median_latency_sec ? `${src.median_latency_sec}s` : 'N/A'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={`px-2.5 py-1 rounded text-xs font-bold border ${getStatusBadge(src.status)}`}>
+                        {src.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Macro Calendar Caution Window */}
+          {macroData && macroData.calendar && (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
+                <Calendar className="w-4 h-4 text-indigo-400" />
+                2026 Central Bank Monetary Policy Calendar (RBI MPC & US FOMC)
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {macroData.calendar.events?.slice(0, 8).map((ev: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{ev.authority}</span>
+                        <span className="text-slate-400">{ev.region}</span>
+                      </div>
+                      <span className="text-slate-300 block text-[11px] mt-0.5">{ev.title}</span>
+                    </div>
+                    <div className="text-right font-mono text-[11px] text-cyan-400">
+                      {ev.decision_date}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'EARNINGS' && (
         <div className="flex flex-col gap-6">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
@@ -246,7 +498,6 @@ export const NewsPage: React.FC = () => {
 
           {earningsData && earningsData.latest_period && (
             <div className="flex flex-col gap-6">
-              {/* Weak-Results Alert Banner (AMBER) */}
               {earningsData.severity === 'AMBER' && (
                 <div className="p-4 bg-amber-950/60 border border-amber-800 rounded-xl text-xs text-amber-300 flex items-start gap-3 shadow-lg">
                   <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -261,7 +512,6 @@ export const NewsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Latest Period Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                   <span className="text-xs text-slate-400 block mb-1">Reporting Period</span>
@@ -297,7 +547,6 @@ export const NewsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Consensus & Guidance Policy Table */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
                 <h2 className="text-sm font-bold text-white mb-2">Consensus & Earnings Surprise Analysis</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -335,7 +584,6 @@ export const NewsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Official Verified Source Links */}
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-xs flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2 text-slate-300">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
