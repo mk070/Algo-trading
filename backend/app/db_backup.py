@@ -118,3 +118,4 @@ def restore_database_backup(snapshot_path: Path, db: Optional[Session] = None) -
     finally:
         if db is None:
             sess.close()
+

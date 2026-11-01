@@ -62,6 +62,48 @@ def get_database_health():
     return check_db_health()
 
 
+@router.get("/neon/services")
+def get_neon_services():
+    """Returns end-to-end status of all wired Neon services: Postgres, Auth, and Realtime."""
+    db_health = check_db_health()
+    
+    auth_status = {
+        "configured": bool(settings.neon_auth_base_url),
+        "base_url": settings.neon_auth_base_url,
+        "jwks_url": settings.neon_auth_jwks_url,
+    }
+    if settings.neon_auth_jwks_url:
+        try:
+            import httpx
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(settings.neon_auth_jwks_url)
+                if res.status_code == 200:
+                    auth_status["status"] = "CONNECTED"
+                    auth_status["keys_count"] = len(res.json().get("keys", []))
+                else:
+                    auth_status["status"] = f"HTTP_{res.status_code}"
+        except Exception as e:
+            auth_status["status"] = "UNREACHABLE"
+            auth_status["error"] = str(e)
+    else:
+        auth_status["status"] = "NOT_CONFIGURED"
+
+    rt_status = {
+        "configured": bool(settings.neon_realtime_url),
+        "url": settings.neon_realtime_url,
+        "secret_set": bool(settings.neon_realtime_secret),
+        "status": "ACTIVE" if (settings.neon_realtime_url and settings.neon_realtime_secret) else "NOT_CONFIGURED",
+    }
+
+    return {
+        "branch": settings.neon_branch or "production",
+        "postgres": db_health,
+        "auth": auth_status,
+        "realtime": rt_status,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+
 @router.get("/regime")
 def get_regime(market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
     """Returns current market regime status and index indicators."""

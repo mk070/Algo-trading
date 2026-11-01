@@ -420,3 +420,4 @@ def downgrade() -> None:
     ]
     for table in tables:
         op.drop_table(table)
+

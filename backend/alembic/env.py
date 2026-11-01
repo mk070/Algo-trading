@@ -29,9 +29,11 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """Retrieve normalized PostgreSQL database URL from application settings."""
+    """Retrieve normalized PostgreSQL database URL from application settings.
+    Prefers direct unpooled connection for transactional DDL per Neon best practices.
+    """
     try:
-        return settings.normalized_database_url
+        return settings.normalized_unpooled_database_url
     except Exception:
         # Fallback to configured URL in alembic.ini or placeholder if settings fail
         return config.get_main_option(

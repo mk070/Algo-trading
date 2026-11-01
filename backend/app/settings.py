@@ -172,6 +172,14 @@ class AppSettings(BaseSettings):
         default="postgresql://neondb_owner:YOUR_PASSWORD@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require",
         alias="DATABASE_URL"
     )
+    database_url_unpooled: Optional[str] = Field(default=None, alias="DATABASE_URL_UNPOOLED")
+
+    # Neon Cloud Services (Auth, Realtime, Branch)
+    neon_branch: Optional[str] = Field(default=None, alias="NEON_BRANCH")
+    neon_auth_base_url: Optional[str] = Field(default=None, alias="NEON_AUTH_BASE_URL")
+    neon_auth_jwks_url: Optional[str] = Field(default=None, alias="NEON_AUTH_JWKS_URL")
+    neon_realtime_url: Optional[str] = Field(default=None, alias="NEON_REALTIME_URL")
+    neon_realtime_secret: Optional[str] = Field(default=None, alias="NEON_REALTIME_SECRET")
 
     @property
     def normalized_database_url(self) -> str:
@@ -189,6 +197,18 @@ class AppSettings(BaseSettings):
         elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
             url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return url
+
+    @property
+    def normalized_unpooled_database_url(self) -> str:
+        """Direct (unpooled) PostgreSQL URL for schema migrations (Alembic) and DDL."""
+        raw = (self.database_url_unpooled or self.database_url or "").strip()
+        if not raw or raw.startswith("sqlite"):
+            return self.normalized_database_url
+        if raw.startswith("postgres://"):
+            raw = raw.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif raw.startswith("postgresql://") and not raw.startswith("postgresql+"):
+            raw = raw.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return raw
     
     # Angel One SmartAPI (Core Market Data)
     angelone_api_key: Optional[str] = Field(default=None, alias="ANGELONE_API_KEY")

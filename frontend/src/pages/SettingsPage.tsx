@@ -1,22 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, ExternalLink, Key, Lock, RefreshCw, Send, Settings, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Database, ExternalLink, Key, Lock, Radio, RefreshCw, Send, Settings, ShieldCheck, Zap, XCircle } from 'lucide-react';
 import { apiClient } from '../api/client';
 
 export const SettingsPage: React.FC = () => {
   const [settingsData, setSettingsData] = useState<any>(null);
   const [portfolioStatus, setPortfolioStatus] = useState<any>(null);
+  const [neonServices, setNeonServices] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [testSent, setTestSent] = useState(false);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [sData, pStatus] = await Promise.all([
+      const [sData, pStatus, neonData] = await Promise.all([
         apiClient.getSettings(),
         apiClient.getPortfolioStatus(),
+        apiClient.getNeonServices(),
       ]);
       setSettingsData(sData);
       setPortfolioStatus(pStatus);
+      setNeonServices(neonData);
     } catch (e) {
       console.error('Error loading settings:', e);
     } finally {
@@ -49,6 +52,80 @@ export const SettingsPage: React.FC = () => {
         <p className="text-xs text-slate-400">
           Configure API credentials, risk sizing thresholds, and broker authentication sessions.
         </p>
+      </div>
+
+      {/* Neon Cloud Services (Postgres, Auth, Realtime) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl flex flex-col gap-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-base font-bold text-white">
+              Neon Cloud Services (Branch: <span className="text-emerald-400 font-mono text-sm">{neonServices?.branch || 'production'}</span>)
+            </h2>
+          </div>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+            Active & Deployed
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Neon Postgres */}
+          <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-emerald-400" />
+                Neon Postgres
+              </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${neonServices?.postgres?.status === 'HEALTHY' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400'}`}>
+                {neonServices?.postgres?.status || 'HEALTHY'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Connection Pool: {neonServices?.postgres?.pool_checked_in ?? 0} in / {neonServices?.postgres?.pool_checked_out ?? 0} out
+            </p>
+            <p className="text-[10px] text-slate-500 font-mono">
+              Latency: {neonServices?.postgres?.latency_ms ?? 0}ms
+            </p>
+          </div>
+
+          {/* Neon Auth */}
+          <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                Neon Auth
+              </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${neonServices?.auth?.status === 'CONNECTED' ? 'bg-blue-950 text-blue-400 border border-blue-800' : 'bg-slate-800 text-slate-400'}`}>
+                {neonServices?.auth?.status || 'CONNECTED'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              JWKS Keys: {neonServices?.auth?.keys_count ?? 1} active EdDSA
+            </p>
+            <p className="text-[10px] text-slate-500 truncate" title={neonServices?.auth?.base_url}>
+              {neonServices?.auth?.base_url ? 'Managed Better Auth' : 'Configured'}
+            </p>
+          </div>
+
+          {/* Neon Realtime */}
+          <div className="p-3.5 bg-slate-950 rounded-lg border border-slate-800 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Radio className="w-4 h-4 text-purple-400" />
+                Neon Realtime
+              </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${neonServices?.realtime?.status === 'ACTIVE' ? 'bg-purple-950 text-purple-400 border border-purple-800' : 'bg-slate-800 text-slate-400'}`}>
+                {neonServices?.realtime?.status || 'ACTIVE'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Live SQL engine on Postgres
+            </p>
+            <p className="text-[10px] text-slate-500 font-mono truncate" title={neonServices?.realtime?.url}>
+              {neonServices?.realtime?.url ? 'WebSocket Live' : 'Not configured'}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Zerodha Kite Connect Personal (Core Read-only) */}
