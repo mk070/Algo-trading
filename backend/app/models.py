@@ -93,6 +93,7 @@ class Signal(Base):
     gap95 = Column(Float, nullable=True)
     reasons_json = Column(Text, nullable=True)
     news_flags_json = Column(Text, nullable=True)
+    sources_json = Column(Text, default='["AUTO"]')  # ["AUTO", "WATCHLIST:MyFocus", ...]
     state = Column(
         String(30),
         default="WATCHLIST",
@@ -184,9 +185,9 @@ class NewsEvent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     symbol = Column(String(50), nullable=False, index=True)
     source = Column(String(50), nullable=False)  # nse_rss, sec_edgar, gdelt_doc, finnhub, rbi_rss, fed_rss
-    source_id = Column(String(100), nullable=True)
-    title = Column(String(500), nullable=False)
-    url = Column(String(500), nullable=True)
+    source_id = Column(Text, nullable=True)
+    title = Column(Text, nullable=False)
+    url = Column(Text, nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=False)
     ingested_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     severity = Column(String(20), default="GREEN")  # RED, AMBER, GREEN
@@ -410,3 +411,74 @@ class DecisionStageResult(Base):
     status = Column(String(20), nullable=False)  # PASS, BLOCK, WAIT
     checks_json = Column(Text, nullable=False)
     rejection_reasons_json = Column(Text, nullable=True)
+
+
+class LatestQuote(Base):
+    """Shared latest-quote table for multi-worker state synchronization."""
+    __tablename__ = "latest_quotes"
+
+    symbol = Column(String(50), primary_key=True)
+    market = Column(String(10), primary_key=True, default="IN")
+    price = Column(Float, nullable=False)
+    provider = Column(String(50), nullable=False)
+    exchange_ts = Column(DateTime(timezone=True), nullable=False)
+    received_ts = Column(DateTime(timezone=True), nullable=False)
+    freshness = Column(String(20), nullable=False, default="FRESH")  # FRESH, STALE, DELAYED, UNAVAILABLE
+    realtime = Column(Boolean, nullable=False, default=True)
+    day_volume = Column(Float, default=0.0)
+    open = Column(Float, nullable=True)
+    high = Column(Float, nullable=True)
+    low = Column(Float, nullable=True)
+    close = Column(Float, nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), onupdate=utc_now)
+
+
+class CustomPriceAlert(Base):
+    """User-defined price level alerts evaluated in the monitoring loop."""
+    __tablename__ = "custom_price_alerts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    market = Column(String(10), nullable=False, default="IN")
+    target_price = Column(Float, nullable=False)
+    condition = Column(String(10), nullable=False)  # ABOVE, BELOW
+    notes = Column(String(200), nullable=True)
+    triggered = Column(Boolean, default=False)
+    triggered_at = Column(DateTime(timezone=True), nullable=True)
+    triggered_price = Column(Float, nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+
+class Watchlist(Base):
+    """Named user watchlists (Spec 3.6, Manual Watchlist Import enhancement)."""
+    __tablename__ = "watchlists"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    market = Column(String(10), nullable=False, default="IN")
+    name = Column(String(100), nullable=False)
+    source = Column(String(50), default="APP_MANUAL")  # APP_MANUAL, ZERODHA_MANUAL_IMPORT
+    is_default = Column(Boolean, default=False)
+    imported_at = Column(DateTime(timezone=True), nullable=True)
+    last_reimported_at = Column(DateTime(timezone=True), nullable=True)
+    is_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class WatchlistItem(Base):
+    """Individual stock symbol on a named watchlist."""
+    __tablename__ = "watchlist_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    watchlist_id = Column(Integer, ForeignKey("watchlists.id"), nullable=False, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    raw_input = Column(String(100), nullable=True)
+    status = Column(String(20), default="RESOLVED")  # RESOLVED, AMBIGUOUS, UNRESOLVED, UNSUPPORTED
+    exchange = Column(String(20), default="NSE")
+    notes = Column(String(250), nullable=True)
+    source = Column(String(50), default="APP_MANUAL")  # APP_MANUAL, ZERODHA_MANUAL_IMPORT, CSV_IMPORT
+    is_deleted = Column(Boolean, default=False)
+    added_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    removed_at = Column(DateTime(timezone=True), nullable=True)
+

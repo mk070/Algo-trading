@@ -428,7 +428,7 @@ All routes under `/api`. Protect with a bearer token from env `APP_TOKEN` (singl
 | POST | `/scan/run?market=` | run a scan on demand (async job, returns job id) |
 | GET | `/watchlist` | active signals + open positions with live prices, distance to trigger/stop |
 | GET | `/quotes?symbols=` | latest cached quotes with staleness flags |
-| GET | `/bars/{symbol}?tf=1d&n=250` | OHLCV + EMA20/SMA50/SMA200 for the chart |
+| GET | `/bars/{symbol}?tf=1d\|15m&n=250` | OHLCV + EMA20/50, SMA50/150/200, RSI14, ATR14, feed status, and strategy overlay |
 | GET/POST | `/positions` | list / create ("I took this trade": actual price, qty, date, signal id) |
 | PATCH | `/positions/{id}` | edit stop, notes |
 | POST | `/positions/{id}/close` | record exit (price, qty, date, reason) -> writes journal row |
@@ -486,7 +486,7 @@ Design goals: fast, calm, mobile-first (owner checks from a phone), dark/light t
    - **Today's Trade Plan**: per market, ranked signal cards. Each card: symbol, setup badge (Tight-base breakout / Pullback), state badge (Watchlist / Approaching / Triggered / Invalidated / Extended), trend-template pass/fail checklist, **Buy above X**, **Stop Y**, **Target Z (2R)**, **Qty N**, risk in currency, cost in R, gap-risk badge, news chips, and an expandable "Why" list of reasons. Buttons: "Open chart", "I took this trade", "Skip".
    - Live strip: nearest-to-trigger names with distance %, alerts feed, data-health indicator.
    - If there are no setups, show "No qualifying setups: doing nothing is a valid trade."
-2. **Signal detail**: candlestick chart (lightweight-charts) with EMA20, SMA50, SMA200, horizontal lines for trigger/stop/target, volume pane, indicator values (RSI, ATR), reasons, news & events panel, cost breakdown, position-size calculator that updates if the owner edits the entry price.
+2. **Signal detail**: Interactive TradingView candlestick chart (`lightweight-charts@5.2.1`) supporting Daily and 15m timeframes, EMA20/50, SMA50/150/200, volume overlay, separate RSI14 & ATR14 panels, VCP consolidation base box, trigger/stop/target/entry-zone lines, signal confirmation markers, 8-point Minervini Trend Template drawer, manual drawing tools (horizontal line, trendline, rectangle), and data feed provenance status (LIVE / DELAYED / STALE / DISCONNECTED).
 3. **Watchlist/Live**: table of active signals and open positions with live price, % to trigger, % to stop, staleness dot; auto-refresh via SSE.
 4. **Positions**: (auto-synced from Zerodha where connected, with a "Synced" badge, a "Mark as swing trade" toggle and an "Other holdings (not tracked)" list; manual entry for US) open positions with entry, qty, active stop (with "move stop to X at your broker" prompts when the trail moves), unrealized P/L in currency and R, days held, next-rule warnings (earnings in N days, close below SMA50), "Record exit" dialog.
 5. **Journal & Analytics**: (includes import of Zerodha Console CSV reports) trade table with filters; equity curve; win rate, avg win/loss, expectancy in R, profit factor, max drawdown, by setup/market/month; paper-vs-live comparison; notes and tags.

@@ -68,6 +68,11 @@ class ComplianceHTTPClient:
         "rbi.org.in",
         "www.federalreserve.gov",         # Official US Federal Reserve RSS
         "federalreserve.gov",
+        "news.google.com",                # Financial News & Press Syndication (Yahoo Finance, Reuters, Bloomberg, Mint)
+        "feeds.finance.yahoo.com",        # Official Yahoo Finance RSS Headlines
+        "finance.yahoo.com",              # Yahoo Finance
+        "query2.finance.yahoo.com",       # Yahoo Finance API
+        "query1.finance.yahoo.com",
     }
 
     # Explicitly prohibited hosts and patterns (anti-scraping enforcement)
@@ -862,4 +867,145 @@ class CentralBankRssCollector:
                 )
             )
         return items
+
+
+class FinancialMediaNewsCollector:
+    """Collects real-time financial news headlines and articles for specific tickers
+    from verified financial press syndication feeds (Yahoo Finance, Reuters, Bloomberg,
+    Moneycontrol, Mint, CNBC).
+    """
+
+    def __init__(self, http_client: Optional[ComplianceHTTPClient] = None):
+        self.http = http_client or ComplianceHTTPClient()
+
+    def fetch_news_for_symbol(
+        self,
+        symbol: str,
+        company_name: Optional[str] = None,
+        market: str = "IN",
+        limit: int = 15,
+    ) -> CollectorResponse:
+        clean_sym = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
+        t0 = time.time()
+        items: List[RawNewsItem] = []
+
+        region = "IN" if market.upper() == "IN" else "US"
+        lang = "en-IN" if region == "IN" else "en-US"
+
+        # 1. Primary: Financial Press Syndication Search
+        query_text = f"{clean_sym} {company_name or ''} stock".strip()
+        url = f"https://news.google.com/rss/search?q={query_text}&hl={lang}&gl={region}&ceid={region}:en"
+
+        try:
+            resp = self.http.get(url, min_interval_sec=0.2)
+            if resp.status_code == 200:
+                root = ET.fromstring(resp.text)
+                for item_node in root.findall(".//item")[:limit]:
+                    title_node = item_node.find("title")
+                    link_node = item_node.find("link")
+                    pub_node = item_node.find("pubDate")
+                    source_node = item_node.find("source")
+
+                    title = (title_node.text or "").strip() if title_node is not None else ""
+                    link = (link_node.text or "").strip() if link_node is not None else ""
+                    pub_str = (pub_node.text or "").strip() if pub_node is not None else ""
+                    publisher = (
+                        (source_node.text or "Financial Press").strip()
+                        if source_node is not None
+                        else "Financial Press"
+                    )
+
+                    if not title:
+                        continue
+
+                    pub_dt = datetime.datetime.utcnow()
+                    if pub_str:
+                        try:
+                            parsed_dt = email.utils.parsedate_to_datetime(pub_str)
+                            pub_dt = parsed_dt.replace(tzinfo=None)
+                        except Exception:
+                            pass
+
+                    hasher = hashlib.sha256()
+                    hasher.update(f"media:{clean_sym}:{title}:{pub_dt.date()}".encode("utf-8"))
+                    dedupe_key = f"MEDIA:{clean_sym}:{hasher.hexdigest()[:16]}"
+
+                    items.append(
+                        RawNewsItem(
+                            symbol=clean_sym,
+                            source=f"media_{publisher.lower().replace(' ', '_').replace('.', '')[:15]}",
+                            source_id=link,
+                            title=title,
+                            url=link,
+                            published_at=pub_dt,
+                            category="MEDIA_NEWS",
+                            raw_text=f"Published by {publisher}. {title}",
+                            raw_data={"publisher": publisher, "market": market, "query": query_text},
+                            dedupe_key=dedupe_key,
+                            domain="finance.yahoo.com" if "yahoo" in publisher.lower() else "financial_press",
+                            is_official_filing=False,
+                        )
+                    )
+
+            # 2. If US market, also fetch Yahoo Finance direct headline RSS
+            if market.upper() == "US":
+                yf_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={clean_sym}&region=US&lang=en-US"
+                try:
+                    yf_resp = self.http.get(yf_url, min_interval_sec=0.2)
+                    if yf_resp.status_code == 200:
+                        yf_root = ET.fromstring(yf_resp.text)
+                        for it in yf_root.findall(".//item")[:limit]:
+                            y_title = (it.find("title").text or "").strip() if it.find("title") is not None else ""
+                            y_link = (it.find("link").text or "").strip() if it.find("link") is not None else ""
+                            y_pub = (it.find("pubDate").text or "").strip() if it.find("pubDate") is not None else ""
+                            if not y_title:
+                                continue
+
+                            y_dt = datetime.datetime.utcnow()
+                            if y_pub:
+                                try:
+                                    y_dt = email.utils.parsedate_to_datetime(y_pub).replace(tzinfo=None)
+                                except Exception:
+                                    pass
+
+                            hasher = hashlib.sha256()
+                            hasher.update(f"yf:{clean_sym}:{y_title}:{y_dt.date()}".encode("utf-8"))
+                            y_key = f"YF:{clean_sym}:{hasher.hexdigest()[:16]}"
+
+                            items.append(
+                                RawNewsItem(
+                                    symbol=clean_sym,
+                                    source="yahoo_finance",
+                                    source_id=y_link,
+                                    title=y_title,
+                                    url=y_link,
+                                    published_at=y_dt,
+                                    category="MEDIA_NEWS",
+                                    raw_text=y_title,
+                                    raw_data={"publisher": "Yahoo Finance", "market": "US"},
+                                    dedupe_key=y_key,
+                                    domain="finance.yahoo.com",
+                                    is_official_filing=False,
+                                )
+                            )
+                except Exception as e:
+                    logger.debug(f"Direct Yahoo RSS fetch note: {e}")
+
+            return CollectorResponse(
+                source="financial_media",
+                success=True,
+                status_code=200,
+                items=items,
+                latency_sec=time.time() - t0,
+            )
+        except Exception as e:
+            logger.warning(f"Error fetching financial media news for {symbol}: {e}")
+            return CollectorResponse(
+                source="financial_media",
+                success=False,
+                status_code=500,
+                error=str(e),
+                latency_sec=time.time() - t0,
+            )
+
 

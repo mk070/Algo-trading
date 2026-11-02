@@ -147,6 +147,18 @@ def job_poll_macro_calendar(db):
             news_engine.ingest_raw_item(item, db=db)
 
 
+def job_poll_media_news(db):
+    """Periodic poll of live financial press (Yahoo Finance, Moneycontrol, Reuters)
+    for top universe and watchlist symbols.
+    """
+    logger.info("Polling real-time financial media news (Yahoo Finance, Reuters, Moneycontrol)...")
+    from app.engine.universe import universe_manager
+    in_stocks = [s.symbol for s in universe_manager.load_universe("IN")][:12]
+    us_stocks = [s.symbol for s in universe_manager.load_universe("US")][:8]
+    news_engine.poll_financial_news(in_stocks, market="IN", db=db)
+    news_engine.poll_financial_news(us_stocks, market="US", db=db)
+
+
 def job_db_backup(db):
     """Nightly point-in-time snapshot backup of Neon PostgreSQL database."""
     from app.db_backup import create_database_backup
@@ -190,6 +202,12 @@ def start_scheduler():
             log_job_execution("macro_poll", job_poll_macro_calendar),
             IntervalTrigger(hours=6),
             id="macro_poll",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("news_media_poll", job_poll_media_news),
+            IntervalTrigger(minutes=20),
+            id="news_media_poll",
             replace_existing=True,
         )
         scheduler.add_job(

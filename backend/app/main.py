@@ -10,6 +10,7 @@ from app.api.routes_plan import router as plan_router
 from app.api.routes_portfolio import router as portfolio_router
 from app.api.routes_positions import router as positions_router
 from app.api.routes_system import router as system_router
+from app.api.routes_watchlists import router as watchlists_router
 from app.db import init_db
 from app.providers.manager import provider_manager
 from app.scheduler.jobs import start_scheduler, stop_scheduler
@@ -40,6 +41,9 @@ async def lifespan(app: FastAPI):
     # Cache instruments asynchronously/on boot if available
     try:
         provider_manager.angelone._load_cached_instruments()
+        if not provider_manager.angelone.instrument_map:
+            logger.info("Angel One scrip master is empty; fetching latest official instrument list...")
+            provider_manager.angelone.refresh_instruments()
     except Exception as e:
         logger.warning(f"Initial instrument cache loading warning: {e}")
     # Start scheduler
@@ -71,6 +75,7 @@ app.add_middleware(
 # Include all API Routers under /api
 app.include_router(system_router, prefix="/api", tags=["System & Settings"])
 app.include_router(plan_router, prefix="/api", tags=["Trade Plan & Signals"])
+app.include_router(watchlists_router, prefix="/api", tags=["Watchlists"])
 app.include_router(positions_router, prefix="/api", tags=["Positions & Journal"])
 app.include_router(portfolio_router, prefix="/api", tags=["Zerodha Portfolio & Valuation"])
 app.include_router(news_router, prefix="/api", tags=["News Intelligence"])

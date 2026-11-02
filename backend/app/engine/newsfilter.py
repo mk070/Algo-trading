@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.engine.news_collectors import (
     CentralBankRssCollector,
     ComplianceHTTPClient,
+    FinancialMediaNewsCollector,
     FinnhubCollector,
     GdeltDocCollector,
     NseRssCollector,
@@ -93,6 +94,44 @@ class NewsIntelligenceEngine:
         self.gdelt_collector = GdeltDocCollector(self.http_client)
         self.finnhub_collector = FinnhubCollector(self.http_client)
         self.central_bank_collector = CentralBankRssCollector(self.http_client)
+        self.media_collector = FinancialMediaNewsCollector(self.http_client)
+
+    def poll_financial_news(
+        self,
+        symbols: List[str],
+        market: str = "IN",
+        db: Optional[Session] = None,
+    ) -> int:
+        """Polls live financial media news (Yahoo Finance, Reuters, Moneycontrol, etc.)
+        for specified symbols and ingests them into the database.
+        """
+        ingested_count = 0
+        total_latency = 0.0
+        success_count = 0
+
+        for sym in symbols:
+            try:
+                res = self.media_collector.fetch_news_for_symbol(sym, market=market)
+                total_latency += res.latency_sec
+                if res.success:
+                    success_count += 1
+                    for item in res.items:
+                        classified = self.ingest_raw_item(item, db=db)
+                        if classified:
+                            ingested_count += 1
+            except Exception as e:
+                logger.warning(f"Error polling financial news for {sym}: {e}")
+
+        if db is not None:
+            self.update_source_health(
+                source="financial_media",
+                success=success_count > 0,
+                latency_sec=total_latency / max(1, len(symbols)),
+                items_count=ingested_count,
+                db=db,
+            )
+
+        return ingested_count
 
     def _load_rules(self) -> Dict[str, Any]:
         rules_path = CONFIG_DIR / "news_rules.yaml"
@@ -439,8 +478,9 @@ class NewsIntelligenceEngine:
             .first()
         )
         if poll_job and poll_job.finished_at:
-            now = datetime.datetime.utcnow()
-            idle_sec = (now - poll_job.finished_at).total_seconds()
+            finished = poll_job.finished_at
+            now_dt = datetime.datetime.now(datetime.timezone.utc) if finished.tzinfo is not None else datetime.datetime.utcnow()
+            idle_sec = (now_dt - finished).total_seconds()
             if idle_sec > 3600.0:  # 1 hour gap
                 gaps.append(f"Scheduler news job idle for {idle_sec / 60.0:.1f} minutes (> 60m threshold)")
 
@@ -480,7 +520,9 @@ class NewsIntelligenceEngine:
                 if source_state.status == "DOWN":
                     is_coverage_stale = True
                 elif source_state.last_success_at:
-                    age_min = (now - source_state.last_success_at).total_seconds() / 60.0
+                    last_succ = source_state.last_success_at
+                    now_ts = datetime.datetime.now(datetime.timezone.utc) if last_succ.tzinfo is not None else datetime.datetime.utcnow()
+                    age_min = (now_ts - last_succ).total_seconds() / 60.0
                     if age_min > self.cfg.max_source_age_min:
                         is_coverage_stale = True
                 else:

@@ -50,7 +50,12 @@ class AngelOneProvider:
         self.ws_manager = AngelOneWebSocketManager(self)
 
     def is_configured(self) -> bool:
-        return bool(self.api_key and self.client_code and self.pin and self.totp_secret)
+        if not (self.api_key and self.client_code and self.pin and self.totp_secret):
+            return False
+        # Treat template/placeholder strings in .env as unconfigured
+        if any("your_" in str(val).lower() for val in [self.api_key, self.client_code, self.totp_secret]):
+            return False
+        return True
 
     def login(self) -> bool:
         if not self.is_configured():
@@ -58,7 +63,10 @@ class AngelOneProvider:
             return False
 
         try:
-            from smartapi import SmartConnect
+            try:
+                from SmartApi import SmartConnect
+            except ImportError:
+                from smartapi import SmartConnect
 
             self.smart_api = SmartConnect(api_key=self.api_key)
             totp = pyotp.TOTP(self.totp_secret).now()
@@ -142,6 +150,7 @@ class AngelOneProvider:
             "LT": "11483",
             "ITC": "1660",
             "TATAMOTORS": "3456",
+            "TMPV": "3456",
             "BAJFINANCE": "317",
             "M&M": "2031",
             "BAJAJ-AUTO": "16669",

@@ -34,7 +34,9 @@ export interface Signal {
   score: number;
   atr: number;
   gap95: number;
-  state: 'WATCHLIST' | 'APPROACHING' | 'TRIGGERED_PROVISIONAL' | 'TRIGGERED_CONFIRMED' | 'INVALIDATED' | 'EXTENDED' | 'EXPIRED' | 'SKIPPED';
+  state: 'WATCHLIST' | 'APPROACHING' | 'TRIGGERED_PROVISIONAL' | 'TRIGGERED_CONFIRMED' | 'INVALIDATED' | 'EXTENDED' | 'EXPIRED' | 'SKIPPED' | 'BLOCKED' | 'NO_SETUP' | 'ALREADY_HELD' | 'VALID_SETUP' | string;
+  sources?: string[];
+  first_failing_check?: string;
   reasons: string[];
   checklist?: ChecklistItem[];
   news_coverage?: NewsCoverage;
@@ -61,6 +63,7 @@ export interface TradePlan {
   regime: RegimeResult;
   signals: Signal[];
   shadow_signals: Signal[];
+  candidate_opportunities?: Signal[];
   universe_size: number;
   passed_filters: number;
   data_warnings: string[];

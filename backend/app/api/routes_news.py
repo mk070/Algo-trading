@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.engine.newsfilter import news_engine
+from app.engine.universe import universe_manager
 from app.models import CompanyRelationship, NewsCoverageGap, NewsEvent, NewsSourceState
 from app.settings import settings
 
@@ -48,67 +49,55 @@ def get_news_events(
     events = query.order_by(NewsEvent.published_at.desc()).limit(100).all()
 
     if not events:
-        # Realistic initial fallback items
-        return [
-            {
-                "id": 1,
-                "symbol": "RELIANCE",
-                "source": "nse_rss",
-                "title": "Reliance bags new solar EPC contract worth INR 1,450 Cr",
-                "url": "https://nsearchives.nseindia.com/",
-                "published_at": (datetime.datetime.utcnow() - datetime.timedelta(hours=6)).isoformat(),
-                "ingested_at": datetime.datetime.utcnow().isoformat(),
-                "severity": "GREEN",
-                "category": "Order win",
-                "match_confidence": "EXACT_NAME",
-                "is_unverified": False,
-                "materiality": "MEDIUM",
-                "summary": "Reliance bags new solar EPC contract worth INR 1,450 Cr.",
-                "price_change_day_pct": 1.25,
-                "price_atr_multiple": 0.8,
-            },
-            {
-                "id": 2,
-                "symbol": "TCS",
-                "source": "nse_rss",
-                "title": "Board meeting scheduled for consideration of financial results and dividend",
-                "url": "https://nsearchives.nseindia.com/",
-                "published_at": (datetime.datetime.utcnow() - datetime.timedelta(hours=18)).isoformat(),
-                "ingested_at": datetime.datetime.utcnow().isoformat(),
-                "severity": "AMBER",
-                "category": "Board meeting for results",
-                "match_confidence": "EXACT_NAME",
-                "is_unverified": False,
-                "materiality": "MEDIUM",
-                "summary": "Board meeting scheduled for consideration of financial results and dividend.",
-                "price_change_day_pct": -0.4,
-                "price_atr_multiple": 0.3,
-            },
-        ]
+        # If no events exist yet, automatically poll live financial media news for core stocks
+        try:
+            mkt = "US" if symbol and any(c.isascii() and c in ("AAPL", "TSLA", "MSFT", "NVDA") for c in [symbol]) else "IN"
+            top_stocks = [symbol] if symbol else (["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"] if mkt == "IN" else ["AAPL", "TSLA", "NVDA", "MSFT"])
+            news_engine.poll_financial_news(top_stocks, market=mkt, db=db)
+            events = query.order_by(NewsEvent.published_at.desc()).limit(100).all()
+        except Exception as e:
+            logger.warning(f"Initial live news fetch warning: {e}")
 
-    return [
-        {
-            "id": e.id,
-            "symbol": e.symbol,
-            "source": e.source,
-            "title": e.title,
-            "url": e.url,
-            "published_at": e.published_at.isoformat(),
-            "ingested_at": e.ingested_at.isoformat(),
-            "severity": e.severity,
-            "category": e.category,
-            "ai_summary": e.ai_summary,
-            "match_confidence": e.match_confidence or "EXACT_NAME",
-            "is_unverified": e.is_unverified or False,
-            "syndication_cluster_id": e.syndication_cluster_id,
-            "materiality": e.materiality or "LOW",
-            "summary": e.summary or e.title,
-            "price_change_day_pct": e.price_change_day_pct,
-            "price_atr_multiple": e.price_atr_multiple,
-            "analyst_action": json.loads(e.analyst_action_json) if e.analyst_action_json else None,
-        }
-        for e in events
-    ]
+    unique_syms = list(set(e.symbol for e in events))
+    quotes = {}
+    if unique_syms:
+        try:
+            from app.providers.manager import provider_manager
+            quotes = provider_manager.get_quotes(unique_syms, market="IN")
+        except Exception as qe:
+            logger.debug(f"Could not load live quotes for news: {qe}")
+
+    results = []
+    for e in events:
+        q = quotes.get(e.symbol)
+        day_pct = round(q.pct_change, 2) if (q and q.pct_change is not None) else e.price_change_day_pct
+        live_price = round(q.last_price, 2) if q else None
+
+        results.append(
+            {
+                "id": e.id,
+                "symbol": e.symbol,
+                "source": e.source,
+                "title": e.title,
+                "url": e.url,
+                "published_at": e.published_at.isoformat(),
+                "ingested_at": e.ingested_at.isoformat(),
+                "severity": e.severity,
+                "category": e.category,
+                "ai_summary": e.ai_summary,
+                "match_confidence": e.match_confidence or "EXACT_NAME",
+                "is_unverified": e.is_unverified or False,
+                "syndication_cluster_id": e.syndication_cluster_id,
+                "materiality": e.materiality or "LOW",
+                "summary": e.summary or e.title,
+                "live_price": live_price,
+                "price_change_day_pct": day_pct,
+                "price_atr_multiple": e.price_atr_multiple,
+                "analyst_action": json.loads(e.analyst_action_json) if e.analyst_action_json else None,
+            }
+        )
+
+    return results
 
 
 @router.get("/news/coverage")
@@ -228,3 +217,32 @@ def get_earnings_analysis(
 
     res = earnings_analyst.analyze_results(latest, prior_qoq=prior_qoq, prior_yoy=prior_yoy, db=db)
     return res.model_dump()
+
+
+@router.post("/news/refresh")
+def refresh_live_news(
+    market: str = Query("IN", pattern="^(IN|US)$"),
+    symbols: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Fetches real-time financial news from Yahoo Finance, Reuters, Moneycontrol, Mint,
+    and business press syndication for universe or specified stocks.
+    """
+    market = market.upper() if isinstance(market, str) else "IN"
+    if symbols and isinstance(symbols, str):
+        sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    else:
+        # Load top universe stocks for this market
+        u_stocks = universe_manager.load_universe(market)
+        sym_list = [s.symbol for s in u_stocks][:15]
+        if not sym_list:
+            sym_list = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"] if market == "IN" else ["AAPL", "TSLA", "NVDA", "MSFT"]
+
+    count = news_engine.poll_financial_news(sym_list, market=market, db=db)
+    return {
+        "status": "SUCCESS",
+        "market": market,
+        "symbols_polled": sym_list,
+        "items_ingested": count,
+    }
+

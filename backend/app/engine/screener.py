@@ -198,21 +198,34 @@ class ScreenerEngine:
             extension_reason=ext_reason,
         )
 
+    def calculate_rs_score(self, df: pd.DataFrame) -> float:
+        """Calculates blended RS score (0.5 * ret63 + 0.5 * ret126)."""
+        if df is not None and len(df) >= 126:
+            ret63 = float(df["close"].pct_change(63).iloc[-1])
+            ret126 = float(df["close"].pct_change(126).iloc[-1])
+            if pd.notna(ret63) and pd.notna(ret126):
+                return 0.5 * ret63 + 0.5 * ret126
+        return 0.0
+
+    def compute_out_of_universe_rs_rank(
+        self, stock_df: pd.DataFrame, universe_scores: List[float]
+    ) -> float:
+        """Computes percentile rank against the benchmark universe return distribution
+        WITHOUT adding the stock to the population (avoiding universe distortion).
+        """
+        if not universe_scores:
+            return 0.50
+        stock_score = self.calculate_rs_score(stock_df)
+        count_below = sum(1 for s in universe_scores if s <= stock_score)
+        return round(count_below / len(universe_scores), 2)
+
     def calculate_universe_rs_ranks(
         self, data_dict: Dict[str, pd.DataFrame]
     ) -> Dict[str, float]:
         """Calculates RS percentile ranks across all universe stocks."""
         scores: Dict[str, float] = {}
         for sym, df in data_dict.items():
-            if df is not None and len(df) >= 126:
-                ret63 = float(df["close"].pct_change(63).iloc[-1])
-                ret126 = float(df["close"].pct_change(126).iloc[-1])
-                if pd.notna(ret63) and pd.notna(ret126):
-                    scores[sym] = 0.5 * ret63 + 0.5 * ret126
-                else:
-                    scores[sym] = 0.0
-            else:
-                scores[sym] = 0.0
+            scores[sym] = self.calculate_rs_score(df)
 
         if not scores:
             return {}

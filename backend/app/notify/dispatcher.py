@@ -30,6 +30,30 @@ class NotificationDispatcher:
         "DATA_STALE",
     }
 
+    # Meaningful alert types eligible for Telegram outbound alerts.
+    # Excludes routine candle updates, scanner heartbeats, or duplicate noise.
+    TELEGRAM_ALLOWED_ALERT_TYPES = {
+        "BUY",
+        "BUY_CONFIRMED",
+        "CANCEL",
+        "BLOCK",
+        "BLOCKED",
+        "WAIT",
+        "SELL",
+        "SELL_HARD_STOP",
+        "SELL_HALF",
+        "TRAIL_UPDATE",
+        "MOVE_STOP",
+        "NEWS_RED",
+        "EARNINGS_WARNING",
+        "MATERIAL_EVENT",
+        "DATA_STALE",
+        "FEED_FAILURE",
+        "CIRCUIT_BREAKER",
+        "SYSTEM",
+        "SYSTEM_CRITICAL",
+    }
+
     def __init__(self):
         self.sent_alert_keys: Set[str] = set()
         self.sse_subscribers: List[asyncio.Queue] = []
@@ -114,18 +138,66 @@ class NotificationDispatcher:
         payload: Optional[Dict] = None,
         db: Optional[Session] = None,
         max_retries: int = 2,
+        quote: Optional[Any] = None,
     ) -> Optional[int]:
-        """Dispatch alert, enforce deduplication, deliver to Telegram with retry, persist, and broadcast."""
+        """Dispatch alert, enforce deduplication (including persistence across restarts),
+        deliver to Telegram with retry, persist, and broadcast."""
         dedupe_key = f"{alert_type}_{symbol or 'GLOBAL'}_{title}"
         if dedupe_key in self.sent_alert_keys:
             return None
+
+        payload = dict(payload or {})
+        if quote is not None:
+            try:
+                price_val = float(getattr(quote, "price", getattr(quote, "last_price", 0.0)))
+                prov_val = str(getattr(quote, "provider", getattr(quote, "source", "unknown")))
+                ex_ts = getattr(quote, "exchange_ts", getattr(quote, "timestamp", None))
+                rec_ts = getattr(quote, "received_ts", None)
+                fresh_val = getattr(quote, "freshness", "FRESH")
+                if hasattr(fresh_val, "value"):
+                    fresh_val = fresh_val.value
+                rt_val = bool(getattr(quote, "realtime", getattr(quote, "is_realtime", True)))
+                payload["quote_audit"] = {
+                    "price": price_val,
+                    "provider": prov_val,
+                    "exchange_ts": ex_ts.isoformat() if hasattr(ex_ts, "isoformat") else (str(ex_ts) if ex_ts else None),
+                    "received_ts": rec_ts.isoformat() if hasattr(rec_ts, "isoformat") else (str(rec_ts) if rec_ts else None),
+                    "freshness": str(fresh_val),
+                    "realtime": rt_val,
+                }
+            except Exception as e:
+                logger.warning(f"Could not build quote_audit for alert: {e}")
+
+        # Cross-restart deduplication check via DB (last 24 hours)
+        if db is not None:
+            try:
+                one_day_ago = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+                existing = (
+                    db.query(Alert.id)
+                    .filter(
+                        Alert.type == alert_type,
+                        Alert.symbol == symbol,
+                        Alert.title == title,
+                        Alert.ts >= one_day_ago,
+                    )
+                    .first()
+                )
+                if existing:
+                    self.sent_alert_keys.add(dedupe_key)
+                    return None
+            except Exception as e:
+                logger.warning(f"Error checking DB for duplicate alert: {e}")
+
         self.sent_alert_keys.add(dedupe_key)
 
         now = datetime.datetime.utcnow()
         msg_text = f"<b>{title}</b>\n\n{body}"
 
-        # 1. Deliver to Telegram with retry
-        delivered, retries_used = self._deliver_telegram_with_retry(msg_text, max_retries=max_retries)
+        # 1. Deliver to Telegram with retry (only for meaningful alert types)
+        delivered = False
+        retries_used = 0
+        if alert_type in self.TELEGRAM_ALLOWED_ALERT_TYPES:
+            delivered, retries_used = self._deliver_telegram_with_retry(msg_text, max_retries=max_retries)
 
         # 2. Persist to DB
         alert_id = None

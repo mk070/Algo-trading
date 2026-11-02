@@ -121,3 +121,186 @@ def test_repeated_notifications_for_unacknowledged_critical_alerts(mem_db, monke
     reminded_again = disp.repeat_unacknowledged_critical_alerts(mem_db, max_age_min=30, repeat_interval_min=5)
     assert alert.id not in reminded_again
 
+
+def test_telegram_mask_chat_id():
+    from app.notify.telegram import TelegramNotifier
+    assert TelegramNotifier.mask_chat_id(None) == "Not configured"
+    assert TelegramNotifier.mask_chat_id("") == "Not configured"
+    assert TelegramNotifier.mask_chat_id("1234") == "****"
+    assert TelegramNotifier.mask_chat_id("909235485") == "*****5485"
+    assert TelegramNotifier.mask_chat_id("-1001234567890") == "**********7890"
+
+
+def test_telegram_status_unconfigured():
+    from app.notify.telegram import TelegramNotifier
+    notifier = TelegramNotifier(token="", chat_id="")
+    status = notifier.get_status()
+    assert status["status"] == "NOT_CONFIGURED"
+    assert status["configured"] is False
+    assert status["bot_username"] is None
+
+
+def test_telegram_get_status_and_test_message(monkeypatch):
+    from app.notify.telegram import TelegramNotifier
+    notifier = TelegramNotifier(token="mock_token", chat_id="909235485")
+
+    class MockResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json = json_data
+            self.text = str(json_data)
+
+        def json(self):
+            return self._json
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, **kwargs):
+            if "getMe" in url:
+                return MockResponse(200, {
+                    "ok": True,
+                    "result": {
+                        "id": 123456,
+                        "username": "SwingMaster7_bot",
+                        "first_name": "SwingTrader",
+                        "is_bot": True,
+                    }
+                })
+            return MockResponse(404, {"ok": False})
+
+        def post(self, url, json=None, **kwargs):
+            if "sendMessage" in url:
+                assert json["chat_id"] == "909235485"
+                assert "Swing Trading Platform" in json["text"]
+                return MockResponse(200, {"ok": True, "result": {"message_id": 999}})
+            return MockResponse(400, {"ok": False})
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", MockClient)
+
+    # 1. Test status
+    status = notifier.get_status()
+    assert status["status"] == "CONNECTED"
+    assert status["bot_username"] == "@SwingMaster7_bot"
+    assert status["masked_chat_id"] == "*****5485"
+    assert status["last_check"] is not None
+
+    # 2. Test send_test_message
+    ok, msg = notifier.send_test_message()
+    assert ok is True
+    assert "delivered successfully" in msg
+
+
+def test_telegram_test_message_failure(monkeypatch):
+    from app.notify.telegram import TelegramNotifier
+    notifier = TelegramNotifier(token="mock_token", chat_id="909235485")
+
+    class MockResponse:
+        def __init__(self, status_code, json_data):
+            self.status_code = status_code
+            self._json = json_data
+            self.text = "Bad Request: chat not found"
+
+        def json(self):
+            return self._json
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, **kwargs):
+            return MockResponse(200, {"ok": True, "result": {"username": "SwingMaster7_bot"}})
+
+        def post(self, url, **kwargs):
+            return MockResponse(400, {"ok": False, "description": "Bad Request: chat not found"})
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", MockClient)
+
+    ok, msg = notifier.send_test_message()
+    assert ok is False
+    assert "chat not found" in msg
+
+
+def test_telegram_api_endpoints(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.notify.telegram import telegram_notifier
+
+    client = TestClient(app)
+
+    monkeypatch.setattr(telegram_notifier, "get_status", lambda: {
+        "status": "CONNECTED",
+        "configured": True,
+        "bot_username": "@SwingMaster7_bot",
+        "bot_name": "SwingTrader",
+        "masked_chat_id": "*****5485",
+        "last_check": "2026-11-01T18:00:00Z",
+        "error": None,
+    })
+
+    monkeypatch.setattr(telegram_notifier, "send_test_message", lambda: (True, "Test message delivered successfully by @SwingMaster7_bot."))
+
+    # GET status
+    resp = client.get("/api/telegram/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "CONNECTED"
+    assert data["bot_username"] == "@SwingMaster7_bot"
+    assert "token" not in data  # Token must never leak
+
+    # POST test
+    resp_post = client.post("/api/telegram/test")
+    assert resp_post.status_code == 200
+    post_data = resp_post.json()
+    assert post_data["success"] is True
+    assert "delivered successfully" in post_data["detail"]
+
+
+def test_alert_deduplication_across_backend_restarts(mem_db):
+    # Simulate an alert recorded earlier before backend restart
+    past_time = datetime.datetime.utcnow() - datetime.timedelta(hours=2)
+    alert = Alert(
+        ts=past_time,
+        type="BUY",
+        symbol="INFY",
+        market="IN",
+        title="BUY: INFY @ 1800",
+        body="Actionable breakout alert",
+        acknowledged=False,
+        retry_count=0,
+    )
+    mem_db.add(alert)
+    mem_db.commit()
+
+    # Simulate fresh backend start: new NotificationDispatcher with empty in-memory set
+    new_disp = NotificationDispatcher()
+    assert len(new_disp.sent_alert_keys) == 0
+
+    # Dispatch identical alert with db passed
+    res = new_disp.dispatch(
+        alert_type="BUY",
+        title="BUY: INFY @ 1800",
+        body="Actionable breakout alert",
+        symbol="INFY",
+        market="IN",
+        db=mem_db,
+    )
+    # Must be deduplicated via database check to prevent re-sending after reboot
+    assert res is None
+
+

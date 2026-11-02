@@ -206,7 +206,63 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 
 ---
 
-## 7. US Market Data Setup
+## 7. Telegram Notifications Setup (Simple, One-Time Setup)
+
+The platform includes a zero-friction, one-time Telegram integration for outbound swing-trading notifications.
+
+> **Strict Architectural Boundary:** Telegram is strictly an outbound notification channel. No BUY/SELL execution commands or broker order placements are ever accepted or routed through Telegram. Bot tokens are kept securely on the backend and are never sent to the browser.
+
+### Step-by-Step Setup
+
+1. **Create Bot on Telegram:**
+   - Open Telegram and message [@BotFather](https://t.me/BotFather).
+   - Send `/newbot`, name your bot (e.g. `MySwingTraderBot`), and choose a username ending in `bot` (e.g. `SwingMaster7_bot`).
+   - Copy the HTTP API token provided by BotFather (e.g. `9186942205:AAF...`).
+2. **Find Your Numeric Chat ID:**
+   - Message [@userinfobot](https://t.me/userinfobot) or [@raw_data_bot](https://t.me/raw_data_bot) on Telegram.
+   - It will reply with your unique numeric Telegram user ID (e.g. `909235485`).
+   - *Important:* Open your newly created bot in Telegram and click **Start** (or send `/start`) so the bot has permission to message you.
+3. **Configure Environment Variables in `.env`:**
+   ```bash
+   TELEGRAM_BOT_TOKEN=9186942205:AAFjv4ZqugmoNjFAhxlqDnj9GRc7ZxhUO7I
+   TELEGRAM_CHAT_ID=909235485
+   ```
+4. **Verify in Settings Page:**
+   - Open the web dashboard at `http://127.0.0.1:8000/settings`.
+   - The **Telegram Notifications** card automatically checks credentials using Telegram's `getMe` API:
+     - **Status Badge:** Displays `Connected` (green), `Not Configured`, or `Error`.
+     - **Bot Username:** Verified handle (e.g. `@SwingMaster7_bot`).
+     - **Masked Chat ID:** Securely masked (e.g. `*****5485`).
+     - **Last Connection Check:** Timestamp of the last successful API handshake.
+   - Click **Test Telegram**:
+     - Sends exactly one test notification message:
+       ```text
+       ✅ Swing Trading Platform
+
+       Telegram notifications are working correctly.
+       You will receive important trading alerts here.
+       ```
+     - Verifies delivery confirmation from Telegram's `sendMessage` API before showing success.
+     - Displays actionable errors if the chat ID is invalid, bot was blocked, or credentials fail.
+     - Automatically debounced to prevent accidental repeated clicks.
+
+### Trading Notifications Scope & Reliability
+
+Telegram is reserved only for meaningful, actionable trading signals:
+- **Actionable BUY setups / Entry triggers:** 15m candle close confirmation and volume pace validated.
+- **Exit & Stop-Loss Alerts:** Hard stops, trailing stop updates, 50-day SMA trend breaks, and 50% partial profit targets (2R).
+- **Entry Blocked / Invalidation Reasons:** Rejections when price falls below stop before breakout or fails risk checks.
+- **Corporate Risk & Disclosures:** High-severity (`RED`) news alerts and earnings blackout period warnings.
+- **Critical System & Data Failures:** Stale data feeds (>20s delay) and risk circuit breaker activation.
+
+**Anti-Noise Guarantees:**
+- **Zero Routine Noise:** Scanner refreshes, heartbeat ticks, and unchanged signals never send Telegram messages.
+- **Persistent Deduplication:** Event keys are cached in memory and cross-checked against the PostgreSQL `alerts` table across backend restarts.
+- **Transient Failure Retries:** Built-in exponential backoff retry mechanism (up to 3 attempts).
+
+---
+
+## 8. US Market Data Setup
 
 - **Adapter Candidate:** Alpaca Markets ([https://alpaca.markets/](https://alpaca.markets/)).
 - **Configuration:** Set `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, and `ALPACA_ENDPOINT` in `.env`.
@@ -214,7 +270,7 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 
 ---
 
-## 8. Environment Variable Reference
+## 9. Environment Variable Reference
 
 | Variable | Description | Required | Source / Provider |
 |---|---|---|---|
@@ -235,7 +291,7 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 
 ---
 
-## 9. Feature & Integration Status
+## 10. Feature & Integration Status
 
 | Feature / Integration | Status | Test Coverage | Credentials Needed | Paid Subscription |
 |---|---|---|---|---|
@@ -260,7 +316,7 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 - **Angel One TOTP Error:** Ensure `ANGELONE_TOTP_SECRET` is the raw alphanumeric Base32 key (not the 6-digit rolling code). Check that your system clock is synchronized via NTP.
 - **Zerodha Token Expired:** Zerodha access tokens invalidate every morning at 06:00 IST. Navigate to `/settings` and click "Connect Zerodha" to re-authenticate.
@@ -269,9 +325,48 @@ backend\.venv\Scripts\pytest backend/tests/test_news_engine_v2.py
 
 ---
 
-## 11. Security & Compliance
+## 13. Live-Data Reliability & Dashboard Additions
 
-- Wrap Zerodha in a read-only client; order endpoints are completely omitted from the codebase.
-- Never commit secrets to git; `.env` is strictly ignored.
-- Decisions and signals are strictly decision-support tools. The trader executes all trades manually.
+### Two-Lane Quote Contract
+- **Decision Lane:** Enforces strict typed `DecisionQuote` model. Only quotes marked `freshness=FRESH` and `realtime=True` are permitted to reach the `DecisionPipeline`, Entry Timer, or alert dispatcher. Any stale or delayed quote raises `IneligibleQuoteError`.
+- **Display Lane:** Quotes with cached or delayed values can be rendered in the UI with explicit badges (`STALE`, `DELAYED`), but are strictly barred from triggering buy/sell signals.
+- **Quote Audit Traceability:** Every dispatched alert embeds an immutable 5-tuple quote audit snapshot in `payload_json["quote_audit"]` (`price`, `provider`, `exchange_ts`, `received_ts`, `freshness`, `realtime`).
+
+### Outbound REST Request Layer (`ProviderRequestLayer`)
+- **Single-Flight Coalescing:** Eliminates duplicate concurrent outbound HTTP/REST calls for the same ticker.
+- **Bounded Concurrency:** Configurable semaphore limits parallel queries per provider.
+- **TTL Cache:** In-memory caching with eviction prevents redundant external provider requests.
+- **429 Rate-Limit Handling:** Exponential backoff with randomized jitter on HTTP 429 / Rate Limit responses.
+- **Circuit Breaker:** State machine (`CLOSED` -> `OPEN` on consecutive errors -> `HALF_OPEN` cooldown) protects against external API degradation. Metrics (latency p50/p95, success rate, cooldown) surfaced on `/api/health`.
+
+### Dashboard Additions
+- **Market Pulse & Sector Heatmap:** Live breadth cards (% > 50/200 SMA, advancers/decliners ratio, 52-week highs/lows) and interactive sector momentum grid (1D, 1W, 1M returns with leader stocks) mounted on the Dashboard.
+- **Quick Symbol Search (`Ctrl/Cmd + K`):** Global keyboard shortcut modal to search universe instruments with prices, sectors, and freshness indicators.
+- **Persistent Chart Preferences:** Indicator toggles (`EMA20`, `SMA50`, `SMA200`, `Volume`) and timeframe settings are remembered in browser `localStorage`.
+- **Custom Price Alerts:** User-defined price levels (`ABOVE` / `BELOW`) monitored in the background loop, labeled `[MANUAL ALERT]`, and delivered to Telegram and UI stream with exactly-once deduplication.
+
+---
+
+## 14. TradingView-Style Interactive Charting Engine (`lightweight-charts@5.2.1`)
+
+The platform integrates an institutional-grade, high-performance candlestick charting engine using **TradingView Lightweight Charts v5**:
+
+- **Real Multi-Timeframe Feeds:** Selectable **Daily (`1D`)** and **15-minute (`15m`)** candles sourced directly from the official Angel One SmartAPI (for NSE equities) and YFinance (for US equities/fallbacks).
+- **Moving Average Overlays:** Independent toggle buttons with local persistence for **EMA 20** (Gold `#f59e0b`), **EMA 50** (Orange `#fb923c`), **SMA 50** (Blue `#3b82f6`), **SMA 150** (Teal `#14b8a6`), and **SMA 200** (Purple `#a855f7`). Indicators are calculated on the backend using exact strategy formulas (`indicators.py`).
+- **Separate Indicator Panels:**
+  - **Volume:** Pane 0 histogram overlay with green/red alpha transparency.
+  - **RSI 14:** Dedicated secondary panel with dashed 70 Overbought and 30 Oversold reference levels.
+  - **ATR 14:** Dedicated tertiary panel tracking volatility expansion and contraction.
+- **Strategy Output Visualizations:**
+  - **Breakout Trigger:** Dashed Emerald green price line (`#10b981`) marking the exact buy trigger price.
+  - **Entry Zone Ceiling:** Dotted Teal price line (`#34d399`) marking the max chase limit (`trigger + 0.5*ATR`).
+  - **Stop Loss:** Dashed Rose red price line (`#f43f5e`) marking structural invalidation.
+  - **Target 1 (2R):** Dashed Cyan price line (`#06b6d4`) marking the 2R profit-taking target.
+  - **VCP Base Consolidation Box:** Bounding box highlighting the base consolidation window, duration in sessions, depth %, and pivot level.
+  - **Signal Markers:** Interactive arrows below trigger bars with confirmation status (`TRIGGERED_CONFIRMED`, `APPROACHING`, `BUY_CONFIRMED`, `WATCHLIST`).
+  - **Minervini Stage 2 Trend Template Drawer:** Interactive badge displaying pass ratio (e.g., `7/8 Pass`) that expands to show the 8-point checklist with actual values vs. expected rules.
+- **Manual Drawing Tools:** Interactive SVG overlay allowing traders to draw **Horizontal Lines**, **Trendlines**, and **Rectangles** with local persistence and clear/delete controls. Annotations are strictly client-side and never alter strategy logic.
+- **Provenance & Feed Status:** Real-time badge tracking `LIVE` (green), `DELAYED` (amber), `STALE` (red), or `DISCONNECTED` (gray) status with provider attribution and last quote timestamps.
+- **0-Latency Live Session Candle:** Dynamically updates today's active bar with live market LTPs while preserving completed 15-minute confirmation candles.
+
 

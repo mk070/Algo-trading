@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from app.providers.base import MarketDataProvider, ProviderHealth, Quote, validate_candle_data
+from app.providers.base import MarketDataProvider, ProviderHealth, Quote, QuoteFreshness, validate_candle_data
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +51,14 @@ class YFinanceProvider:
                 orig_sym = sym_map[yf_syms[0]]
                 if not data.empty:
                     df = data.reset_index()
-                    df.columns = [c.lower() for c in df.columns]
+                    df.columns = [
+                        c[1].lower().strip() if (isinstance(c, tuple) and len(c) > 1 and c[1])
+                        else (c[0].lower().strip() if isinstance(c, tuple) else str(c).lower().strip())
+                        for c in df.columns
+                    ]
                     if "adj close" in df.columns:
                         df["adj_close"] = df["adj close"]
-                    else:
+                    elif "close" in df.columns:
                         df["adj_close"] = df["close"]
                     df["date"] = pd.to_datetime(df["date"]).dt.date
                     df["source"] = self.name
@@ -62,17 +66,24 @@ class YFinanceProvider:
             else:
                 for yf_s in yf_syms:
                     orig_sym = sym_map[yf_s]
-                    if yf_s in data.columns.levels[0]:
-                        sub_df = data[yf_s].dropna().reset_index()
-                        if not sub_df.empty:
-                            sub_df.columns = [c.lower() for c in sub_df.columns]
-                            if "adj close" in sub_df.columns:
-                                sub_df["adj_close"] = sub_df["adj close"]
-                            else:
-                                sub_df["adj_close"] = sub_df["close"]
-                            sub_df["date"] = pd.to_datetime(sub_df["date"]).dt.date
-                            sub_df["source"] = self.name
-                            results[orig_sym] = sub_df
+                    try:
+                        if hasattr(data.columns, "levels") and yf_s in data.columns.levels[0]:
+                            sub_df = data[yf_s].dropna().reset_index()
+                            if not sub_df.empty:
+                                sub_df.columns = [
+                                    c[1].lower().strip() if (isinstance(c, tuple) and len(c) > 1 and c[1])
+                                    else (c[0].lower().strip() if isinstance(c, tuple) else str(c).lower().strip())
+                                    for c in sub_df.columns
+                                ]
+                                if "adj close" in sub_df.columns:
+                                    sub_df["adj_close"] = sub_df["adj close"]
+                                elif "close" in sub_df.columns:
+                                    sub_df["adj_close"] = sub_df["close"]
+                                sub_df["date"] = pd.to_datetime(sub_df["date"]).dt.date
+                                sub_df["source"] = self.name
+                                results[orig_sym] = sub_df
+                    except Exception as sub_e:
+                        logger.warning(f"Error parsing yfinance data for {yf_s}: {sub_e}")
         except Exception as e:
             logger.error(f"YFinance batch download error: {e}")
 
@@ -81,6 +92,63 @@ class YFinanceProvider:
             clean_s = sym.replace(".NS", "")
             if clean_s not in results or results[clean_s].empty:
                 results[clean_s] = self._generate_synthetic_bars(clean_s, start, end)
+
+        return results
+
+    def intraday_bars(
+        self, symbols: List[str], interval: str = "15m", days: int = 5, market: str = "IN"
+    ) -> Dict[str, pd.DataFrame]:
+        results: Dict[str, pd.DataFrame] = {}
+        if not symbols:
+            return results
+
+        yf_syms = [self._normalize_symbol(s, market) for s in symbols]
+        sym_map = {self._normalize_symbol(s, market): s.replace(".NS", "").replace(".BO", "") for s in symbols}
+
+        try:
+            data = yf.download(
+                tickers=yf_syms,
+                period=f"{days}d",
+                interval=interval,
+                auto_adjust=False,
+                group_by="ticker",
+                threads=True,
+                progress=False,
+            )
+
+            if len(yf_syms) == 1:
+                orig_sym = sym_map[yf_syms[0]]
+                if not data.empty:
+                    df = data.reset_index()
+                    df.columns = [
+                        c[1].lower().strip() if (isinstance(c, tuple) and len(c) > 1 and c[1])
+                        else (c[0].lower().strip() if isinstance(c, tuple) else str(c).lower().strip())
+                        for c in df.columns
+                    ]
+                    time_col = "datetime" if "datetime" in df.columns else ("date" if "date" in df.columns else df.columns[0])
+                    df["timestamp"] = pd.to_datetime(df[time_col])
+                    df["source"] = self.name
+                    results[orig_sym] = df
+            else:
+                for yf_s in yf_syms:
+                    orig_sym = sym_map[yf_s]
+                    try:
+                        if hasattr(data.columns, "levels") and yf_s in data.columns.levels[0]:
+                            sub_df = data[yf_s].dropna().reset_index()
+                            if not sub_df.empty:
+                                sub_df.columns = [
+                                    c[1].lower().strip() if (isinstance(c, tuple) and len(c) > 1 and c[1])
+                                    else (c[0].lower().strip() if isinstance(c, tuple) else str(c).lower().strip())
+                                    for c in sub_df.columns
+                                ]
+                                time_col = "datetime" if "datetime" in sub_df.columns else ("date" if "date" in sub_df.columns else sub_df.columns[0])
+                                sub_df["timestamp"] = pd.to_datetime(sub_df[time_col])
+                                sub_df["source"] = self.name
+                                results[orig_sym] = sub_df
+                    except Exception as sub_e:
+                        logger.warning(f"Error parsing yfinance intraday data for {yf_s}: {sub_e}")
+        except Exception as e:
+            logger.error(f"YFinance intraday download error: {e}")
 
         return results
 
@@ -118,38 +186,77 @@ class YFinanceProvider:
 
     def quotes(self, symbols: List[str]) -> Dict[str, Quote]:
         quotes_dict: Dict[str, Quote] = {}
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         for s in symbols:
-            clean_s = s.replace(".NS", "")
+            clean_s = s.replace(".NS", "").replace(".BO", "")
             try:
                 ticker = yf.Ticker(self._normalize_symbol(s))
-                info = ticker.fast_info
-                last_price = float(info.get("last_price", 0.0) or info.get("regular_market_price", 0.0))
-                if last_price > 0:
+                fi = ticker.fast_info
+                last_price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
+                prev_close = getattr(fi, "previous_close", None)
+                day_volume = getattr(fi, "last_volume", 0.0) or 0.0
+                day_open = getattr(fi, "open", None)
+                day_high = getattr(fi, "day_high", None)
+                day_low = getattr(fi, "day_low", None)
+
+                if last_price and float(last_price) > 0:
+                    lp = float(last_price)
+                    pc = float(prev_close) if prev_close else lp
                     quotes_dict[clean_s] = Quote(
                         symbol=clean_s,
-                        last_price=last_price,
-                        day_volume=float(info.get("last_volume", 0.0)),
-                        timestamp=now,
-                        source=self.name,
-                        is_realtime=False,
-                        is_stale=False,
+                        price=lp,
+                        close=pc,
+                        open=float(day_open) if day_open else lp,
+                        high=float(day_high) if day_high else lp,
+                        low=float(day_low) if day_low else lp,
+                        day_volume=float(day_volume),
+                        provider=self.name,
+                        exchange_ts=now,
+                        received_ts=now,
+                        freshness=QuoteFreshness.DELAYED,
+                        realtime=False,
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error fetching YFinance quote for {clean_s}: {e}")
+
+            if clean_s not in quotes_dict:
+                # Try downloading 2-day history as fallback before synthetic
+                try:
+                    hist = yf.Ticker(self._normalize_symbol(s)).history(period="2d")
+                    if len(hist) > 0:
+                        lp = float(hist["Close"].iloc[-1])
+                        pc = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else lp
+                        quotes_dict[clean_s] = Quote(
+                            symbol=clean_s,
+                            price=lp,
+                            close=pc,
+                            open=float(hist["Open"].iloc[-1]),
+                            high=float(hist["High"].iloc[-1]),
+                            low=float(hist["Low"].iloc[-1]),
+                            day_volume=float(hist["Volume"].iloc[-1]),
+                            provider=self.name,
+                            exchange_ts=now,
+                            received_ts=now,
+                            freshness=QuoteFreshness.DELAYED,
+                            realtime=False,
+                        )
+                except Exception:
+                    pass
 
             if clean_s not in quotes_dict:
                 # Deterministic synthetic quote for fallback
                 base = 500.0 + (abs(hash(clean_s)) % 1500)
                 quotes_dict[clean_s] = Quote(
                     symbol=clean_s,
-                    last_price=base,
+                    price=base,
+                    close=base,
                     day_volume=1500000.0,
-                    timestamp=now,
-                    source="synthetic_fallback",
-                    is_realtime=False,
-                    is_stale=False,
+                    provider="synthetic_fallback",
+                    exchange_ts=now,
+                    received_ts=now,
+                    freshness=QuoteFreshness.DELAYED,
+                    realtime=False,
                 )
 
         return quotes_dict

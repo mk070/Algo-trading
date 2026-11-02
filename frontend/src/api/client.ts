@@ -2,6 +2,63 @@ import { BacktestMetrics, JournalEntry, Position, Signal, TradePlan } from '../t
 
 const API_BASE = '/api';
 
+export interface CandleBar {
+  time: string | number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ema20?: number | null;
+  ema50?: number | null;
+  sma50?: number | null;
+  sma150?: number | null;
+  sma200?: number | null;
+  rsi14?: number | null;
+  atr14?: number | null;
+}
+
+export interface TrendTemplateRule {
+  rule: string;
+  passed: boolean;
+  actual: string;
+  expected: string;
+}
+
+export interface StrategyOverlay {
+  signal_id?: number;
+  setup: string;
+  trigger: number;
+  entry_zone_high: number;
+  stop: number;
+  target1: number;
+  state: string;
+  rs_rank?: number | null;
+  atr?: number | null;
+  reasons: string[];
+  vcp_base?: {
+    base_bars: number;
+    start_time: string | number;
+    end_time: string | number;
+    base_high: number;
+    base_low: number;
+    pivot: number;
+  } | null;
+  trend_template?: TrendTemplateRule[];
+}
+
+export interface BarsResponse {
+  symbol: string;
+  market: string;
+  timeframe: string;
+  provider: string;
+  feed_status: 'LIVE' | 'DELAYED' | 'STALE' | 'DISCONNECTED';
+  last_quote_time?: string | null;
+  current_price?: number | null;
+  bars: CandleBar[];
+  strategy_overlay?: StrategyOverlay | null;
+}
+
 export const apiClient = {
   async getHealth() {
     const res = await fetch(`${API_BASE}/health`);
@@ -34,8 +91,66 @@ export const apiClient = {
     return res.json();
   },
 
-  async getBars(symbol: string, market: string = 'IN', n: number = 250) {
-    const res = await fetch(`${API_BASE}/bars/${symbol}?market=${market}&n=${n}`);
+  async getWatchlists(market: string = 'IN') {
+    const res = await fetch(`${API_BASE}/watchlists?market=${market}`);
+    return res.json();
+  },
+
+  async createWatchlist(name: string, market: string = 'IN') {
+    const res = await fetch(`${API_BASE}/watchlists`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, market }),
+    });
+    return res.json();
+  },
+
+  async deleteWatchlist(id: number) {
+    const res = await fetch(`${API_BASE}/watchlists/${id}`, { method: 'DELETE' });
+    return res.json();
+  },
+
+  async getWatchlistItems(watchlistId: number) {
+    const res = await fetch(`${API_BASE}/watchlists/${watchlistId}/items`);
+    return res.json();
+  },
+
+  async addWatchlistItem(watchlistId: number, data: { symbol: string; notes?: string; source?: string }) {
+    const res = await fetch(`${API_BASE}/watchlists/${watchlistId}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+
+  async removeWatchlistItem(watchlistId: number, itemId: number) {
+    const res = await fetch(`${API_BASE}/watchlists/${watchlistId}/items/${itemId}`, { method: 'DELETE' });
+    return res.json();
+  },
+
+  async importWatchlistSymbols(watchlistId: number, rawText: string, sourceTag: string = 'MANUAL_IMPORT') {
+    const res = await fetch(`${API_BASE}/watchlists/${watchlistId}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: rawText, source_tag: sourceTag }),
+    });
+    return res.json();
+  },
+
+  async getBars(symbol: string, market: string = 'IN', tfOrN: string | number = '1d', n: number = 250): Promise<BarsResponse> {
+    const tf = typeof tfOrN === 'string' ? tfOrN : '1d';
+    const limit = typeof tfOrN === 'number' ? tfOrN : n;
+    const res = await fetch(`${API_BASE}/bars/${symbol}?market=${market}&tf=${tf}&n=${limit}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      try {
+        const errJson = JSON.parse(errText);
+        throw new Error(errJson.detail || `Server returned ${res.status}`);
+      } catch {
+        throw new Error(`Server returned ${res.status}: ${errText.slice(0, 100)}`);
+      }
+    }
     return res.json();
   },
 
@@ -139,6 +254,18 @@ export const apiClient = {
     }
   },
 
+  async refreshNews(market: string = 'IN') {
+    try {
+      const res = await fetch(`${API_BASE}/news/refresh?market=${market}`, {
+        method: 'POST',
+      });
+      return await res.json();
+    } catch (e) {
+      console.error('Error refreshing news:', e);
+      return { status: 'ERROR', message: String(e) };
+    }
+  },
+
   async getNewsSourcesHealth() {
     try {
       const res = await fetch(`${API_BASE}/news/sources/health`);
@@ -231,6 +358,73 @@ export const apiClient = {
     } catch {
       return null;
     }
+  },
+
+  async getTelegramStatus() {
+    const res = await fetch(`${API_BASE}/telegram/status`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Telegram status: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async testTelegram() {
+    const res = await fetch(`${API_BASE}/telegram/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to send Telegram test message');
+    }
+    return data;
+  },
+
+  async getMarketPulse(market: string = 'IN') {
+    const res = await fetch(`${API_BASE}/market/pulse?market=${market}`);
+    return res.json();
+  },
+
+  async searchSymbols(query: string, market: string = 'IN') {
+    const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}&market=${market}`);
+    return res.json();
+  },
+
+  async getCustomAlerts(market?: string, activeOnly?: boolean) {
+    let url = `${API_BASE}/alerts/custom`;
+    const params = new URLSearchParams();
+    if (market) params.append('market', market);
+    if (activeOnly) params.append('active_only', 'true');
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+    const res = await fetch(url);
+    return res.json();
+  },
+
+  async createCustomAlert(data: {
+    symbol: string;
+    market: string;
+    target_price: number;
+    condition: string;
+    notes?: string;
+  }) {
+    const res = await fetch(`${API_BASE}/alerts/custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to create alert');
+    }
+    return res.json();
+  },
+
+  async deleteCustomAlert(id: number) {
+    const res = await fetch(`${API_BASE}/alerts/custom/${id}`, {
+      method: 'DELETE',
+    });
+    return res.json();
   },
 };
 

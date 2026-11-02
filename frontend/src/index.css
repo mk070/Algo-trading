@@ -1,3 +1,6 @@
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,26 +11,33 @@
 
 body {
   margin: 0;
-  background-color: #020617;
-  color: #f8fafc;
+  background-color: #0d0f0e;
+  color: #e8eae9;
+  font-family: 'Plus Jakarta Sans Variable', system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv01" 1;
 }
 
-/* Custom scrollbars */
+/* Enforce tabular numbers for financial clarity across all tables, ticks, badges */
+.tabular-nums, table, [data-tabular="true"] {
+  font-feature-settings: "tnum" 1, "cv01" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom terminal scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #0d0f0e;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #2e3331;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #444a48;
 }
-

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Activity, BarChart2, BookOpen, Clock, Compass, FileText, Newspaper, RefreshCw, Settings, ShieldCheck } from 'lucide-react';
+import { Activity, BarChart2, Bell, BookOpen, Clock, Compass, FileText, Newspaper, RefreshCw, Search, Settings, ShieldCheck } from 'lucide-react';
 import { RegimeResult } from '../types';
 
 interface NavbarProps {
@@ -9,6 +9,8 @@ interface NavbarProps {
   regime?: RegimeResult | null;
   isStreaming: boolean;
   onRefresh?: () => void;
+  onOpenSearch?: () => void;
+  onOpenCustomAlerts?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,6 +19,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   regime,
   isStreaming,
   onRefresh,
+  onOpenSearch,
+  onOpenCustomAlerts,
 }) => {
   const getRegimeColor = (status?: string) => {
     switch (status) {
@@ -86,14 +90,41 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Right side: Live SSE Pulse + Refresh + Disclaimer badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+        {/* Right side: Search, Custom Alerts, SSE, Refresh */}
+        <div className="flex items-center gap-2.5">
+          {/* Quick Search Shortcut */}
+          {onOpenSearch && (
+            <button
+              onClick={onOpenSearch}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 hover:text-white transition shadow-sm"
+              title="Search symbols (Ctrl+K or Cmd+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="hidden md:inline text-[10px] px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono">
+                Ctrl K
+              </kbd>
+            </button>
+          )}
+
+          {/* Custom Alerts Button */}
+          {onOpenCustomAlerts && (
+            <button
+              onClick={onOpenCustomAlerts}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 hover:text-white transition"
+              title="Set Custom Price Alert"
+            >
+              <Bell className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden lg:inline">Alerts</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium pl-1">
             <span
               className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`}
               title={isStreaming ? 'Connected to Live Server-Sent Events' : 'Connecting to Stream...'}
             ></span>
-            <span className="hidden sm:inline">{isStreaming ? 'Live Feed' : 'Connecting'}</span>
+            <span className="hidden sm:inline">{isStreaming ? 'Live' : 'Connecting'}</span>
           </div>
 
           {onRefresh && (

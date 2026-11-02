@@ -362,3 +362,53 @@ def test_isolation_invariant_news_cannot_generate_buys_or_alter_risk():
     assert "stop" not in dump
     assert "buy_signal" not in dump
     assert dump["status"] in ("CLEAR", "REVIEW", "BLOCKED", "UNKNOWN")
+
+
+# -----------------------------------------------------------------------------
+# 11. FINANCIAL MEDIA NEWS COLLECTOR & REFRESH ENDPOINT TEST
+# -----------------------------------------------------------------------------
+
+def test_financial_media_collector_and_poll(mem_db, monkeypatch):
+    """Verifies FinancialMediaNewsCollector returns parsed news items and stores them safely."""
+    from app.engine.news_collectors import FinancialMediaNewsCollector
+
+    collector = FinancialMediaNewsCollector()
+
+    # Mock compliance client to return valid Google News / Yahoo Finance RSS XML
+    sample_rss = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+      <channel>
+        <title>Google News</title>
+        <item>
+          <title>Reliance Industries reports record revenue in Q2 - Yahoo Finance</title>
+          <link>https://news.google.com/rss/articles/sample_id_123</link>
+          <pubDate>Mon, 02 Nov 2026 09:30:00 GMT</pubDate>
+          <description>Full article details from Yahoo Finance.</description>
+          <source url="https://finance.yahoo.com">Yahoo Finance</source>
+        </item>
+      </channel>
+    </rss>"""
+
+    class MockResp:
+        status_code = 200
+        text = sample_rss
+        headers = {}
+
+    monkeypatch.setattr(collector.http, "get", lambda url, **kwargs: MockResp())
+
+    resp = collector.fetch_news_for_symbol("RELIANCE", market="IN")
+    assert resp.success is True
+    assert len(resp.items) == 1
+    assert "Reliance Industries" in resp.items[0].title
+    assert "yahoo" in resp.items[0].source.lower()
+
+    # Ingest via news engine
+    engine = NewsIntelligenceEngine()
+    monkeypatch.setattr(engine.media_collector.http, "get", lambda url, **kwargs: MockResp())
+    ingested_count = engine.poll_financial_news(["RELIANCE"], market="IN", db=mem_db)
+    assert ingested_count >= 1
+
+    stored = mem_db.query(NewsEvent).filter(NewsEvent.symbol == "RELIANCE").first()
+    assert stored is not None
+    assert stored.source.startswith("media_")
+

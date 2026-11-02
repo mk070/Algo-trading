@@ -1,7 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, ArrowUpRight, BarChart3, CheckCircle, RefreshCw, Shield, Sparkles, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  BarChart3,
+  CheckCircle,
+  Clock,
+  Eye,
+  Layers,
+  ListFilter,
+  RefreshCw,
+  Shield,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
 import { apiClient } from '../api/client';
 import { CandleChart } from '../components/CandleChart';
+import { MarketPulseWidget } from '../components/MarketPulseWidget';
 import { SignalCard } from '../components/SignalCard';
 import { TakeTradeModal } from '../components/TakeTradeModal';
 import { Signal, TradePlan } from '../types';
@@ -18,6 +33,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
   const [chartBars, setChartBars] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [tradeModalSignal, setTradeModalSignal] = useState<Signal | null>(null);
+  const [oppFilter, setOppFilter] = useState<'ALL' | 'SETUPS' | 'APPROACHING' | 'BLOCKED' | 'HELD'>('ALL');
 
   const fetchPlan = async () => {
     try {
@@ -155,6 +171,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
           ) : (
             <CandleChart
               symbol={selectedChartSymbol}
+              market={currentMarket}
               bars={chartBars}
               trigger={selectedSignal?.trigger}
               stop={selectedSignal?.stop}
@@ -163,6 +180,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
           )}
         </div>
       )}
+
+      {/* Market Breadth & Sector Heatmap */}
+      <MarketPulseWidget
+        currentMarket={currentMarket}
+        onSelectSymbol={handleOpenChart}
+      />
 
       {/* Primary Section: Today's Ranked Trade Plan */}
       <div>
@@ -188,13 +211,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
             ))}
           </div>
         ) : !plan?.signals || plan.signals.length === 0 ? (
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-10 text-center flex flex-col items-center justify-center gap-2">
-            <Shield className="w-10 h-10 text-slate-600 mb-1" />
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-2">
+            <Shield className="w-9 h-9 text-amber-500/80 mb-1" />
             <h3 className="text-base font-semibold text-slate-200">
-              No Qualifying Setups Today
+              {plan?.regime.status === 'WEAK' ? 'Breakout Entries Paused (Market Regime WEAK)' : 'No Actionable Breakout Triggers Today'}
             </h3>
-            <p className="text-xs text-slate-400 max-w-md">
-              "Doing nothing is a valid trade." The market regime or trend template rules rejected extended or choppy stocks to protect your capital.
+            <p className="text-xs text-slate-400 max-w-xl">
+              {plan?.regime.status === 'WEAK'
+                ? `Rule-Based Capital Protection Active: Nifty index is below SMA200 (${plan?.regime.sma200.toFixed(2)}). All new breakout BUY orders are prudently halted. Stocks forming bases are being monitored in the Opportunity Radar below.`
+                : '"Doing nothing is a valid trade." The market regime or trend template rules rejected extended or choppy stocks to protect your capital.'}
             </p>
           </div>
         ) : (
@@ -210,6 +235,171 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
           </div>
         )}
       </div>
+
+      {/* Opportunity & Candidate Watchlist Radar */}
+      {plan?.candidate_opportunities && plan.candidate_opportunities.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="p-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                Candidate Opportunity Radar ({plan.candidate_opportunities.length} Stocks Tracked)
+              </h3>
+              <p className="text-xs text-slate-400">
+                Universe & Watchlist stocks screened today with real-time opportunity states, setup patterns, and guardrail reasons.
+              </p>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-semibold">
+              <button
+                onClick={() => setOppFilter('ALL')}
+                className={`px-2.5 py-1 rounded transition-colors ${oppFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                All ({plan.candidate_opportunities.length})
+              </button>
+              <button
+                onClick={() => setOppFilter('SETUPS')}
+                className={`px-2.5 py-1 rounded transition-colors ${oppFilter === 'SETUPS' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Setups ({plan.candidate_opportunities.filter((c) => c.setup !== 'MONITORING').length})
+              </button>
+              <button
+                onClick={() => setOppFilter('APPROACHING')}
+                className={`px-2.5 py-1 rounded transition-colors ${oppFilter === 'APPROACHING' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Near Breakout ({plan.candidate_opportunities.filter((c) => c.state === 'APPROACHING').length})
+              </button>
+              <button
+                onClick={() => setOppFilter('BLOCKED')}
+                className={`px-2.5 py-1 rounded transition-colors ${oppFilter === 'BLOCKED' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Blocked ({plan.candidate_opportunities.filter((c) => c.state === 'BLOCKED').length})
+              </button>
+              <button
+                onClick={() => setOppFilter('HELD')}
+                className={`px-2.5 py-1 rounded transition-colors ${oppFilter === 'HELD' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Already Held ({plan.candidate_opportunities.filter((c) => c.state === 'ALREADY_HELD').length})
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-bold border-b border-slate-800 tracking-wider">
+                <tr>
+                  <th className="px-4 py-3">Symbol & Source</th>
+                  <th className="px-4 py-3">Setup Pattern</th>
+                  <th className="px-4 py-3">State</th>
+                  <th className="px-4 py-3">RS Rank</th>
+                  <th className="px-4 py-3">Trigger</th>
+                  <th className="px-4 py-3">Stop</th>
+                  <th className="px-4 py-3">Status Reason / Guardrail</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {plan.candidate_opportunities
+                  .filter((cand) => {
+                    if (oppFilter === 'SETUPS') return cand.setup !== 'MONITORING';
+                    if (oppFilter === 'APPROACHING') return cand.state === 'APPROACHING';
+                    if (oppFilter === 'BLOCKED') return cand.state === 'BLOCKED';
+                    if (oppFilter === 'HELD') return cand.state === 'ALREADY_HELD';
+                    return true;
+                  })
+                  .slice(0, 30)
+                  .map((cand) => {
+                    const isHeld = cand.state === 'ALREADY_HELD';
+                    const isBlocked = cand.state === 'BLOCKED';
+                    const isApproaching = cand.state === 'APPROACHING';
+                    const isValidSetup = cand.state === 'VALID_SETUP';
+
+                    return (
+                      <tr key={cand.id || cand.symbol} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="px-4 py-3 font-bold text-white font-sans text-sm">
+                          <div className="flex items-center gap-2">
+                            <span>{cand.symbol}</span>
+                            {cand.sources && cand.sources.map((src, i) => (
+                              <span
+                                key={i}
+                                className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                                  src.startsWith('WATCHLIST')
+                                    ? 'bg-amber-950/80 text-amber-300 border border-amber-800/50'
+                                    : 'bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                {src.replace('WATCHLIST:', '')}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-sans font-semibold ${
+                            cand.setup === 'VCP'
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                              : cand.setup === 'PULLBACK'
+                              ? 'bg-purple-950/80 text-purple-300 border border-purple-800/60'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {cand.setup}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-sans">
+                          {isHeld ? (
+                            <span className="px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 text-[10px] font-bold">
+                              ALREADY HELD
+                            </span>
+                          ) : isApproaching ? (
+                            <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold">
+                              NEAR BREAKOUT
+                            </span>
+                          ) : isValidSetup ? (
+                            <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
+                              VALID SETUP
+                            </span>
+                          ) : isBlocked ? (
+                            <span className="px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-900/60 text-[10px] font-bold">
+                              BLOCKED
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">
+                              NO SETUP
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`font-bold ${
+                            cand.rs_rank >= 0.70 ? 'text-emerald-400' : cand.rs_rank >= 0.50 ? 'text-amber-400' : 'text-slate-400'
+                          }`}>
+                            {(cand.rs_rank * 100).toFixed(0)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-200">
+                          {cand.trigger ? `₹${cand.trigger.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-rose-400">
+                          {cand.stop ? `₹${cand.stop.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 font-sans text-slate-400 text-[11px] max-w-xs truncate" title={cand.first_failing_check || cand.reasons?.[0] || 'Monitoring'}>
+                          {cand.first_failing_check || cand.reasons?.[0] || 'Candidate monitored'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-sans">
+                          <button
+                            onClick={() => handleOpenChart(cand.symbol)}
+                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
+                          >
+                            📈 Chart
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Experimental / Shadow Mode Setups (Setup P) */}
       {plan?.shadow_signals && plan.shadow_signals.length > 0 && (

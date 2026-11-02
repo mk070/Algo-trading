@@ -3,11 +3,12 @@ import json
 import logging
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import BrokerSnapshot, ImportedReport, Position, ReportTrade
+from app.models import BrokerSnapshot, ImportedReport, Position, ReportTrade, SettingKV
 from app.providers.kite_provider import parse_zerodha_console_csv
 from app.providers.manager import provider_manager
 
@@ -30,14 +31,69 @@ def get_kite_login_url():
 
 @router.get("/portfolio/kite/callback")
 def handle_kite_callback(request_token: str, db: Session = Depends(get_db)):
-    """Receives request_token, exchanges it for the daily access token."""
+    """Receives request_token, exchanges it for the daily access token, saves session to DB, and redirects."""
     try:
         session_data = provider_manager.kite.exchange_request_token(request_token)
-        return {
-            "status": "SUCCESS",
-            "message": "Zerodha Kite Personal session established successfully.",
+
+        # Persist session in SettingKV table
+        key = "kite_session"
+        payload = {
+            "access_token": session_data.get("access_token"),
+            "token_expiry": provider_manager.kite.token_expiry.isoformat() if provider_manager.kite.token_expiry else None,
             "user_id": session_data.get("user_id"),
         }
+        existing = db.query(SettingKV).filter(SettingKV.key == key).first()
+        if existing:
+            existing.value_json = json.dumps(payload)
+            existing.updated_at = datetime.datetime.utcnow()
+        else:
+            db.add(SettingKV(key=key, value_json=json.dumps(payload)))
+        db.commit()
+
+        # Immediate sync of holdings and funds to database snapshot
+        try:
+            sync_portfolio_now(db)
+        except Exception as se:
+            logger.warning(f"Post-callback auto-sync warning: {se}")
+
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Zerodha Kite Session Established</title>
+  <style>
+    body {{ background: #0b0f19; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+    .card {{ background: #111827; border: 1px solid #1f2937; padding: 2.5rem; border-radius: 1rem; text-align: center; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }}
+    .badge {{ display: inline-flex; align-items: center; gap: 0.5rem; background: #064e3b; color: #34d399; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 9999px; font-size: 0.875rem; margin-bottom: 1rem; }}
+    h2 {{ margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 600; color: #f3f4f6; }}
+    p {{ color: #9ca3af; font-size: 0.875rem; line-height: 1.5; margin: 0.5rem 0; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">✓ Zerodha Kite Connected</div>
+    <h2>Session Established</h2>
+    <p>User ID: <strong style="color: #60a5fa;">{session_data.get("user_id")}</strong></p>
+    <p>Your Zerodha account has been authenticated for today's market session.</p>
+    <p style="font-size: 0.75rem; color: #6b7280; margin-top: 1rem;">This window will close automatically...</p>
+  </div>
+  <script>
+    if (window.opener) {{
+      window.opener.postMessage({{ type: 'KITE_CONNECTED', user_id: '{session_data.get("user_id")}' }}, '*');
+      setTimeout(() => {{
+        try {{ window.close(); }} catch(e) {{}}
+      }}, 1200);
+    }} else {{
+      setTimeout(() => {{
+        window.location.href = '/positions?kite=connected';
+      }}, 1200);
+    }}
+  </script>
+</body>
+</html>
+"""
+        return HTMLResponse(content=html_content, status_code=200)
     except Exception as e:
         logger.error(f"Kite callback error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -84,8 +140,13 @@ def get_holdings():
 
 @router.get("/portfolio/valuation")
 def get_portfolio_valuation():
-    """Calculates live portfolio valuation comparing Broker-Reported vs Angel One Calculated P&L."""
+    """Calculates live portfolio valuation comparing Broker-Reported vs Angel One Calculated P&L,
+    including Zerodha available cash balance and total account equity."""
     holdings = provider_manager.kite.holdings()
+    funds = provider_manager.kite.funds()
+    available_cash = float(funds.get("available_cash", 0.0))
+    is_auth = provider_manager.kite.is_authenticated()
+
     symbols = [h["tradingsymbol"] for h in holdings]
     quotes = provider_manager.get_quotes(symbols, market="IN")
 
@@ -139,12 +200,26 @@ def get_portfolio_valuation():
             }
         )
 
+    user_id = None
+    try:
+        from app.db import SessionLocal
+        with SessionLocal() as db_sess:
+            row = db_sess.query(SettingKV).filter(SettingKV.key == "kite_session").first()
+            if row and row.value_json:
+                user_id = json.loads(row.value_json).get("user_id")
+    except Exception:
+        pass
+
     return {
         "summary": {
             "total_invested": round(total_invested, 2),
+            "available_cash": round(available_cash, 2),
+            "total_account_equity": round(total_invested + available_cash, 2),
             "broker_reported_value": round(total_broker_val, 2),
             "calculated_live_value": round(total_calc_val, 2),
             "calculated_live_pnl": round(total_calc_val - total_invested, 2),
+            "is_authenticated": is_auth,
+            "user_id": user_id,
             "as_of": now.isoformat(),
         },
         "holdings": items,

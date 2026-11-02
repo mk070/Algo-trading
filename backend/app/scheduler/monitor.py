@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.engine.exits import exit_manager
 from app.engine.pipeline import decision_pipeline
-from app.models import Position, Signal
+from app.models import CustomPriceAlert, Position, Signal
 from app.notify.dispatcher import dispatcher
 from app.providers.base import Quote
 from app.providers.manager import provider_manager
@@ -31,7 +31,9 @@ class LiveBreakoutMonitor:
 
     def __init__(self):
         self.vcp_cfg = settings.get_vcp_config()
-        self.approach_pct = self.vcp_cfg.approach_pct
+        self.approach_pct = self.vcp_cfg.approach_pct or 1.5
+        self.demote_pct = 3.0  # Hysteresis buffer to prevent flip-flopping
+        self.max_subscriptions = 50  # WebSocket connection subscription cap
         self.min_volume_pace = getattr(self.vcp_cfg, "volume_pace_min", 1.0)
         self.dispatched_alerts: Set[str] = set()
 
@@ -42,11 +44,34 @@ class LiveBreakoutMonitor:
         self.dispatched_alerts.add(key)
         return True
 
-    def sync_websocket_subscriptions(self, market: str, symbols: List[str]):
-        """Ensure Angel One WebSocket streams shortlist + open positions for India."""
+    def sync_websocket_subscriptions(
+        self,
+        market: str,
+        p0_symbols: List[str],
+        p1_symbols: List[str],
+        p2_symbols: List[str],
+    ):
+        """Tier-based subscription manager respecting max 50 symbols cap:
+        - P0: Open positions (highest priority)
+        - P1: Near trigger / Provisional
+        - P2: Valid setups waiting for confirmation (evicted first when cap is exceeded)
+        - P3: General universe / watchlist (polled via REST)
+        """
         if market.upper() == "IN":
             try:
-                provider_manager.angelone.ws_manager.sync_subscriptions(symbols)
+                # Prioritize P0, then P1, then P2 up to max_subscriptions (50)
+                sub_list = []
+                for s in p0_symbols:
+                    if s not in sub_list and len(sub_list) < self.max_subscriptions:
+                        sub_list.append(s)
+                for s in p1_symbols:
+                    if s not in sub_list and len(sub_list) < self.max_subscriptions:
+                        sub_list.append(s)
+                for s in p2_symbols:
+                    if s not in sub_list and len(sub_list) < self.max_subscriptions:
+                        sub_list.append(s)
+
+                provider_manager.angelone.ws_manager.sync_subscriptions(sub_list)
             except Exception as e:
                 logger.warning(f"Could not sync WebSocket subscriptions: {e}")
 
@@ -72,12 +97,17 @@ class LiveBreakoutMonitor:
             .all()
         )
 
-        all_symbols = list(set([s.symbol for s in active_signals] + [p.symbol for p in open_positions]))
+        # Categorize monitoring tiers
+        p0_syms = list(set(p.symbol for p in open_positions))
+        p1_syms = list(set(s.symbol for s in active_signals if s.state in ("APPROACHING", "TRIGGERED_PROVISIONAL")))
+        p2_syms = list(set(s.symbol for s in active_signals if s.state == "WATCHLIST"))
+
+        all_symbols = list(set(p0_syms + p1_syms + p2_syms))
         if not all_symbols:
             return
 
-        # Keep WebSocket subscriptions synchronized
-        self.sync_websocket_subscriptions(market, all_symbols)
+        # Keep WebSocket subscriptions synchronized under tiering and cap of 50
+        self.sync_websocket_subscriptions(market, p0_syms, p1_syms, p2_syms)
 
         # Fetch quotes: try primary WebSocket quotes first for IN, fallback to REST
         quotes: Dict[str, Quote] = {}
@@ -138,6 +168,7 @@ class LiveBreakoutMonitor:
                         body=f"Price ({last_p:.2f}) dropped to or below stop ({stop:.2f}) before breakout.",
                         symbol=sig.symbol,
                         market=market,
+                        quote=q,
                         db=db,
                     )
                 continue
@@ -154,25 +185,33 @@ class LiveBreakoutMonitor:
                         body=f"Price ({last_p:.2f}) moved beyond acceptable entry zone ({zone_high:.2f}). Skip trade.",
                         symbol=sig.symbol,
                         market=market,
+                        quote=q,
                         db=db,
                     )
                 continue
 
-            # Approaching Zone Check
-            if trigger > 0 and last_p < trigger and ((trigger - last_p) / trigger * 100.0) <= self.approach_pct:
-                if sig.state != "APPROACHING":
-                    sig.state = "APPROACHING"
+            # Approaching Zone Check with 1.5% promotion and 3.0% demotion hysteresis
+            if trigger > 0 and last_p < trigger:
+                dist_pct = ((trigger - last_p) / trigger * 100.0)
+                if dist_pct <= self.approach_pct:
+                    if sig.state != "APPROACHING":
+                        sig.state = "APPROACHING"
+                        db.commit()
+                        dedupe_key = f"{sig.symbol}:APPROACHING:{today}"
+                        if self._should_dispatch(dedupe_key):
+                            dispatcher.dispatch(
+                                alert_type="SYSTEM",
+                                title=f"APPROACHING TRIGGER: {sig.symbol}",
+                                body=f"Price ({last_p:.2f}) is within {self.approach_pct}% of breakout trigger ({trigger:.2f}).",
+                                symbol=sig.symbol,
+                                market=market,
+                                quote=q,
+                                db=db,
+                            )
+                elif dist_pct > self.demote_pct and sig.state == "APPROACHING":
+                    # Demote back to WATCHLIST only beyond 3.0% (hysteresis to prevent chatter)
+                    sig.state = "WATCHLIST"
                     db.commit()
-                    dedupe_key = f"{sig.symbol}:APPROACHING:{today}"
-                    if self._should_dispatch(dedupe_key):
-                        dispatcher.dispatch(
-                            alert_type="SYSTEM",
-                            title=f"APPROACHING TRIGGER: {sig.symbol}",
-                            body=f"Price ({last_p:.2f}) is within {self.approach_pct}% of breakout trigger ({trigger:.2f}).",
-                            symbol=sig.symbol,
-                            market=market,
-                            db=db,
-                        )
 
             # Trigger Evaluation (Between trigger and zone_high)
             if last_p >= trigger and last_p <= zone_high:
@@ -200,6 +239,7 @@ class LiveBreakoutMonitor:
                                 body=f"Price crossed trigger ({trigger:.2f}). Awaiting 15-min candle confirmation close and volume pace check.",
                                 symbol=sig.symbol,
                                 market=market,
+                                quote=q,
                                 db=db,
                             )
                 else:
@@ -249,6 +289,7 @@ class LiveBreakoutMonitor:
                                     "target": sig.target1,
                                     "volume_pace": vol_pace,
                                 },
+                                quote=q,
                                 db=db,
                             )
                     elif pipeline_decision.final_decision == "BLOCK":
@@ -263,6 +304,7 @@ class LiveBreakoutMonitor:
                                 body=f"15m breakout was blocked by live pipeline check: {reasons_text}",
                                 symbol=sig.symbol,
                                 market=market,
+                                quote=q,
                                 db=db,
                             )
                     else:  # WAIT
@@ -296,6 +338,7 @@ class LiveBreakoutMonitor:
                     body=eval_res.reason,
                     symbol=pos.symbol,
                     market=market,
+                    quote=q,
                     db=db,
                 )
             elif eval_res.action == "SELL_PARTIAL":
@@ -305,6 +348,7 @@ class LiveBreakoutMonitor:
                     body=eval_res.reason,
                     symbol=pos.symbol,
                     market=market,
+                    quote=q,
                     db=db,
                 )
             elif eval_res.action == "TRAIL_UPDATE" and eval_res.new_active_stop:
@@ -317,6 +361,53 @@ class LiveBreakoutMonitor:
                         body=eval_res.reason,
                         symbol=pos.symbol,
                         market=market,
+                        quote=q,
+                        db=db,
+                    )
+
+        # 3. Check User-Defined Custom Price Alerts
+        custom_alerts = (
+            db.query(CustomPriceAlert)
+            .filter(
+                CustomPriceAlert.market == market,
+                CustomPriceAlert.active == True,
+                CustomPriceAlert.triggered == False,
+            )
+            .all()
+        )
+        if custom_alerts:
+            alert_symbols = list({ca.symbol for ca in custom_alerts})
+            alert_quotes = provider_manager.get_quotes(alert_symbols, market=market, db=db)
+            for ca in custom_alerts:
+                aq = alert_quotes.get(ca.symbol)
+                if not aq:
+                    continue
+                curr_p = aq.last_price
+                should_trigger = False
+                if ca.condition.upper() == "ABOVE" and curr_p >= ca.target_price:
+                    should_trigger = True
+                elif ca.condition.upper() == "BELOW" and curr_p <= ca.target_price:
+                    should_trigger = True
+
+                if should_trigger:
+                    ca.triggered = True
+                    ca.triggered_at = now
+                    ca.triggered_price = curr_p
+                    db.commit()
+                    note_str = f" ({ca.notes})" if ca.notes else ""
+                    dispatcher.dispatch(
+                        alert_type="SYSTEM",
+                        title=f"[MANUAL ALERT] {ca.symbol} {ca.condition} {ca.target_price:.2f}",
+                        body=f"{ca.symbol} reached {curr_p:.2f} (target: {ca.target_price:.2f} {ca.condition}){note_str}",
+                        symbol=ca.symbol,
+                        market=market,
+                        payload={
+                            "target_price": ca.target_price,
+                            "condition": ca.condition,
+                            "notes": ca.notes,
+                            "triggered_price": curr_p,
+                        },
+                        quote=aq,
                         db=db,
                     )
 

@@ -23,6 +23,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { ChartModal } from '../components/ChartModal';
 import { EarningsAnalysisResult } from '../types';
 
 export const NewsPage: React.FC = () => {
@@ -34,6 +35,20 @@ export const NewsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [searchSymbol, setSearchSymbol] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [chartSymbol, setChartSymbol] = useState<string | null>(null);
+
+  const handleRefreshNews = async () => {
+    try {
+      setRefreshing(true);
+      await apiClient.refreshNews('IN');
+      await fetchNews();
+    } catch (e) {
+      console.error('Error refreshing news:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Earnings Analyst state
   const [earningsSymbol, setEarningsSymbol] = useState('RELIANCE');
@@ -186,6 +201,15 @@ export const NewsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleRefreshNews}
+                disabled={refreshing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white shadow transition-all"
+              >
+                <Radio className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                {refreshing ? 'Fetching Live News...' : 'Refresh Financial News'}
+              </button>
+
               <input
                 type="text"
                 placeholder="Search symbol (e.g. RELIANCE)..."
@@ -271,6 +295,11 @@ export const NewsPage: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
+                        {e.live_price != null && (
+                          <span className="text-white font-bold text-xs">
+                            ₹{e.live_price.toFixed(2)}
+                          </span>
+                        )}
                         {e.price_change_day_pct !== null && e.price_change_day_pct !== undefined && (
                           <span className={`px-2 py-0.5 rounded font-bold border ${
                             e.price_change_day_pct >= 0
@@ -281,6 +310,12 @@ export const NewsPage: React.FC = () => {
                             {e.price_atr_multiple ? ` (${e.price_atr_multiple}x ATR)` : ''}
                           </span>
                         )}
+                        <button
+                          onClick={() => setChartSymbol(e.symbol)}
+                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-colors text-[11px] font-sans font-semibold flex items-center gap-1 border border-slate-700"
+                        >
+                          📈 Chart
+                        </button>
                         <div className="flex items-center gap-1 text-slate-500">
                           <Clock className="w-3.5 h-3.5" />
                           <span>{new Date(e.published_at).toLocaleString('en-IN')}</span>
@@ -613,6 +648,13 @@ export const NewsPage: React.FC = () => {
           )}
         </div>
       )}
+      {/* Technical Candlestick Modal */}
+      <ChartModal
+        isOpen={Boolean(chartSymbol)}
+        onClose={() => setChartSymbol(null)}
+        symbol={chartSymbol}
+        market="IN"
+      />
     </div>
   );
 };

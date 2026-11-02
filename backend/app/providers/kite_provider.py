@@ -37,7 +37,28 @@ class KitePortfolioReader:
     def is_configured(self) -> bool:
         return bool(self.api_key and self.api_secret)
 
+    def _restore_session_from_db_if_needed(self):
+        if not self.access_token:
+            try:
+                from app.db import SessionLocal
+                from app.models import SettingKV
+                with SessionLocal() as db:
+                    row = db.query(SettingKV).filter(SettingKV.key == "kite_session").first()
+                    if row and row.value_json:
+                        data = json.loads(row.value_json)
+                        exp_str = data.get("token_expiry")
+                        if exp_str:
+                            exp_dt = datetime.datetime.fromisoformat(exp_str)
+                            if datetime.datetime.utcnow() < exp_dt:
+                                self.access_token = data.get("access_token")
+                                self.token_expiry = exp_dt
+                                logger.info("Restored Kite session from database.")
+            except Exception as e:
+                logger.warning(f"Failed to restore Kite session from DB: {e}")
+
     def is_authenticated(self) -> bool:
+        if not self.access_token:
+            self._restore_session_from_db_if_needed()
         if not self.access_token:
             return False
         if self.token_expiry and datetime.datetime.utcnow() >= self.token_expiry:

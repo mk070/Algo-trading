@@ -39,5 +39,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 .vscode/
+logs/
 
 .neon

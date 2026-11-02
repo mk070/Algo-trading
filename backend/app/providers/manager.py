@@ -4,11 +4,20 @@ from typing import Dict, List, Optional
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.models import DailyBar
+from app.models import DailyBar, LatestQuote
 from app.providers.alpaca_provider import AlpacaProvider
 from app.providers.angelone_provider import AngelOneProvider
-from app.providers.base import MarketDataProvider, ProviderHealth, Quote, validate_candle_data
+from app.providers.base import (
+    DecisionQuote,
+    IneligibleQuoteError,
+    MarketDataProvider,
+    ProviderHealth,
+    Quote,
+    QuoteFreshness,
+    validate_candle_data,
+)
 from app.providers.kite_provider import KitePortfolioReader
+from app.providers.request_layer import request_layers
 from app.providers.yfinance_provider import YFinanceProvider
 from app.settings import settings
 
@@ -80,11 +89,17 @@ class ProviderManager:
         if not missing_symbols:
             return results
 
-        # 2. Fetch missing symbols via provider chain
+        # 2. Fetch missing symbols via provider chain wrapped in request layer
         chain = self.get_provider_chain(market)
         for provider in chain:
             try:
-                bars = provider.daily_bars(missing_symbols, start, end)
+                rl = request_layers.get(provider.name)
+                req_key = f"daily_bars:{provider.name}:{market}:{','.join(sorted(missing_symbols))}:{start}:{end}"
+                if rl:
+                    bars = rl.execute(req_key, lambda: provider.daily_bars(missing_symbols, start, end), ttl_sec=300.0)
+                else:
+                    bars = provider.daily_bars(missing_symbols, start, end)
+
                 for sym, df in bars.items():
                     if df is not None and not df.empty:
                         results[sym] = df
@@ -95,6 +110,39 @@ class ProviderManager:
                             self._cache_bars_to_db(db, sym, df)
             except Exception as e:
                 logger.warning(f"Provider {provider.name} failed for {market}: {e}")
+
+            if not missing_symbols:
+                break
+
+        return results
+
+    def get_intraday_bars(
+        self,
+        symbols: List[str],
+        interval: str = "FIFTEEN_MINUTE",
+        days: int = 5,
+        market: str = "IN",
+    ) -> Dict[str, pd.DataFrame]:
+        results: Dict[str, pd.DataFrame] = {}
+        missing_symbols = list(symbols)
+
+        chain = self.get_provider_chain(market)
+        for provider in chain:
+            try:
+                if hasattr(provider, "intraday_bars"):
+                    yf_interval = "15m" if "FIFTEEN" in interval.upper() or interval == "15m" else interval
+                    if provider.name == "yfinance":
+                        bars = provider.intraday_bars(missing_symbols, interval=yf_interval, days=days, market=market)
+                    else:
+                        bars = provider.intraday_bars(missing_symbols, interval=interval, days=days)
+
+                    for sym, df in bars.items():
+                        if df is not None and not df.empty:
+                            results[sym] = df
+                            if sym in missing_symbols:
+                                missing_symbols.remove(sym)
+            except Exception as e:
+                logger.warning(f"Provider {provider.name} failed intraday bars for {market}: {e}")
 
             if not missing_symbols:
                 break
@@ -133,23 +181,141 @@ class ProviderManager:
             db.rollback()
             logger.warning(f"Error caching bars for {symbol}: {e}")
 
-    def get_quotes(self, symbols: List[str], market: str = "IN") -> Dict[str, Quote]:
-        """Fetch quotes enforcing freshness checks."""
-        chain = self.get_provider_chain(market)
+    def save_latest_quotes_to_db(self, quotes: Dict[str, Quote], market: str, db: Session):
+        """Multi-worker state synchronization: upserts latest quotes into PostgreSQL."""
+        try:
+            for sym, q in quotes.items():
+                existing = (
+                    db.query(LatestQuote)
+                    .filter(LatestQuote.symbol == sym, LatestQuote.market == market)
+                    .first()
+                )
+                if existing:
+                    existing.price = q.price
+                    existing.provider = q.provider
+                    existing.exchange_ts = q.exchange_ts
+                    existing.received_ts = q.received_ts
+                    existing.freshness = q.freshness.value if isinstance(q.freshness, QuoteFreshness) else str(q.freshness)
+                    existing.realtime = q.realtime
+                    existing.day_volume = q.day_volume
+                    existing.open = q.open
+                    existing.high = q.high
+                    existing.low = q.low
+                    existing.close = q.close
+                else:
+                    new_q = LatestQuote(
+                        symbol=sym,
+                        market=market,
+                        price=q.price,
+                        provider=q.provider,
+                        exchange_ts=q.exchange_ts,
+                        received_ts=q.received_ts,
+                        freshness=q.freshness.value if isinstance(q.freshness, QuoteFreshness) else str(q.freshness),
+                        realtime=q.realtime,
+                        day_volume=q.day_volume,
+                        open=q.open,
+                        high=q.high,
+                        low=q.low,
+                        close=q.close,
+                    )
+                    db.add(new_q)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Error persisting latest quotes to DB: {e}")
+
+    def get_quotes(
+        self,
+        symbols: List[str],
+        market: str = "IN",
+        db: Optional[Session] = None,
+    ) -> Dict[str, Quote]:
+        """Fetch quotes enforcing freshness checks, with multi-worker DB synchronization."""
         quotes: Dict[str, Quote] = {}
         missing = list(symbols)
+        now = datetime.datetime.now(datetime.timezone.utc)
 
+        # 1. Multi-worker sync: check shared PostgreSQL latest_quotes table
+        if db is not None:
+            try:
+                db_quotes = (
+                    db.query(LatestQuote)
+                    .filter(
+                        LatestQuote.symbol.in_(symbols),
+                        LatestQuote.market == market,
+                    )
+                    .all()
+                )
+                for row in db_quotes:
+                    row_ex_ts = row.exchange_ts if row.exchange_ts.tzinfo else row.exchange_ts.replace(tzinfo=datetime.timezone.utc)
+                    age_sec = (now - row_ex_ts).total_seconds()
+                    max_age = 20.0 if row.realtime else 60.0
+                    freshness = QuoteFreshness.FRESH if age_sec <= max_age else QuoteFreshness.STALE
+
+                    q = Quote(
+                        symbol=row.symbol,
+                        market=row.market,
+                        price=row.price,
+                        provider=row.provider,
+                        exchange_ts=row_ex_ts,
+                        received_ts=row.received_ts,
+                        freshness=freshness,
+                        realtime=row.realtime,
+                        day_volume=row.day_volume,
+                        open=row.open,
+                        high=row.high,
+                        low=row.low,
+                        close=row.close,
+                    )
+                    quotes[row.symbol] = q
+                    if age_sec <= max_age and row.symbol in missing:
+                        missing.remove(row.symbol)
+            except Exception as e:
+                logger.warning(f"Error fetching shared quotes from DB: {e}")
+
+        if not missing:
+            return quotes
+
+        # 2. Query provider chain guarded by request layer
+        chain = self.get_provider_chain(market)
         for provider in chain:
             try:
-                res = provider.quotes(missing)
-                now = datetime.datetime.utcnow()
-                for sym, q in res.items():
-                    # Strict freshness check
-                    age_sec = (now - q.timestamp).total_seconds()
-                    max_age = 20 if q.is_realtime else 60
-                    if age_sec > max_age:
-                        q.is_stale = True
+                rl = request_layers.get(provider.name)
+                req_key = f"quotes:{provider.name}:{market}:{','.join(sorted(missing))}"
+                if rl:
+                    res = rl.execute(req_key, lambda: provider.quotes(missing), ttl_sec=5.0)
+                else:
+                    res = provider.quotes(missing)
 
+                for sym, raw_q in res.items():
+                    ts = raw_q.timestamp if raw_q.timestamp.tzinfo else raw_q.timestamp.replace(tzinfo=datetime.timezone.utc)
+                    age_sec = (now - ts).total_seconds()
+                    max_age = 20.0 if raw_q.is_realtime else 60.0
+
+                    if age_sec > max_age:
+                        freshness = QuoteFreshness.STALE
+                    elif not raw_q.is_realtime:
+                        freshness = QuoteFreshness.DELAYED
+                    else:
+                        freshness = QuoteFreshness.FRESH
+
+                    q = Quote(
+                        symbol=sym,
+                        market=market,
+                        price=raw_q.last_price,
+                        provider=raw_q.source or provider.name,
+                        exchange_ts=ts,
+                        received_ts=now,
+                        freshness=freshness,
+                        realtime=raw_q.is_realtime,
+                        day_volume=raw_q.day_volume,
+                        open=raw_q.open,
+                        high=raw_q.high,
+                        low=raw_q.low,
+                        close=raw_q.close,
+                        bid=raw_q.bid,
+                        ask=raw_q.ask,
+                    )
                     quotes[sym] = q
                     if sym in missing:
                         missing.remove(sym)
@@ -159,18 +325,54 @@ class ProviderManager:
             if not missing:
                 break
 
+        # 3. Multi-worker sync: persist newly fetched quotes to PostgreSQL
+        if db is not None and quotes:
+            self.save_latest_quotes_to_db(quotes, market, db)
+
         return quotes
 
+    def get_decision_quotes(
+        self,
+        symbols: List[str],
+        market: str = "IN",
+        db: Optional[Session] = None,
+    ) -> Dict[str, DecisionQuote]:
+        """Decision Lane boundary: strictly filters out any non-FRESH or non-realtime quotes."""
+        all_quotes = self.get_quotes(symbols, market=market, db=db)
+        decision_quotes: Dict[str, DecisionQuote] = {}
+        for sym, q in all_quotes.items():
+            try:
+                dq = q.to_decision_quote()
+                decision_quotes[sym] = dq
+            except IneligibleQuoteError as e:
+                logger.debug(f"Quote for {sym} excluded from decision lane: {e}")
+        return decision_quotes
+
     def check_health(self) -> Dict[str, ProviderHealth]:
+        def _enrich(h: ProviderHealth) -> ProviderHealth:
+            rl = request_layers.get(h.name)
+            if rl:
+                m = rl.get_metrics()
+                h.success_rate = m["success_rate"]
+                h.p50_latency_ms = m["p50_latency_ms"]
+                h.p95_latency_ms = m["p95_latency_ms"]
+                h.circuit_state = m["circuit_state"]
+                h.cooldown_until = m["cooldown_until"]
+                if m.get("last_error"):
+                    h.last_error = m["last_error"]
+            return h
+
         return {
-            "angelone": self.angelone.health(),
-            "yfinance": self.yfinance.health(),
-            "alpaca": self.alpaca.health(),
-            "kite_personal": ProviderHealth(
-                name="kite_personal",
-                status="HEALTHY" if self.kite.is_authenticated() else ("CONFIGURED_NOT_AUTH" if self.kite.is_configured() else "NOT_CONFIGURED"),
-                is_realtime=False,
-                message="Zerodha Kite Personal connected" if self.kite.is_authenticated() else "Daily login required via /portfolio/kite/login-url",
+            "angelone": _enrich(self.angelone.health()),
+            "yfinance": _enrich(self.yfinance.health()),
+            "alpaca": _enrich(self.alpaca.health()),
+            "kite_personal": _enrich(
+                ProviderHealth(
+                    name="kite_personal",
+                    status="HEALTHY" if self.kite.is_authenticated() else ("CONFIGURED_NOT_AUTH" if self.kite.is_configured() else "NOT_CONFIGURED"),
+                    is_realtime=False,
+                    message="Zerodha Kite Personal connected" if self.kite.is_authenticated() else "Daily login required via /portfolio/kite/login-url",
+                )
             ),
         }
 
