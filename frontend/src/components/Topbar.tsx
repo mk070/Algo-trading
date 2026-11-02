@@ -75,7 +75,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         {onToggleMobileMenu && (
           <button
             onClick={onToggleMobileMenu}
-            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 mr-1 shrink-0"
+            className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 mr-1 shrink-0 min-w-[38px] min-h-[38px] flex items-center justify-center"
             aria-label="Toggle Navigation Drawer"
           >
             <Menu className="w-5 h-5" />
@@ -134,7 +134,7 @@ export const Topbar: React.FC<TopbarProps> = ({
         <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs font-semibold">
           <button
             onClick={() => onMarketChange('US')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md transition-all ${
               currentMarket === 'US'
                 ? 'bg-indigo-950 text-indigo-300 border border-indigo-700/80 font-bold shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
@@ -145,11 +145,12 @@ export const Topbar: React.FC<TopbarProps> = ({
                 currentMarket === 'US' ? 'bg-indigo-400' : 'bg-slate-500'
               }`}
             ></span>
-            United States
+            <span className="hidden sm:inline">United States</span>
+            <span className="sm:hidden font-mono text-[11px]">US</span>
           </button>
           <button
             onClick={() => onMarketChange('IN')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all ${
+            className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md transition-all ${
               currentMarket === 'IN'
                 ? 'bg-indigo-950 text-indigo-300 border border-indigo-700/80 font-bold shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
@@ -160,7 +161,8 @@ export const Topbar: React.FC<TopbarProps> = ({
                 currentMarket === 'IN' ? 'bg-indigo-400' : 'bg-slate-500'
               }`}
             ></span>
-            India
+            <span className="hidden sm:inline">India</span>
+            <span className="sm:hidden font-mono text-[11px]">IN</span>
           </button>
         </div>
 

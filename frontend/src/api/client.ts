@@ -1,6 +1,9 @@
 import { BacktestMetrics, JournalEntry, Position, Signal, TradePlan } from '../types';
 
-const API_BASE = '/api';
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '');
+export const API_BASE = configuredApiBase
+  ? `${configuredApiBase.endsWith('/api') ? configuredApiBase.slice(0, -4) : configuredApiBase}/api`
+  : '/api';
 
 export interface CandleBar {
   time: string | number;
@@ -135,6 +138,11 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ raw_text: rawText, source_tag: sourceTag }),
     });
+    return res.json();
+  },
+
+  async getQuotes(symbols: string[], market: string = 'IN'): Promise<Record<string, any>> {
+    const res = await fetch(`${API_BASE}/quotes?symbols=${encodeURIComponent(symbols.join(','))}&market=${market}`);
     return res.json();
   },
 
@@ -427,4 +435,3 @@ export const apiClient = {
     return res.json();
   },
 };
-

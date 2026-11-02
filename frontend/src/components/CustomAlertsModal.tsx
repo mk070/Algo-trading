@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Bell, Trash2, X } from 'lucide-react';
 import { apiClient } from '../api/client';
 
 interface CustomAlertItem {
@@ -109,10 +110,10 @@ export const CustomAlertsModal: React.FC<CustomAlertsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/90">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-800 bg-slate-900/90">
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <span>🔔</span> Custom Price Alerts ({currentMarket})
+              <Bell className="w-4 h-4 text-amber-400" /> Custom Price Alerts ({currentMarket})
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               Set user-defined price targets. Monitored continuously in background and labeled [MANUAL ALERT].
@@ -120,9 +121,9 @@ export const CustomAlertsModal: React.FC<CustomAlertsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-lg font-bold p-1"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 

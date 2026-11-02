@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Award, BookOpen, CheckCircle, DollarSign, FileUp, Percent, TrendingUp, Upload } from 'lucide-react';
-import { apiClient } from '../api/client';
+import { API_BASE, apiClient } from '../api/client';
 import { JournalEntry } from '../types';
 
 export const JournalPage: React.FC = () => {
@@ -41,7 +41,7 @@ export const JournalPage: React.FC = () => {
     setUploadResult(null);
 
     try {
-      const res = await fetch('/api/portfolio/import?kind=TRADEBOOK', {
+      const res = await fetch(`${API_BASE}/portfolio/import?kind=TRADEBOOK`, {
         method: 'POST',
         body: formData,
       });
@@ -187,4 +187,3 @@ export const JournalPage: React.FC = () => {
     </div>
   );
 };
-

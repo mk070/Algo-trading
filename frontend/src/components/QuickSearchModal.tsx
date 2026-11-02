@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { LineChart, Newspaper, Search, Star } from 'lucide-react';
 import { apiClient } from '../api/client';
 
 interface SearchResult {
@@ -89,7 +90,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-20 px-3 sm:px-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
       onClick={onClose}
     >
       <div
@@ -98,7 +99,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
       >
         {/* Search Input Bar */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-800 bg-slate-900/90">
-          <span className="text-slate-400 text-lg">🔍</span>
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -190,10 +191,10 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                           onOpenChart(res.symbol);
                           onClose();
                         }}
-                        className="p-1 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white text-[10px]"
+                        className="p-1.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition"
                         title="View Candlestick Chart"
                       >
-                        📈
+                        <LineChart className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {onAddToWatchlist && (
@@ -201,10 +202,10 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                         onClick={() => {
                           onAddToWatchlist(res.symbol);
                         }}
-                        className="p-1 rounded bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white text-[10px]"
+                        className="p-1.5 rounded bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white transition"
                         title="Add to Watchlist"
                       >
-                        ⭐
+                        <Star className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {onViewNews && (
@@ -213,10 +214,10 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
                           onViewNews(res.symbol);
                           onClose();
                         }}
-                        className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px]"
+                        className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
                         title="Inspect News & Events"
                       >
-                        📰
+                        <Newspaper className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BarChart3, X, Maximize2, Minimize2 } from 'lucide-react';
+import { BarChart3, Layers, Maximize2, Minimize2, X, Zap } from 'lucide-react';
 import { CandleChart } from './CandleChart';
+import { TradingViewRealtimeChart } from './TradingViewRealtimeChart';
 
 interface ChartModalProps {
   isOpen: boolean;
@@ -22,6 +23,9 @@ export const ChartModal: React.FC<ChartModalProps> = ({
   target,
 }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [chartMode, setChartMode] = useState<'TRADINGVIEW' | 'STRATEGY'>(
+    market === 'US' ? 'TRADINGVIEW' : 'STRATEGY'
+  );
 
   if (!isOpen || !symbol) return null;
 
@@ -32,24 +36,52 @@ export const ChartModal: React.FC<ChartModalProps> = ({
     >
       <div
         className={`w-full ${
-          isFullScreen ? 'max-w-[98vw] h-[96vh]' : 'max-w-6xl max-h-[92vh]'
+          isFullScreen ? 'max-w-[98vw] h-[96vh]' : 'max-w-6xl h-[88vh] max-h-[92vh]'
         } bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Top Bar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800 bg-slate-900/90">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-b border-slate-800 bg-slate-900/90 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-indigo-950 border border-indigo-800 flex items-center justify-center text-indigo-400">
               <BarChart3 className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-sm">{symbol} Interactive Terminal</h3>
+                <h3 className="font-bold text-white text-sm">{symbol}</h3>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                  {market === 'IN' ? 'NSE' : 'NASDAQ'}
+                  {market === 'IN' ? 'NSE' : 'NASDAQ/NYSE'}
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Mode Switcher: TradingView Real-Time vs Strategy Overlays */}
+          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 text-xs font-semibold">
+            <button
+              onClick={() => setChartMode('TRADINGVIEW')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
+                chartMode === 'TRADINGVIEW'
+                  ? 'bg-indigo-600 text-white shadow font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Official 0-latency live streaming TradingView chart"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-300" />
+              <span>TradingView Live</span>
+            </button>
+            <button
+              onClick={() => setChartMode('STRATEGY')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
+                chartMode === 'STRATEGY'
+                  ? 'bg-indigo-600 text-white shadow font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Swing Intel Strategy terminal with VCP base, buy trigger, and stop loss overlays"
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Strategy Overlays</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -71,15 +103,23 @@ export const ChartModal: React.FC<ChartModalProps> = ({
         </div>
 
         {/* Modal Chart Body */}
-        <div className="p-3 sm:p-4 overflow-y-auto flex-1 bg-slate-950">
-          <CandleChart
-            symbol={symbol}
-            market={market}
-            trigger={trigger}
-            stop={stop}
-            target={target}
-            fullHeight={isFullScreen}
-          />
+        <div className="p-2 sm:p-3 overflow-y-auto flex-1 bg-slate-950 min-h-0 flex flex-col">
+          {chartMode === 'TRADINGVIEW' ? (
+            <TradingViewRealtimeChart
+              symbol={symbol}
+              market={market}
+              height="100%"
+            />
+          ) : (
+            <CandleChart
+              symbol={symbol}
+              market={market}
+              trigger={trigger}
+              stop={stop}
+              target={target}
+              fullHeight={isFullScreen}
+            />
+          )}
         </div>
       </div>
     </div>

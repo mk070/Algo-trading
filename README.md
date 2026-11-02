@@ -99,6 +99,17 @@ cmd /c "cd frontend && npm run dev"
 & "backend\.venv\Scripts\python.exe" -m pytest backend/tests -v
 ```
 
+## Deploy Frontend on Vercel and Backend on Render
+
+The frontend uses `/api` locally by default. For a separate Vercel frontend and Render backend:
+
+1. In Vercel, set the project **Root Directory** to `frontend`, with **Build Command** `npm run build` and **Output Directory** `dist`.
+2. Add the `VITE_API_BASE_URL` environment variable in Vercel, using the public Render backend origin, for example `https://your-service.onrender.com` (no trailing slash required). The frontend appends `/api` automatically.
+3. Redeploy the Vercel project after setting or changing the variable. `VITE_*` values are included in the public frontend build; never put credentials or other secrets in them.
+4. Configure backend credentials and secrets separately in Render's environment settings.
+
+The Vite development server continues to proxy `/api` to `http://127.0.0.1:8000` when `VITE_API_BASE_URL` is unset.
+
 ---
 
 ## 4. Angel One SmartAPI Setup (Market Data)
@@ -368,5 +379,3 @@ The platform integrates an institutional-grade, high-performance candlestick cha
 - **Manual Drawing Tools:** Interactive SVG overlay allowing traders to draw **Horizontal Lines**, **Trendlines**, and **Rectangles** with local persistence and clear/delete controls. Annotations are strictly client-side and never alter strategy logic.
 - **Provenance & Feed Status:** Real-time badge tracking `LIVE` (green), `DELAYED` (amber), `STALE` (red), or `DISCONNECTED` (gray) status with provider attribution and last quote timestamps.
 - **0-Latency Live Session Candle:** Dynamically updates today's active bar with live market LTPs while preserving completed 15-minute confirmation candles.
-
-

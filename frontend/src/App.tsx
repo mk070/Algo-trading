@@ -15,7 +15,7 @@ import { PositionsPage } from './pages/PositionsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
 import { WatchlistPage } from './pages/WatchlistPage';
-import { apiClient } from './api/client';
+import { API_BASE, apiClient } from './api/client';
 import { RegimeResult } from './types';
 
 export const AppContent: React.FC = () => {
@@ -143,7 +143,7 @@ export const AppContent: React.FC = () => {
   useEffect(() => {
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/stream');
+      eventSource = new EventSource(`${API_BASE}/stream`);
       eventSource.onopen = () => setIsStreaming(true);
       eventSource.onmessage = (e) => {
         try {
@@ -171,7 +171,7 @@ export const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-row font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row font-sans overflow-x-hidden">
       {/* Left Sidebar (OpenStock Institutional Layout) */}
       <Sidebar
         currentMarket={currentMarket}
@@ -183,7 +183,7 @@ export const AppContent: React.FC = () => {
       />
 
       {/* Main Terminal Shell */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full overflow-x-hidden">
         {/* Sticky Topbar with Workspace Tabs & Market Controls */}
         <Topbar
           currentMarket={currentMarket}
@@ -248,7 +248,7 @@ export const AppContent: React.FC = () => {
         )}
 
         {/* Primary Page Content Canvas */}
-        <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 lg:p-6">
+        <main className="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 lg:p-6 min-w-0">
           <Routes>
             <Route path="/" element={<DashboardPage currentMarket={currentMarket} />} />
             <Route path="/watchlist" element={<WatchlistPage currentMarket={currentMarket} />} />

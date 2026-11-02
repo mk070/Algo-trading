@@ -282,10 +282,16 @@ class ProviderManager:
             try:
                 rl = request_layers.get(provider.name)
                 req_key = f"quotes:{provider.name}:{market}:{','.join(sorted(missing))}"
+                def _fetch_quotes(p=provider, syms=missing, m=market):
+                    try:
+                        return p.quotes(syms, market=m)
+                    except TypeError:
+                        return p.quotes(syms)
+
                 if rl:
-                    res = rl.execute(req_key, lambda: provider.quotes(missing), ttl_sec=5.0)
+                    res = rl.execute(req_key, _fetch_quotes, ttl_sec=5.0)
                 else:
-                    res = provider.quotes(missing)
+                    res = _fetch_quotes()
 
                 for sym, raw_q in res.items():
                     ts = raw_q.timestamp if raw_q.timestamp.tzinfo else raw_q.timestamp.replace(tzinfo=datetime.timezone.utc)

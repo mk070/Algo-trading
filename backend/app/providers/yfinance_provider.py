@@ -184,14 +184,15 @@ class YFinanceProvider:
         )
         return df
 
-    def quotes(self, symbols: List[str]) -> Dict[str, Quote]:
+    def quotes(self, symbols: List[str], market: str = "IN") -> Dict[str, Quote]:
         quotes_dict: Dict[str, Quote] = {}
         now = datetime.datetime.now(datetime.timezone.utc)
 
         for s in symbols:
             clean_s = s.replace(".NS", "").replace(".BO", "")
             try:
-                ticker = yf.Ticker(self._normalize_symbol(s))
+                norm_sym = self._normalize_symbol(s, market=market)
+                ticker = yf.Ticker(norm_sym)
                 fi = ticker.fast_info
                 last_price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
                 prev_close = getattr(fi, "previous_close", None)
@@ -223,7 +224,8 @@ class YFinanceProvider:
             if clean_s not in quotes_dict:
                 # Try downloading 2-day history as fallback before synthetic
                 try:
-                    hist = yf.Ticker(self._normalize_symbol(s)).history(period="2d")
+                    norm_sym = self._normalize_symbol(s, market=market)
+                    hist = yf.Ticker(norm_sym).history(period="2d")
                     if len(hist) > 0:
                         lp = float(hist["Close"].iloc[-1])
                         pc = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else lp

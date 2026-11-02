@@ -47,14 +47,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { symbol: 'AAPL', name: 'Apple Inc', price: '$232.80', chg: '-0.32%', isPos: false },
       ];
 
+  const handleStockClick = (symbol: string) => {
+    if (onCloseMobile) onCloseMobile();
+    if (onSelectStock) onSelectStock(symbol);
+  };
+
+  const handleSearchClick = () => {
+    if (onCloseMobile) onCloseMobile();
+    onOpenSearch();
+  };
+
   const sidebarContent = (
-    <aside className="w-64 h-full bg-slate-950 border-r border-slate-800 flex flex-col justify-between select-none">
+    <aside className="w-full sm:w-64 h-full bg-slate-950 border-r border-slate-800 flex flex-col justify-between select-none">
       {/* Top Section */}
       <div className="flex-1 overflow-y-auto scrollbar-none p-3.5 space-y-4">
         {/* Brand Header */}
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-slate-950 text-base shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center font-black text-slate-950 text-base shadow-sm shrink-0">
               S
             </div>
             <div>
@@ -69,7 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              className="lg:hidden p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800"
+              className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              aria-label="Close navigation menu"
             >
               <X className="w-5 h-5" />
             </button>
@@ -78,8 +89,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Top Search CTA Button (OpenStock Style) */}
         <button
-          onClick={onOpenSearch}
-          className="w-full bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold py-2 px-3 rounded-lg text-xs flex items-center justify-between shadow transition-all duration-150 group"
+          onClick={handleSearchClick}
+          className="w-full bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold py-2.5 px-3 rounded-lg text-xs flex items-center justify-between shadow transition-all duration-150 group min-h-[40px]"
           title="Search symbols (Ctrl+K or Cmd+K)"
         >
           <span className="flex items-center gap-2">
@@ -106,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     key={item.to}
                     to={item.to}
                     onClick={onCloseMobile}
-                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors min-h-[38px] ${
                       isActive
                         ? 'bg-slate-800 text-white font-semibold border-l-2 border-indigo-500'
                         : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
@@ -135,14 +146,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {pinnedStocks.map((s) => (
               <button
                 key={s.symbol}
-                onClick={() => onSelectStock && onSelectStock(s.symbol)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs hover:bg-slate-900 transition-colors text-left group"
+                onClick={() => handleStockClick(s.symbol)}
+                className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs hover:bg-slate-900 transition-colors text-left group min-h-[38px]"
               >
                 <div>
                   <span className="font-bold text-slate-200 group-hover:text-white block leading-none">
                     {s.symbol}
                   </span>
-                  <span className="text-[10px] text-slate-500 truncate block max-w-[100px]">
+                  <span className="text-[10px] text-slate-500 truncate block max-w-[110px]">
                     {s.name}
                   </span>
                 </div>
@@ -168,15 +179,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-slate-800 space-y-2.5 bg-slate-950">
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-400 font-mono">
+            <div className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-400 font-mono shrink-0">
               Z
             </div>
-            <div>
-              <div className="text-xs font-bold text-slate-200 leading-tight">
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-slate-200 leading-tight truncate">
                 madhan (SBV367)
               </div>
               <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
                 Zerodha Connected
               </div>
             </div>
@@ -205,7 +216,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop static sidebar */}
-      <div className="hidden lg:block h-screen sticky top-0 shrink-0">
+      <div className="hidden lg:block h-screen sticky top-0 shrink-0 w-64">
         {sidebarContent}
       </div>
 
@@ -213,10 +224,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
             onClick={onCloseMobile}
           />
-          <div className="relative z-10 animate-slideRight">
+          <div className="relative z-10 w-72 max-w-[85vw] h-full shadow-2xl">
             {sidebarContent}
           </div>
         </div>
@@ -224,4 +235,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
-
