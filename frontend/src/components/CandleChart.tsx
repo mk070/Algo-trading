@@ -710,9 +710,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       isExpanded ? 'fixed inset-2 sm:inset-4 z-50 bg-slate-950/95 backdrop-blur-md border-indigo-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)]' : 'w-full'
     }`}>
       {/* 1. Header Toolbar: Symbol, Market, Timeframe, Live Feed Status, Quote Ticker */}
-      <div className="px-5 py-3 border-b border-slate-800/90 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
+      <div className="px-3 sm:px-5 py-2 sm:py-3 border-b border-slate-800/90 bg-slate-900/90 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0 pl-2 border-l border-slate-800">
             <span className="font-extrabold text-white text-base tracking-tight">{symbol}</span>
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
               {market === 'IN' ? 'NSE' : 'NASDAQ'}
@@ -836,9 +836,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       )}
 
       {/* 2. Controls & Preferences Bar: Moving Averages, Panels, Drawing Tools */}
-      <div className="px-5 py-2.5 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="px-3 sm:px-5 py-2 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between gap-2 text-xs overflow-x-auto scrollbar-none">
         {/* Moving Averages & Indicator Toggles */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <span className="text-slate-500 text-[11px] font-semibold flex items-center gap-1">
             <Layers className="w-3.5 h-3.5" /> Indicators:
           </span>
@@ -1100,8 +1100,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
 
       {/* 3. Strategy Header Banner: VCP / Pullback Setup, Trigger, SL, Target & Trend Template */}
       {strategyData && (
-        <div className="px-5 py-2.5 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="px-3 sm:px-5 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2 text-xs overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="px-2 py-0.5 rounded font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
                 {strategyData.setup} SETUP
@@ -1233,7 +1233,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       )}
 
       {/* 5. Chart Body: Lightweight Charts Canvas + Interactive SVG Drawing Overlay OR TradingView Realtime */}
-      <div className={`relative w-full flex-1 ${isExpanded ? 'min-h-[720px] h-[calc(100vh-140px)]' : 'min-h-[560px] h-[560px]'} bg-slate-950`}>
+      <div className={`relative w-full flex-1 ${isExpanded ? 'min-h-[460px] sm:min-h-[720px] h-full sm:h-[calc(100vh-140px)]' : 'min-h-[380px] sm:min-h-[560px] h-[400px] sm:h-[560px]'} bg-slate-950`}>
         {useTradingViewStream ? (
           <TradingViewRealtimeChart
             symbol={symbol}
@@ -1272,7 +1272,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             )}
 
             {/* Lightweight Charts mounting DOM container */}
-            <div ref={chartContainerRef} className={`w-full ${isExpanded ? "h-full min-h-[720px]" : "h-[560px] min-h-[560px]"}`} />
+            <div ref={chartContainerRef} className={`w-full ${isExpanded ? "h-full min-h-[460px] sm:min-h-[720px]" : "h-[400px] sm:h-[560px] min-h-[380px] sm:min-h-[560px]"}`} />
 
         {/* SVG Drawing Overlay */}
         <svg

@@ -94,8 +94,8 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
 
   return (
     <div
-      style={{ height: resolvedHeight, minHeight: '520px' }}
-      className="w-full flex flex-col bg-slate-950 rounded-xl overflow-hidden border border-slate-800"
+      style={{ height: resolvedHeight }}
+      className="w-full flex flex-col bg-slate-950 rounded-xl overflow-hidden border border-slate-800 min-h-[380px] sm:min-h-[520px]"
     >
       <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs flex-wrap gap-2">
         <div className="flex items-center gap-2 font-mono">
@@ -124,8 +124,8 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
       </div>
       <div
         ref={containerRef}
-        style={{ height: 'calc(100% - 37px)', width: '100%', minHeight: '480px' }}
-        className="w-full flex-1"
+        style={{ height: 'calc(100% - 37px)', width: '100%' }}
+        className="w-full flex-1 min-h-[340px] sm:min-h-[480px]"
       />
     </div>
   );
