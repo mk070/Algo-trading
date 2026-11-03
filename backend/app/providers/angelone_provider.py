@@ -71,7 +71,13 @@ class AngelOneProvider:
             try:
                 from SmartApi import SmartConnect
             except ImportError:
-                from smartapi import SmartConnect
+                try:
+                    from smartapi import SmartConnect
+                except ImportError:
+                    try:
+                        from smartapi.smartConnect import SmartConnect
+                    except ImportError:
+                        from SmartApi.smartConnect import SmartConnect
 
             self.smart_api = SmartConnect(api_key=self.api_key)
             totp = pyotp.TOTP(self.totp_secret).now()

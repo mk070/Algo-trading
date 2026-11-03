@@ -23,9 +23,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({
   target,
 }) => {
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [chartMode, setChartMode] = useState<'TRADINGVIEW' | 'STRATEGY'>(
-    market === 'US' ? 'TRADINGVIEW' : 'STRATEGY'
-  );
+  const [chartMode, setChartMode] = useState<'STRATEGY' | 'TRADINGVIEW'>('STRATEGY');
 
   if (!isOpen || !symbol) return null;
 
@@ -56,8 +54,20 @@ export const ChartModal: React.FC<ChartModalProps> = ({
             </div>
           </div>
 
-          {/* Mode Switcher: TradingView Real-Time vs Strategy Overlays */}
+          {/* Mode Switcher: Strategy Terminal vs TradingView Real-Time */}
           <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 text-xs font-semibold">
+            <button
+              onClick={() => setChartMode('STRATEGY')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
+                chartMode === 'STRATEGY'
+                  ? 'bg-indigo-600 text-white shadow font-bold'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Swing Intel Strategy terminal with VCP base, buy trigger, stop loss, EMAs, RSI, and ATR"
+            >
+              <Layers className="w-3.5 h-3.5 text-cyan-300" />
+              <span>Strategy & Indicators</span>
+            </button>
             <button
               onClick={() => setChartMode('TRADINGVIEW')}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
@@ -69,18 +79,6 @@ export const ChartModal: React.FC<ChartModalProps> = ({
             >
               <Zap className="w-3.5 h-3.5 text-amber-300" />
               <span>TradingView Live</span>
-            </button>
-            <button
-              onClick={() => setChartMode('STRATEGY')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all ${
-                chartMode === 'STRATEGY'
-                  ? 'bg-indigo-600 text-white shadow font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Swing Intel Strategy terminal with VCP base, buy trigger, and stop loss overlays"
-            >
-              <Layers className="w-3.5 h-3.5 text-cyan-300" />
-              <span>Strategy Overlays</span>
             </button>
           </div>
 

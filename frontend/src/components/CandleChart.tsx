@@ -31,6 +31,7 @@ import {
   Zap,
   Activity,
   Maximize2,
+  Minimize2,
   Layers,
   Target,
 } from 'lucide-react';
@@ -135,6 +136,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(!initialBars || initialBars.length === 0);
   const [error, setError] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // Hover Crosshair Ticker state
   const [hoveredBar, setHoveredBar] = useState<CandleBar | null>(null);
@@ -245,7 +247,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     }
 
     const container = chartContainerRef.current;
-    const chartHeight = fullHeight ? container.clientHeight || 580 : 500;
+    const chartHeight = (fullHeight || isExpanded) ? (container.clientHeight || (isExpanded ? 720 : 580)) : 500;
 
     const chart = createChart(container, {
       width: container.clientWidth || 800,
@@ -563,7 +565,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       const { width, height } = entries[0].contentRect;
       chartInstanceRef.current.applyOptions({
         width: Math.max(300, width),
-        height: fullHeight ? Math.max(400, height) : 500,
+        height: (fullHeight || isExpanded) ? Math.max(500, height) : 500,
       });
       setRenderTick((t) => t + 1);
     });
@@ -587,6 +589,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     effectiveEntryHigh,
     strategyData,
     fullHeight,
+    isExpanded,
   ]);
 
   // Handle click on drawing overlay
@@ -695,7 +698,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const activeBar = hoveredBar || chartBars[chartBars.length - 1];
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl flex flex-col shadow-2xl overflow-hidden font-sans">
+    <div className={`bg-slate-900 border border-slate-800 rounded-2xl flex flex-col shadow-2xl overflow-hidden font-sans transition-all duration-300 ${
+      isExpanded ? 'fixed inset-2 sm:inset-4 z-50 bg-slate-950/95 backdrop-blur-md border-indigo-500/50 shadow-[0_0_50px_rgba(0,0,0,0.8)]' : 'w-full'
+    }`}>
       {/* 1. Header Toolbar: Symbol, Market, Timeframe, Live Feed Status, Quote Ticker */}
       <div className="px-5 py-3 border-b border-slate-800/90 bg-slate-900/90 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -1055,6 +1060,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
+
+          {/* Expand / Minimize Toggle */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? 'Minimize Chart' : 'Expand Chart to Full Screen'}
+            className={`p-1.5 rounded border transition ${
+              isExpanded
+                ? 'bg-indigo-600 text-white border-indigo-500'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+          >
+            {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />}
+          </button>
         </div>
       </div>
 
@@ -1193,12 +1211,12 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       )}
 
       {/* 5. Chart Body: Lightweight Charts Canvas + Interactive SVG Drawing Overlay OR TradingView Realtime */}
-      <div className="relative w-full flex-1 min-h-[480px] bg-slate-950">
+      <div className={`relative w-full flex-1 ${isExpanded ? 'min-h-[620px] h-full' : 'min-h-[480px]'} bg-slate-950`}>
         {useTradingViewStream ? (
           <TradingViewRealtimeChart
             symbol={symbol}
             market={market}
-            height={fullHeight ? '100%' : 500}
+            height={fullHeight || isExpanded ? '100%' : 500}
           />
         ) : (
           <>

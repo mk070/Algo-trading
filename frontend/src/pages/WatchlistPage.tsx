@@ -155,20 +155,36 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({ currentMarket }) =
 
   const handleAddSymbol = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeListId || !newSymbol.trim()) return;
+    if (!newSymbol.trim()) return;
+
+    let targetListId = activeListId;
     try {
       setAddingSymbol(true);
-      await apiClient.addWatchlistItem(activeListId, {
-        symbol: newSymbol.trim().toUpperCase(),
-        notes: newNotes.trim() || undefined,
-        source: 'APP_MANUAL',
-      });
-      setNewSymbol('');
-      setNewNotes('');
-      await fetchItems(activeListId);
-      await fetchWatchlists();
-    } catch (e) {
-      alert('Error adding symbol: ' + e);
+
+      // If no watchlist exists yet, create default focus list on-the-fly
+      if (!targetListId) {
+        const createRes = await apiClient.createWatchlist('Default Focus', currentMarket);
+        if (createRes?.watchlist?.id) {
+          targetListId = createRes.watchlist.id;
+          setActiveListId(targetListId);
+        } else {
+          throw new Error('Please create a watchlist first');
+        }
+      }
+
+      if (targetListId) {
+        await apiClient.addWatchlistItem(targetListId, {
+          symbol: newSymbol.trim().toUpperCase(),
+          notes: newNotes.trim() || undefined,
+          source: 'APP_MANUAL',
+        });
+        setNewSymbol('');
+        setNewNotes('');
+        await fetchWatchlists();
+        await fetchItems(targetListId);
+      }
+    } catch (e: any) {
+      alert('Error adding symbol: ' + (e?.message || e));
     } finally {
       setAddingSymbol(false);
     }
