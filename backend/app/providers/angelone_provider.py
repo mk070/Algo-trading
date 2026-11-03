@@ -32,10 +32,15 @@ class AngelOneProvider:
         pin: Optional[str] = None,
         totp_secret: Optional[str] = None,
     ):
-        self.api_key = api_key or settings.angelone_api_key
-        self.client_code = client_code or settings.angelone_client_code
-        self.pin = pin or settings.angelone_pin
-        self.totp_secret = totp_secret or settings.angelone_totp_secret
+        def _clean(val):
+            if not val:
+                return None
+            return str(val).strip().strip('"').strip("'")
+
+        self.api_key = _clean(api_key or settings.angelone_api_key)
+        self.client_code = _clean(client_code or settings.angelone_client_code)
+        self.pin = _clean(pin or settings.angelone_pin)
+        self.totp_secret = _clean(totp_secret or settings.angelone_totp_secret or getattr(settings, "angelone_totp_key", None))
 
         self.smart_api = None
         self.jwt_token = None

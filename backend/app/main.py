@@ -38,14 +38,19 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Swing Trading Intelligence Platform Backend...")
     init_db()
-    # Cache instruments asynchronously/on boot if available
-    try:
-        provider_manager.angelone._load_cached_instruments()
-        if not provider_manager.angelone.instrument_map:
-            logger.info("Angel One scrip master is empty; fetching latest official instrument list...")
-            provider_manager.angelone.refresh_instruments()
-    except Exception as e:
-        logger.warning(f"Initial instrument cache loading warning: {e}")
+    # Cache instruments in non-blocking background thread on boot so Uvicorn starts immediately
+    import threading
+    def _async_load_instruments():
+        try:
+            provider_manager.angelone._load_cached_instruments()
+            if not provider_manager.angelone.instrument_map:
+                logger.info("Angel One scrip master is empty; fetching latest official instrument list in background...")
+                provider_manager.angelone.refresh_instruments()
+        except Exception as e:
+            logger.warning(f"Initial instrument cache loading warning: {e}")
+
+    threading.Thread(target=_async_load_instruments, daemon=True, name="instrument_loader").start()
+
     # Start scheduler
     start_scheduler()
     yield
@@ -64,9 +69,20 @@ app = FastAPI(
 )
 
 # CORS Middleware
+origins = [
+    "https://algo-trading-xi-opal.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,3 +125,7 @@ else:
             "health": "/api/health",
             "disclaimer": "Signals are rules-based, not advice. Past/backtested performance does not guarantee future results.",
         }
+
+    @app.get("/health", tags=["Health"])
+    def root_health():
+        return {"status": "HEALTHY", "service": "algo-trading-backend"}

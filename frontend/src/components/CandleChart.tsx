@@ -32,8 +32,10 @@ import {
   Activity,
   Maximize2,
   Layers,
+  Target,
 } from 'lucide-react';
 import { apiClient, CandleBar, StrategyOverlay, BarsResponse } from '../api/client';
+import { TradingViewRealtimeChart } from './TradingViewRealtimeChart';
 
 export interface CandleChartProps {
   symbol: string;
@@ -57,6 +59,11 @@ interface ChartPreferences {
   showVolume: boolean;
   showRsi: boolean;
   showAtr: boolean;
+  showEntryTrigger: boolean;
+  showStopLoss: boolean;
+  showTarget1: boolean;
+  showTarget2: boolean;
+  showVcpBase: boolean;
 }
 
 const DEFAULT_PREFS: ChartPreferences = {
@@ -68,6 +75,11 @@ const DEFAULT_PREFS: ChartPreferences = {
   showVolume: true,
   showRsi: true,
   showAtr: false,
+  showEntryTrigger: true,
+  showStopLoss: true,
+  showTarget1: true,
+  showTarget2: true,
+  showVcpBase: true,
 };
 
 const PREFS_KEY = 'algo_trading_chart_prefs_v2';
@@ -216,7 +228,11 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const effectiveTrigger = strategyData?.trigger || propTrigger;
   const effectiveStop = strategyData?.stop || propStop;
   const effectiveTarget = strategyData?.target1 || propTarget;
+  const effectiveTarget2 = (effectiveTrigger && effectiveStop && effectiveTrigger > effectiveStop)
+    ? Number((effectiveTrigger + 3.0 * (effectiveTrigger - effectiveStop)).toFixed(2))
+    : (strategyData?.target2 || null);
   const effectiveEntryHigh = strategyData?.entry_zone_high;
+  const [useTradingViewStream, setUseTradingViewStream] = useState<boolean>(false);
 
   // Build Lightweight Chart instance
   useEffect(() => {
@@ -434,8 +450,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       }
     }
 
-    // 6. Strategy Overlay Levels: Trigger, Stop, Target, Entry Zone
-    if (effectiveTrigger && effectiveTrigger > 0) {
+    // 6. Strategy Overlay Levels: Trigger, Stop, Target 1, Target 2, Entry Zone
+    if (prefs.showEntryTrigger && effectiveTrigger && effectiveTrigger > 0) {
       candleSeries.createPriceLine({
         price: effectiveTrigger,
         color: '#10b981',
@@ -446,7 +462,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       });
     }
 
-    if (effectiveEntryHigh && effectiveEntryHigh > 0 && effectiveTrigger && effectiveEntryHigh > effectiveTrigger) {
+    if (prefs.showEntryTrigger && effectiveEntryHigh && effectiveEntryHigh > 0 && effectiveTrigger && effectiveEntryHigh > effectiveTrigger) {
       candleSeries.createPriceLine({
         price: effectiveEntryHigh,
         color: '#34d399',
@@ -457,7 +473,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       });
     }
 
-    if (effectiveStop && effectiveStop > 0) {
+    if (prefs.showStopLoss && effectiveStop && effectiveStop > 0) {
       candleSeries.createPriceLine({
         price: effectiveStop,
         color: '#f43f5e',
@@ -468,7 +484,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       });
     }
 
-    if (effectiveTarget && effectiveTarget > 0) {
+    if (prefs.showTarget1 && effectiveTarget && effectiveTarget > 0) {
       candleSeries.createPriceLine({
         price: effectiveTarget,
         color: '#06b6d4',
@@ -476,6 +492,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         title: `TARGET 1 (2R): ${effectiveTarget.toFixed(2)}`,
+      });
+    }
+
+    if (prefs.showTarget2 && effectiveTarget2 && effectiveTarget2 > 0) {
+      candleSeries.createPriceLine({
+        price: effectiveTarget2,
+        color: '#38bdf8',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `TARGET 2 (3R): ${effectiveTarget2.toFixed(2)}`,
       });
     }
 
@@ -556,6 +583,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     effectiveTrigger,
     effectiveStop,
     effectiveTarget,
+    effectiveTarget2,
     effectiveEntryHigh,
     strategyData,
     fullHeight,
@@ -694,6 +722,20 @@ export const CandleChart: React.FC<CandleChartProps> = ({
               </button>
             ))}
           </div>
+
+          {/* Official TradingView Real-Time Chart Switcher */}
+          <button
+            onClick={() => setUseTradingViewStream(!useTradingViewStream)}
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 border transition ${
+              useTradingViewStream
+                ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
+                : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="Toggle Official TradingView Real-Time Live Feed (0-Latency)"
+          >
+            <Zap className={`w-3.5 h-3.5 ${useTradingViewStream ? 'text-emerald-400 fill-emerald-400' : 'text-amber-400'}`} />
+            <span>{useTradingViewStream ? 'TradingView Live' : 'TradingView'}</span>
+          </button>
 
           {/* Live / Feed Status Pill */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-slate-950/60 border-slate-800">
@@ -861,6 +903,75 @@ export const CandleChart: React.FC<CandleChartProps> = ({
           >
             ATR Panel
           </button>
+
+          {/* Strategy Levels Hide/Show Toggles */}
+          {(effectiveTrigger || effectiveStop || strategyData) && (
+            <div className="flex flex-wrap items-center gap-1.5 pl-2 border-l border-slate-800">
+              <span className="text-slate-500 text-[11px] font-semibold flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-indigo-400" /> Levels:
+              </span>
+
+              <button
+                onClick={() => togglePref('showEntryTrigger')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition flex items-center gap-1 ${
+                  prefs.showEntryTrigger
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 line-through'
+                }`}
+                title="Toggle Entry / Buy Trigger Pivot Line"
+              >
+                <span className="w-2 h-0.5 bg-emerald-400 rounded"></span> Entry
+              </button>
+
+              <button
+                onClick={() => togglePref('showStopLoss')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition flex items-center gap-1 ${
+                  prefs.showStopLoss
+                    ? 'bg-rose-500/10 border-rose-500/40 text-rose-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 line-through'
+                }`}
+                title="Toggle Stop Loss Risk Line"
+              >
+                <span className="w-2 h-0.5 bg-rose-400 rounded"></span> Stop Loss
+              </button>
+
+              <button
+                onClick={() => togglePref('showTarget1')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition flex items-center gap-1 ${
+                  prefs.showTarget1
+                    ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 line-through'
+                }`}
+                title="Toggle Target 1 (2R)"
+              >
+                <span className="w-2 h-0.5 bg-cyan-400 rounded"></span> Target 1
+              </button>
+
+              <button
+                onClick={() => togglePref('showTarget2')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition flex items-center gap-1 ${
+                  prefs.showTarget2
+                    ? 'bg-sky-500/10 border-sky-500/40 text-sky-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 line-through'
+                }`}
+                title="Toggle Target 2 (3R)"
+              >
+                <span className="w-2 h-0.5 bg-sky-400 rounded"></span> Target 2
+              </button>
+
+              <button
+                onClick={() => togglePref('showVcpBase')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition flex items-center gap-1 ${
+                  prefs.showVcpBase
+                    ? 'bg-indigo-500/10 border-indigo-500/40 text-indigo-300'
+                    : 'bg-slate-900 border-slate-800 text-slate-500 line-through'
+                }`}
+                title="Toggle VCP Consolidation Base Box"
+              >
+                <span className="w-1.5 h-1.5 bg-indigo-400 rounded-sm"></span> VCP Base
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Drawing Tools Toolbar */}
@@ -1081,30 +1192,47 @@ export const CandleChart: React.FC<CandleChartProps> = ({
         </div>
       )}
 
-      {/* 5. Chart Body: Lightweight Charts Canvas + Interactive SVG Drawing Overlay */}
+      {/* 5. Chart Body: Lightweight Charts Canvas + Interactive SVG Drawing Overlay OR TradingView Realtime */}
       <div className="relative w-full flex-1 min-h-[480px] bg-slate-950">
-        {loading && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/70 backdrop-blur-sm text-slate-400 text-sm gap-2">
-            <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
-            <span>Loading {timeframe} candlestick bars...</span>
-          </div>
-        )}
+        {useTradingViewStream ? (
+          <TradingViewRealtimeChart
+            symbol={symbol}
+            market={market}
+            height={fullHeight ? '100%' : 500}
+          />
+        ) : (
+          <>
+            {loading && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/70 backdrop-blur-sm text-slate-400 text-sm gap-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+                <span>Loading {timeframe} candlestick bars...</span>
+              </div>
+            )}
 
-        {error && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/90 text-rose-400 text-sm gap-2 p-6 text-center">
-            <AlertCircle className="w-8 h-8 text-rose-400" />
-            <span className="max-w-md">{error}</span>
-            <button
-              onClick={() => fetchBarsData(false)}
-              className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold"
-            >
-              Retry Load
-            </button>
-          </div>
-        )}
+            {error && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/90 text-rose-400 text-sm gap-3 p-6 text-center">
+                <AlertCircle className="w-8 h-8 text-rose-400" />
+                <span className="max-w-md">{error}</span>
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+                  <button
+                    onClick={() => fetchBarsData(false)}
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
+                  >
+                    Retry Load
+                  </button>
+                  <button
+                    onClick={() => setUseTradingViewStream(true)}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg transition"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-white" />
+                    Switch to TradingView Live Feed (0-Latency)
+                  </button>
+                </div>
+              </div>
+            )}
 
-        {/* Lightweight Charts mounting DOM container */}
-        <div ref={chartContainerRef} className="w-full h-full min-h-[480px]" />
+            {/* Lightweight Charts mounting DOM container */}
+            <div ref={chartContainerRef} className="w-full h-full min-h-[480px]" />
 
         {/* SVG Drawing Overlay */}
         <svg
@@ -1114,7 +1242,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
           }`}
         >
           {/* VCP Base Consolidation Area Highlight Box */}
-          {vcpBaseBox && (
+          {prefs.showVcpBase && vcpBaseBox && (
             <g className="pointer-events-none">
               <rect
                 x={vcpBaseBox.x}
@@ -1212,7 +1340,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             return null;
           })}
         </svg>
-      </div>
+      </>
+    )}
+  </div>
     </div>
   );
 };
