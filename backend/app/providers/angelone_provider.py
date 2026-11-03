@@ -149,7 +149,7 @@ class AngelOneProvider:
         clean_sym = symbol.replace(".NS", "").replace(".BO", "").upper()
         if clean_sym in self.instrument_map:
             return self.instrument_map[clean_sym]["token"]
-        # Seeded known tokens for core Nifty 50 stocks as reliable fallbacks
+        # Seeded known tokens for core Nifty 50 stocks & major indices as reliable fallbacks
         known_tokens = {
             "RELIANCE": "2885",
             "TCS": "11536",
@@ -165,6 +165,10 @@ class AngelOneProvider:
             "BAJFINANCE": "317",
             "M&M": "2031",
             "BAJAJ-AUTO": "16669",
+            "SENSEX": "99919000",
+            "BSESN": "99919000",
+            "NIFTY": "99926000",
+            "NIFTY50": "99926000",
         }
         return known_tokens.get(clean_sym)
 
@@ -252,17 +256,24 @@ class AngelOneProvider:
             return quotes_dict
 
         for sym in symbols:
-            token = self.get_token(sym)
+            clean_sym = sym.replace(".NS", "").replace(".BO", "").replace("BSE:", "").replace("NSE:", "").upper()
+            token = self.get_token(clean_sym)
             if not token:
                 continue
             try:
                 time.sleep(0.35)
-                res = self.smart_api.ltpData("NSE", sym.replace(".NS", "") + "-EQ", token)
+                if clean_sym in ("SENSEX", "BSESN"):
+                    res = self.smart_api.ltpData("BSE", "SENSEX", token)
+                elif clean_sym in ("NIFTY", "NIFTY50"):
+                    res = self.smart_api.ltpData("NSE", "Nifty 50", token)
+                else:
+                    res = self.smart_api.ltpData("NSE", clean_sym + "-EQ", token)
+
                 if res and res.get("status") and res.get("data"):
                     d = res["data"]
                     last_price = float(d.get("ltp", 0.0))
-                    quotes_dict[sym] = Quote(
-                        symbol=sym,
+                    q = Quote(
+                        symbol=clean_sym,
                         last_price=last_price,
                         day_volume=0.0,
                         timestamp=now,
@@ -274,7 +285,9 @@ class AngelOneProvider:
                         low=float(d.get("low", last_price)),
                         close=float(d.get("close", last_price)),
                     )
-                    self.last_quote_time[sym] = now
+                    quotes_dict[clean_sym] = q
+                    quotes_dict[sym] = q
+                    self.last_quote_time[clean_sym] = now
             except Exception as e:
                 logger.error(f"Failed to fetch Angel One quote for {sym}: {e}")
 

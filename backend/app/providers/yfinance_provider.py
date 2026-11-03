@@ -10,6 +10,21 @@ from app.providers.base import MarketDataProvider, ProviderHealth, Quote, QuoteF
 logger = logging.getLogger(__name__)
 
 
+INDEX_MAP = {
+    "SENSEX": "^BSESN",
+    "BSESN": "^BSESN",
+    "BSE:SENSEX": "^BSESN",
+    "^BSESN": "^BSESN",
+    "NIFTY": "^NSEI",
+    "NIFTY50": "^NSEI",
+    "NSE:NIFTY": "^NSEI",
+    "^NSEI": "^NSEI",
+    "BANKNIFTY": "^NSEBANK",
+    "NSE:BANKNIFTY": "^NSEBANK",
+    "^NSEBANK": "^NSEBANK",
+}
+
+
 class YFinanceProvider:
     """YFinance research and fallback provider.
     NOTE: delayed data; is_realtime is False. Never used to fire live trigger alerts.
@@ -20,10 +35,15 @@ class YFinanceProvider:
 
     def _normalize_symbol(self, symbol: str, market: str = "IN") -> str:
         s = symbol.strip().upper()
+        if s in INDEX_MAP:
+            return INDEX_MAP[s]
+        clean = s.replace("BSE:", "").replace("NSE:", "").strip()
+        if clean in INDEX_MAP:
+            return INDEX_MAP[clean]
         if market == "IN":
             if not s.endswith(".NS") and not s.endswith(".BO") and not s.startswith("^"):
-                return f"{s}.NS"
-        return s
+                return f"{clean}.NS"
+        return clean
 
     def daily_bars(
         self, symbols: List[str], start: datetime.date, end: datetime.date, market: str = "IN"
@@ -190,6 +210,7 @@ class YFinanceProvider:
 
         for s in symbols:
             clean_s = s.replace(".NS", "").replace(".BO", "")
+            lookup_key = clean_s.replace("BSE:", "").replace("NSE:", "").strip().upper()
             try:
                 norm_sym = self._normalize_symbol(s, market=market)
                 ticker = yf.Ticker(norm_sym)
@@ -204,7 +225,7 @@ class YFinanceProvider:
                 if last_price and float(last_price) > 0:
                     lp = float(last_price)
                     pc = float(prev_close) if prev_close else lp
-                    quotes_dict[clean_s] = Quote(
+                    q_obj = Quote(
                         symbol=clean_s,
                         price=lp,
                         close=pc,
@@ -218,6 +239,10 @@ class YFinanceProvider:
                         freshness=QuoteFreshness.DELAYED,
                         realtime=False,
                     )
+                    quotes_dict[clean_s] = q_obj
+                    quotes_dict[s] = q_obj
+                    if lookup_key != clean_s:
+                        quotes_dict[lookup_key] = q_obj
             except Exception as e:
                 logger.warning(f"Error fetching YFinance quote for {clean_s}: {e}")
 
@@ -229,7 +254,7 @@ class YFinanceProvider:
                     if len(hist) > 0:
                         lp = float(hist["Close"].iloc[-1])
                         pc = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else lp
-                        quotes_dict[clean_s] = Quote(
+                        q_obj = Quote(
                             symbol=clean_s,
                             price=lp,
                             close=pc,
@@ -243,13 +268,25 @@ class YFinanceProvider:
                             freshness=QuoteFreshness.DELAYED,
                             realtime=False,
                         )
+                        quotes_dict[clean_s] = q_obj
+                        quotes_dict[s] = q_obj
+                        if lookup_key != clean_s:
+                            quotes_dict[lookup_key] = q_obj
                 except Exception:
                     pass
 
             if clean_s not in quotes_dict:
-                # Deterministic synthetic quote for fallback
-                base = 500.0 + (abs(hash(clean_s)) % 1500)
-                quotes_dict[clean_s] = Quote(
+                # Deterministic synthetic quote for fallback (using realistic baseline if index)
+                if lookup_key in ("SENSEX", "BSESN"):
+                    base = 76000.0 + (abs(hash(clean_s)) % 500)
+                elif lookup_key in ("NIFTY", "NIFTY50"):
+                    base = 23800.0 + (abs(hash(clean_s)) % 200)
+                elif lookup_key in ("BANKNIFTY",):
+                    base = 51000.0 + (abs(hash(clean_s)) % 300)
+                else:
+                    base = 500.0 + (abs(hash(clean_s)) % 1500)
+
+                q_obj = Quote(
                     symbol=clean_s,
                     price=base,
                     close=base,
@@ -260,6 +297,10 @@ class YFinanceProvider:
                     freshness=QuoteFreshness.DELAYED,
                     realtime=False,
                 )
+                quotes_dict[clean_s] = q_obj
+                quotes_dict[s] = q_obj
+                if lookup_key != clean_s:
+                    quotes_dict[lookup_key] = q_obj
 
         return quotes_dict
 

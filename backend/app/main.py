@@ -116,7 +116,7 @@ if FRONTEND_DIST.exists():
             return FileResponse(index_file)
         return {"app": "Swing Trading Intelligence Platform", "status": "Running"}
 else:
-    @app.get("/")
+    @app.api_route("/", methods=["GET", "HEAD"])
     def root():
         return {
             "app": "Swing Trading Intelligence Platform",
@@ -126,6 +126,6 @@ else:
             "disclaimer": "Signals are rules-based, not advice. Past/backtested performance does not guarantee future results.",
         }
 
-    @app.get("/health", tags=["Health"])
+    @app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
     def root_health():
         return {"status": "HEALTHY", "service": "algo-trading-backend"}
