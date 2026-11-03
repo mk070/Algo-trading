@@ -247,7 +247,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     }
 
     const container = chartContainerRef.current;
-    const chartHeight = (fullHeight || isExpanded) ? (container.clientHeight || (isExpanded ? 720 : 580)) : 500;
+    const chartHeight = (fullHeight || isExpanded) ? (container.clientHeight || (isExpanded ? 740 : 580)) : 560;
 
     const chart = createChart(container, {
       width: container.clientWidth || 800,
@@ -1233,12 +1233,12 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       )}
 
       {/* 5. Chart Body: Lightweight Charts Canvas + Interactive SVG Drawing Overlay OR TradingView Realtime */}
-      <div className={`relative w-full flex-1 ${isExpanded ? 'min-h-[620px] h-full' : 'min-h-[480px]'} bg-slate-950`}>
+      <div className={`relative w-full flex-1 ${isExpanded ? 'min-h-[720px] h-[calc(100vh-140px)]' : 'min-h-[560px] h-[560px]'} bg-slate-950`}>
         {useTradingViewStream ? (
           <TradingViewRealtimeChart
             symbol={symbol}
             market={market}
-            height={fullHeight || isExpanded ? '100%' : 500}
+            height={isExpanded ? 720 : 560}
           />
         ) : (
           <>
@@ -1272,7 +1272,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             )}
 
             {/* Lightweight Charts mounting DOM container */}
-            <div ref={chartContainerRef} className="w-full h-full min-h-[480px]" />
+            <div ref={chartContainerRef} className={`w-full ${isExpanded ? "h-full min-h-[720px]" : "h-[560px] min-h-[560px]"}`} />
 
         {/* SVG Drawing Overlay */}
         <svg

@@ -235,20 +235,23 @@ def get_bars(
             # 0-Latency Live Quote Injection into the latest daily candle
             if lq.price > 0 and candle_data and not is_15m:
                 today_str = today.isoformat()
+                live_p = float(lq.price)
                 if candle_data[-1]["time"] == today_str:
-                    candle_data[-1]["close"] = round(float(lq.price), 2)
-                    candle_data[-1]["high"] = max(candle_data[-1]["high"], round(float(lq.price), 2))
-                    candle_data[-1]["low"] = min(candle_data[-1]["low"], round(float(lq.price), 2))
+                    candle_data[-1]["close"] = round(live_p, 2)
+                    candle_data[-1]["high"] = max(candle_data[-1]["high"], round(float(getattr(lq, "high", None) or live_p), 2))
+                    candle_data[-1]["low"] = min(candle_data[-1]["low"], round(float(getattr(lq, "low", None) or live_p), 2))
                     if lq.day_volume > 0:
                         candle_data[-1]["volume"] = float(lq.day_volume)
                 else:
-                    prev_close = candle_data[-1]["close"]
+                    open_val = float(getattr(lq, "open", None) or live_p)
+                    high_val = max(open_val, live_p, float(getattr(lq, "high", None) or live_p))
+                    low_val = min(open_val, live_p, float(getattr(lq, "low", None) or live_p))
                     candle_data.append({
                         "time": today_str,
-                        "open": round(float(lq.open or prev_close), 2),
-                        "high": round(float(max(lq.high or lq.price, lq.price)), 2),
-                        "low": round(float(min(lq.low or lq.price, lq.price)), 2),
-                        "close": round(float(lq.price), 2),
+                        "open": round(open_val, 2),
+                        "high": round(high_val, 2),
+                        "low": round(low_val, 2),
+                        "close": round(live_p, 2),
                         "volume": float(lq.day_volume or 0.0),
                         "ema20": candle_data[-1]["ema20"],
                         "ema50": candle_data[-1]["ema50"],

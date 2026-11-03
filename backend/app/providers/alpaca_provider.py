@@ -100,7 +100,12 @@ class AlpacaProvider:
                     for sym, snap in data.items():
                         trade = snap.get("latestTrade", {})
                         price = float(trade.get("p", 0.0))
-                        vol = float(snap.get("dailyBar", {}).get("v", 0.0))
+                        daily_bar = snap.get("dailyBar", {})
+                        vol = float(daily_bar.get("v", 0.0))
+                        open_p = float(daily_bar.get("o", price))
+                        high_p = float(daily_bar.get("h", price))
+                        low_p = float(daily_bar.get("l", price))
+                        close_p = float(daily_bar.get("c", price))
                         quotes_dict[sym] = Quote(
                             symbol=sym,
                             last_price=price,
@@ -109,6 +114,10 @@ class AlpacaProvider:
                             source=self.name,
                             is_realtime=True,
                             is_stale=False,
+                            open=open_p,
+                            high=high_p,
+                            low=low_p,
+                            close=close_p,
                         )
         except Exception as e:
             logger.error(f"Alpaca quotes error: {e}")

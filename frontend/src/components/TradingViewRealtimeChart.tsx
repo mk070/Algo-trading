@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { ExternalLink, Zap } from 'lucide-react';
 
 interface TradingViewRealtimeChartProps {
   symbol: string;
@@ -9,20 +10,22 @@ interface TradingViewRealtimeChartProps {
 export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> = ({
   symbol,
   market,
-  height = '100%',
+  height = '580px',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Map to canonical TradingView exchange:symbol syntax
+  // Map to canonical TradingView exchange:symbol syntax.
+  // NOTE: TradingView external widget blocks "NSE:*" symbols with "This symbol is only available on TradingView".
+  // BSE symbols ("BSE:RELIANCE", "BSE:TCS", etc.) are allowed for live external embedding.
   const resolveTradingViewSymbol = (rawSymbol: string, mkt: 'IN' | 'US'): string => {
     const s = rawSymbol.trim().toUpperCase();
     if (s.includes(':')) return s;
 
     if (mkt === 'IN') {
-      if (s === 'TMPV') return 'NSE:TATAMOTORS';
+      if (s === 'TMPV' || s === 'TATAMOTORS') return 'BSE:TATAMOTORS';
       if (s === 'SENSEX' || s === 'BSESN') return 'BSE:SENSEX';
-      if (s === 'NIFTY' || s === 'NIFTY50') return 'NSE:NIFTY';
-      return `NSE:${s}`;
+      if (s === 'NIFTY' || s === 'NIFTY50') return 'BSE:SENSEX';
+      return `BSE:${s}`;
     } else {
       // US Equities & ETFs
       const amexEtfs = ['SPY', 'DIA', 'IWM', 'XLK', 'XLF', 'XLE', 'XLV', 'XLY', 'XLP', 'XLU', 'XLI', 'XLB'];
@@ -33,11 +36,13 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
     }
   };
 
+  const tvSymbol = resolveTradingViewSymbol(symbol, market);
+  const directTvUrl = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(market === 'IN' ? `NSE:${symbol}` : tvSymbol)}`;
+  const resolvedHeight = typeof height === 'number' ? `${height}px` : (height || '580px');
+
   useEffect(() => {
     if (!containerRef.current) return;
     containerRef.current.innerHTML = '';
-
-    const tvSymbol = resolveTradingViewSymbol(symbol, market);
 
     // Create TradingView embed wrapper
     const widgetContainer = document.createElement('div');
@@ -47,7 +52,7 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
 
     const chartHolder = document.createElement('div');
     chartHolder.className = 'tradingview-widget-container__widget';
-    chartHolder.style.height = 'calc(100% - 32px)';
+    chartHolder.style.height = '100%';
     chartHolder.style.width = '100%';
     widgetContainer.appendChild(chartHolder);
 
@@ -59,7 +64,7 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
       autosize: true,
       symbol: tvSymbol,
       interval: "D",
-      timezone: "exchange",
+      timezone: market === 'IN' ? "Asia/Kolkata" : "America/New_York",
       theme: "dark",
       style: "1",
       locale: "en",
@@ -85,28 +90,43 @@ export const TradingViewRealtimeChart: React.FC<TradingViewRealtimeChartProps> =
         containerRef.current.innerHTML = '';
       }
     };
-  }, [symbol, market]);
+  }, [symbol, market, tvSymbol]);
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
-      <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs">
+    <div
+      style={{ height: resolvedHeight, minHeight: '520px' }}
+      className="w-full flex flex-col bg-slate-950 rounded-xl overflow-hidden border border-slate-800"
+    >
+      <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs flex-wrap gap-2">
         <div className="flex items-center gap-2 font-mono">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span className="font-bold text-white">{resolveTradingViewSymbol(symbol, market)}</span>
+          <span className="font-bold text-white">{tvSymbol}</span>
           <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-            OFFICIAL TRADINGVIEW REAL-TIME FEED
+            TRADINGVIEW LIVE TICK STREAM
           </span>
+          {market === 'IN' && (
+            <span className="text-[10px] text-slate-400 font-sans hidden md:inline">
+              (BSE feed &bull; TradingView blocks external embed for NSE)
+            </span>
+          )}
         </div>
-        <span className="text-[11px] text-slate-400 font-sans hidden sm:inline">
-          Live streaming exchange ticks &bull; Zero latency
-        </span>
+        <div className="flex items-center gap-3">
+          <a
+            href={directTvUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition"
+          >
+            <span>Open on TradingView.com</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
       </div>
       <div
         ref={containerRef}
-        style={{ height: typeof height === 'number' ? `${height}px` : height, minHeight: '480px' }}
+        style={{ height: 'calc(100% - 37px)', width: '100%', minHeight: '480px' }}
         className="w-full flex-1"
       />
     </div>
   );
 };
-

@@ -60,27 +60,30 @@ class ProviderManager:
                         DailyBar.symbol == sym,
                         DailyBar.date >= start,
                         DailyBar.date <= end,
+                        DailyBar.source.notin_(['synthetic_fixture', 'mock', 'synthetic_fallback']),
                     )
                     .order_by(DailyBar.date.asc())
                     .all()
                 )
-                if rows and len(rows) >= 20:  # reasonable minimum cached window
-                    df = pd.DataFrame(
-                        [
-                            {
-                                "date": r.date,
-                                "open": r.open,
-                                "high": r.high,
-                                "low": r.low,
-                                "close": r.close,
-                                "adj_close": r.adj_close,
-                                "volume": r.volume,
-                                "source": r.source,
-                            }
-                            for r in rows
-                        ]
-                    )
-                    cached_dfs[sym] = df
+                if rows and len(rows) >= 20:
+                    latest_cached_date = rows[-1].date
+                    if (end - latest_cached_date).days <= 3:
+                        df = pd.DataFrame(
+                            [
+                                {
+                                    "date": r.date,
+                                    "open": r.open,
+                                    "high": r.high,
+                                    "low": r.low,
+                                    "close": r.close,
+                                    "adj_close": r.adj_close,
+                                    "volume": r.volume,
+                                    "source": r.source,
+                                }
+                                for r in rows
+                            ]
+                        )
+                        cached_dfs[sym] = df
             for sym, df in cached_dfs.items():
                 results[sym] = df
                 if sym in missing_symbols:
@@ -163,7 +166,15 @@ class ProviderManager:
                     .filter(DailyBar.symbol == symbol, DailyBar.date == row_date)
                     .first()
                 )
-                if not existing:
+                if existing:
+                    existing.open = float(row['open'])
+                    existing.high = float(row['high'])
+                    existing.low = float(row['low'])
+                    existing.close = float(row['close'])
+                    existing.adj_close = float(row.get('adj_close', row['close']))
+                    existing.volume = float(row['volume'])
+                    existing.source = str(row.get('source', 'unknown'))
+                else:
                     bar = DailyBar(
                         symbol=symbol,
                         date=row_date,

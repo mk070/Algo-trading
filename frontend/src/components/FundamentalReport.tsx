@@ -643,3 +643,4 @@ export const FundamentalReport: React.FC<Props> = ({ symbol, market }) => {
     </div>
   );
 };
+
