@@ -556,8 +556,16 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       setRenderTick((t) => t + 1);
     });
 
-    // Fit content on initial load
+    // Fit content on initial load — always scroll to the most recent bar
     chart.timeScale().fitContent();
+    // Then scroll right to ensure latest price is visible with small right margin
+    setTimeout(() => {
+      try {
+        chart.timeScale().scrollToRealTime();
+      } catch {
+        chart.timeScale().fitContent();
+      }
+    }, 50);
 
     // Auto-resize observer
     const resizeObserver = new ResizeObserver((entries) => {
@@ -812,6 +820,20 @@ export const CandleChart: React.FC<CandleChartProps> = ({
           </div>
         )}
       </div>
+
+      {/* ⚠ DELAYED DATA BANNER — always shown, prevents acting on stale chart prices */}
+      {feedStatus !== 'LIVE' && (
+        <div className="px-4 py-1.5 bg-amber-950/60 border-b border-amber-800/40 flex items-center gap-2 text-[10px] text-amber-400">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>
+            <strong>DELAYED DATA</strong> — Bars are EOD and may not reflect the current market price.
+            {currentPrice != null && (
+              <> Latest quote: <strong className="text-amber-200">{market === 'IN' ? '₹' : '$'}{currentPrice.toFixed(2)}</strong></>
+            )}
+            {' '}Always confirm on your broker before placing any trade.
+          </span>
+        </div>
+      )}
 
       {/* 2. Controls & Preferences Bar: Moving Averages, Panels, Drawing Tools */}
       <div className="px-5 py-2.5 bg-slate-950/70 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">

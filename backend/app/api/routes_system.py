@@ -823,3 +823,182 @@ def search_symbols(
 
     return matches[:10]
 
+
+@router.get("/fundamentals/{symbol}")
+def get_fundamentals(
+    symbol: str,
+    market: str = Query("US", pattern="^(IN|US)$"),
+):
+    """Fetch comprehensive fundamental data for a stock using yfinance.
+    Supports US and IN (NSE) markets. Returns null for any unavailable fields.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        raise HTTPException(status_code=500, detail="yfinance is not installed")
+
+    clean_sym = symbol.strip().upper()
+    yf_symbol = f"{clean_sym}.NS" if market.upper() == "IN" else clean_sym
+
+    try:
+        ticker = yf.Ticker(yf_symbol)
+        info = ticker.info or {}
+    except Exception as e:
+        logger.warning(f"yfinance failed to fetch info for {yf_symbol}: {e}")
+        info = {}
+
+    def g(key, default=None):
+        """Safe getter that returns None for missing/NaN values."""
+        try:
+            val = info.get(key, default)
+            if val is None:
+                return None
+            # Filter out NaN floats
+            if isinstance(val, float) and (val != val):  # NaN check
+                return None
+            return val
+        except Exception:
+            return None
+
+    def pct(value, base):
+        """Compute percentage safely."""
+        try:
+            if value is None or base is None or base == 0:
+                return None
+            return round((value - base) / base * 100.0, 2)
+        except Exception:
+            return None
+
+    # -- Price section --
+    current_price = g("currentPrice") or g("regularMarketPrice")
+    high_52w = g("fiftyTwoWeekHigh")
+    low_52w = g("fiftyTwoWeekLow")
+
+    pct_from_high = pct(current_price, high_52w) if (current_price and high_52w) else None
+    pct_from_low = pct(current_price, low_52w) if (current_price and low_52w) else None
+
+    # -- Cashflow / FCF yield --
+    fcf = g("freeCashflow")
+    mkt_cap = g("marketCap")
+    fcf_yield = None
+    try:
+        if fcf is not None and mkt_cap and mkt_cap > 0:
+            fcf_yield = round(fcf / mkt_cap * 100.0, 2)
+    except Exception:
+        pass
+
+    # -- Analyst upside --
+    target_mean = g("targetMeanPrice")
+    upside_pct = pct(target_mean, current_price) if (target_mean and current_price) else None
+
+    # -- History-based extras (non-blocking) --
+    try:
+        hist = ticker.history(period="3y")
+        hist_high = round(float(hist["High"].max()), 2) if (hist is not None and not hist.empty) else None
+        hist_low = round(float(hist["Low"].min()), 2) if (hist is not None and not hist.empty) else None
+    except Exception:
+        hist_high = None
+        hist_low = None
+
+    # -- Analyst recommendations (non-blocking) --
+    analyst_consensus = None
+    try:
+        recs = ticker.recommendations
+        if recs is not None and not recs.empty:
+            latest = recs.iloc[-1]
+            analyst_consensus = {col: int(latest[col]) for col in recs.columns if col in latest.index}
+    except Exception:
+        analyst_consensus = None
+
+    result = {
+        "symbol": clean_sym,
+        "market": market.upper(),
+        "provider": "yfinance",
+        "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "company": {
+            "name": g("longName"),
+            "sector": g("sector"),
+            "industry": g("industry"),
+            "country": g("country"),
+        },
+        "price": {
+            "current": current_price,
+            "52w_high": high_52w,
+            "52w_low": low_52w,
+            "52w_pct_from_high": pct_from_high,
+            "52w_pct_from_low": pct_from_low,
+            "3y_high": hist_high,
+            "3y_low": hist_low,
+            "beta": g("beta"),
+            "52w_change": g("52WeekChange"),
+            "average_volume": g("averageVolume"),
+            "average_volume_10d": g("averageVolume10days"),
+        },
+        "valuation": {
+            "pe_trailing": g("trailingPE"),
+            "pe_forward": g("forwardPE"),
+            "peg": g("pegRatio"),
+            "price_to_book": g("priceToBook"),
+            "price_to_sales": g("priceToSalesTrailing12Months"),
+            "ev_to_ebitda": g("enterpriseToEbitda"),
+            "ev_to_revenue": g("enterpriseToRevenue"),
+            "market_cap": mkt_cap,
+            "enterprise_value": g("enterpriseValue"),
+            "revenue_per_share": g("revenuePerShare"),
+            "book_value": g("bookValue"),
+        },
+        "profitability": {
+            "roe": g("returnOnEquity"),
+            "roce": g("returnOnCapitalEmployed"),
+            "roa": g("returnOnAssets"),
+            "operating_margin": g("operatingMargins"),
+            "net_margin": g("profitMargins"),
+            "gross_margin": g("grossMargins"),
+            "ebitda_margin": g("ebitdaMargins"),
+            "ebitda": g("ebitda"),
+            "net_income": g("netIncomeToCommon"),
+            "total_revenue": g("totalRevenue"),
+            "inventory_turnover": g("inventoryTurnover"),
+        },
+        "growth": {
+            "revenue_growth_yoy": g("revenueGrowth"),
+            "earnings_growth_yoy": g("earningsGrowth"),
+            "earnings_growth_qoq": g("earningsQuarterlyGrowth"),
+        },
+        "cashflow": {
+            "free_cash_flow": fcf,
+            "operating_cash_flow": g("operatingCashflow"),
+            "total_cashflow": g("totalCashflow"),
+            "fcf_yield": fcf_yield,
+        },
+        "balance_sheet": {
+            "current_ratio": g("currentRatio"),
+            "quick_ratio": g("quickRatio"),
+            "debt_to_equity": g("debtToEquity"),
+            "float_shares": g("floatShares"),
+            "shares_outstanding": g("sharesOutstanding"),
+        },
+        "dividends": {
+            "yield": g("dividendYield"),
+            "rate": g("dividendRate"),
+            "payout_ratio": g("payoutRatio"),
+        },
+        "ownership": {
+            "insider_pct": g("heldPercentInsiders"),
+            "institutional_pct": g("heldPercentInstitutions"),
+            "short_pct_float": g("shortPercentOfFloat"),
+            "shares_short_pct_shares_out": g("sharesPercentSharesOut"),
+        },
+        "analyst": {
+            "recommendation_mean": g("recommendationMean"),
+            "n_analysts": g("numberOfAnalystOpinions"),
+            "target_mean": target_mean,
+            "target_high": g("targetHighPrice"),
+            "target_low": g("targetLowPrice"),
+            "upside_pct": upside_pct,
+            "consensus": analyst_consensus,
+        },
+    }
+
+    return result
+
