@@ -300,173 +300,245 @@ class DecisionPipeline:
         all_rejections.extend(s3_rejections)
 
         # ------------------------------------------------------------------
-        # STAGE 4: ENTRY PLANNER
+        # STAGES 4-7: ENTRY, EXIT, SIZING, AND RISK VALIDATION
+        # Only evaluate execution mechanics if a valid setup candidate exists!
+        # If no setup exists, mark these stages as WAIT with clean informational notes.
         # ------------------------------------------------------------------
-        s4_checks: List[StageCheck] = []
-        s4_rejections: List[str] = []
-
-        trigger = chosen_cand.trigger if chosen_cand else 0.0
-        zone_high = chosen_cand.entry_zone_high if chosen_cand else 0.0
-        pivot = chosen_cand.pivot if chosen_cand else 0.0
-
-        s4_checks.append(
-            StageCheck(
-                name="Trigger Level",
-                value=f"{trigger:.2f}",
-                threshold="Calculated pivot + 0.1*ATR",
-                passed=trigger > 0,
-                note=f"Pivot: {pivot:.2f}",
+        if not chosen_cand:
+            sizing = None
+            stages.append(
+                StageResult(
+                    stage_name="Entry Planner",
+                    status="WAIT",
+                    checks=[
+                        StageCheck(
+                            name="Trigger Level",
+                            value="None",
+                            threshold="Calculated pivot + 0.1*ATR",
+                            passed=False,
+                            note="Awaiting valid chart base / breakout setup",
+                        )
+                    ],
+                    rejection_reasons=[],
+                )
             )
-        )
-        s4_checks.append(
-            StageCheck(
-                name="Entry Zone Boundary",
-                value=f"{trigger:.2f} to {zone_high:.2f}",
-                threshold=f"Max {((zone_high - trigger)/trigger * 100.0) if trigger > 0 else 0.0:.1f}% above trigger",
-                passed=zone_high >= trigger and trigger > 0,
-                note="Maximum acceptable chase range",
+            stages.append(
+                StageResult(
+                    stage_name="Exit Planner",
+                    status="WAIT",
+                    checks=[
+                        StageCheck(
+                            name="Structural Stop Loss",
+                            value="None",
+                            threshold="Lowest low 10 bars - 0.2*ATR",
+                            passed=False,
+                            note="Defined once trigger level confirmed",
+                        )
+                    ],
+                    rejection_reasons=[],
+                )
             )
-        )
-
-        s4_status = "PASS" if trigger > 0 else "BLOCK"
-        stages.append(
-            StageResult(
-                stage_name="Entry Planner",
-                status=s4_status,
-                checks=s4_checks,
-                rejection_reasons=s4_rejections,
+            stages.append(
+                StageResult(
+                    stage_name="Position Sizer",
+                    status="WAIT",
+                    checks=[
+                        StageCheck(
+                            name="Planned Sizing",
+                            value="0 shares",
+                            threshold=">= 1 share",
+                            passed=False,
+                            note="Position sizing deferred until setup verified",
+                        )
+                    ],
+                    rejection_reasons=[],
+                )
             )
-        )
-
-        # ------------------------------------------------------------------
-        # STAGE 5: EXIT PLANNER
-        # ------------------------------------------------------------------
-        s5_checks: List[StageCheck] = []
-        s5_rejections: List[str] = []
-
-        stop = chosen_cand.stop if chosen_cand else 0.0
-        target1 = chosen_cand.target1 if chosen_cand else 0.0
-        risk_per_share = (trigger - stop) if trigger > stop else 0.0
-
-        s5_checks.append(
-            StageCheck(
-                name="Structural Stop Loss",
-                value=f"{stop:.2f}",
-                threshold="Lowest low 10 bars - 0.2*ATR",
-                passed=stop > 0 and stop < trigger,
-                note=f"Risk/share: {risk_per_share:.2f}",
+            stages.append(
+                StageResult(
+                    stage_name="Risk Validator",
+                    status="WAIT",
+                    checks=[
+                        StageCheck(
+                            name="Risk & Cost Gate",
+                            value="Pending",
+                            threshold="Cost <= 0.25R",
+                            passed=False,
+                            note="Validation executed on actionable entries",
+                        )
+                    ],
+                    rejection_reasons=[],
+                )
             )
-        )
-        s5_checks.append(
-            StageCheck(
-                name="Target 1 (2R)",
-                value=f"{target1:.2f}",
-                threshold=f">= trigger + 2R ({trigger + 2*risk_per_share:.2f})",
-                passed=target1 >= trigger + 1.9 * risk_per_share,
-                note="Minimum reward/risk ratio 2.0",
+        else:
+            # ------------------------------------------------------------------
+            # STAGE 4: ENTRY PLANNER
+            # ------------------------------------------------------------------
+            s4_checks: List[StageCheck] = []
+            s4_rejections: List[str] = []
+
+            trigger = chosen_cand.trigger
+            zone_high = chosen_cand.entry_zone_high
+            pivot = chosen_cand.pivot
+
+            s4_checks.append(
+                StageCheck(
+                    name="Trigger Level",
+                    value=f"{trigger:.2f}",
+                    threshold="Calculated pivot + 0.1*ATR",
+                    passed=trigger > 0,
+                    note=f"Pivot: {pivot:.2f}",
+                )
             )
-        )
-        s5_checks.append(
-            StageCheck(
-                name="Trailing Exit Strategy",
-                value="Chandelier trail (3*ATR from high) after +1R",
-                threshold="Configured",
-                passed=True,
-                note="Breakeven moved at +1R",
+            s4_checks.append(
+                StageCheck(
+                    name="Entry Zone Boundary",
+                    value=f"{trigger:.2f} to {zone_high:.2f}",
+                    threshold=f"Max {((zone_high - trigger)/trigger * 100.0) if trigger > 0 else 0.0:.1f}% above trigger",
+                    passed=zone_high >= trigger and trigger > 0,
+                    note="Maximum acceptable chase range",
+                )
             )
-        )
 
-        s5_status = "PASS" if stop > 0 and stop < trigger else "BLOCK"
-        stages.append(
-            StageResult(
-                stage_name="Exit Planner",
-                status=s5_status,
-                checks=s5_checks,
-                rejection_reasons=s5_rejections,
+            s4_status = "PASS" if trigger > 0 else "BLOCK"
+            stages.append(
+                StageResult(
+                    stage_name="Entry Planner",
+                    status=s4_status,
+                    checks=s4_checks,
+                    rejection_reasons=s4_rejections,
+                )
             )
-        )
 
-        # ------------------------------------------------------------------
-        # STAGE 6: POSITION SIZER
-        # ------------------------------------------------------------------
-        s6_checks: List[StageCheck] = []
-        s6_rejections: List[str] = []
+            # ------------------------------------------------------------------
+            # STAGE 5: EXIT PLANNER
+            # ------------------------------------------------------------------
+            s5_checks: List[StageCheck] = []
+            s5_rejections: List[str] = []
 
-        gap95 = compute_gap95(df) if df is not None else 0.02
-        eff_risk = calculate_effective_risk_per_share(trigger, stop, gap95) if trigger > stop else 1.0
+            stop = chosen_cand.stop
+            target1 = chosen_cand.target1
+            risk_per_share = (trigger - stop) if trigger > stop else 0.0
 
-        sizer = PositionSizer(market=market)
-        sizing = sizer.calculate_size(
-            symbol=symbol,
-            entry=trigger,
-            stop=stop,
-            effective_risk_per_share=eff_risk,
-            capital_override=capital,
-            current_open_positions=current_open_positions,
-            current_open_heat=current_open_heat,
-        )
-
-        s6_checks.append(
-            StageCheck(
-                name="Effective Risk per Share (with Gap95)",
-                value=f"{eff_risk:.2f} (gap95: {gap95*100:.1f}%)",
-                threshold=f">= nominal risk {trigger - stop:.2f}",
-                passed=eff_risk >= (trigger - stop),
-                note="Adjusts sizing downward for gappy stocks",
+            s5_checks.append(
+                StageCheck(
+                    name="Structural Stop Loss",
+                    value=f"{stop:.2f}",
+                    threshold="Lowest low 10 bars - 0.2*ATR",
+                    passed=stop > 0 and stop < trigger,
+                    note=f"Risk/share: {risk_per_share:.2f}",
+                )
             )
-        )
-        s6_checks.append(
-            StageCheck(
-                name="Calculated Whole Share Quantity",
-                value=f"{sizing.qty} shares",
-                threshold=">= 1 share",
-                passed=sizing.qty >= 1,
-                note=f"Position value: {sizing.position_value:.2f}",
+            s5_checks.append(
+                StageCheck(
+                    name="Target 1 (2R)",
+                    value=f"{target1:.2f}",
+                    threshold=f">= trigger + 2R ({trigger + 2*risk_per_share:.2f})",
+                    passed=target1 >= trigger + 1.9 * risk_per_share,
+                    note="Minimum reward/risk ratio 2.0",
+                )
             )
-        )
-
-        if sizing.qty < 1:
-            s6_rejections.append(f"Position size is 0: {sizing.rejection_reason}")
-
-        s6_status = "PASS" if sizing.qty >= 1 else "BLOCK"
-        stages.append(
-            StageResult(
-                stage_name="Position Sizer",
-                status=s6_status,
-                checks=s6_checks,
-                rejection_reasons=s6_rejections,
+            s5_checks.append(
+                StageCheck(
+                    name="Trailing Exit Strategy",
+                    value="Chandelier trail (3*ATR from high) after +1R",
+                    threshold="Configured",
+                    passed=True,
+                    note="Breakeven moved at +1R",
+                )
             )
-        )
-        all_rejections.extend(s6_rejections)
 
-        # ------------------------------------------------------------------
-        # STAGE 7: RISK VALIDATOR (Cost Gate, Heat, Correlation, Circuit Breakers)
-        # ------------------------------------------------------------------
-        from app.engine.risk_validator import RiskValidator
-        validator = RiskValidator(market=market)
-        risk_res = validator.validate(
-            symbol=symbol,
-            entry_price=trigger,
-            stop_loss=stop,
-            qty=sizing.qty,
-            risk_amount=sizing.risk_amount,
-            cost_breakdown=sizing.cost_breakdown,
-            capital=capital,
-            current_open_positions=current_open_positions,
-            current_open_heat=current_open_heat,
-            open_symbols=open_symbols,
-            all_universe_data=all_universe_data,
-        )
-
-        stages.append(
-            StageResult(
-                stage_name="Risk Validator",
-                status=risk_res.status,
-                checks=risk_res.checks,
-                rejection_reasons=risk_res.rejection_reasons,
+            s5_status = "PASS" if stop > 0 and stop < trigger else "BLOCK"
+            stages.append(
+                StageResult(
+                    stage_name="Exit Planner",
+                    status=s5_status,
+                    checks=s5_checks,
+                    rejection_reasons=s5_rejections,
+                )
             )
-        )
-        all_rejections.extend(risk_res.rejection_reasons)
+
+            # ------------------------------------------------------------------
+            # STAGE 6: POSITION SIZER
+            # ------------------------------------------------------------------
+            s6_checks: List[StageCheck] = []
+            s6_rejections: List[str] = []
+
+            gap95 = compute_gap95(df) if df is not None else 0.02
+            eff_risk = calculate_effective_risk_per_share(trigger, stop, gap95) if trigger > stop else 1.0
+
+            sizer = PositionSizer(market=market)
+            sizing = sizer.calculate_size(
+                symbol=symbol,
+                entry=trigger,
+                stop=stop,
+                effective_risk_per_share=eff_risk,
+                capital_override=capital,
+                current_open_positions=current_open_positions,
+                current_open_heat=current_open_heat,
+            )
+
+            s6_checks.append(
+                StageCheck(
+                    name="Effective Risk per Share (with Gap95)",
+                    value=f"{eff_risk:.2f} (gap95: {gap95*100:.1f}%)",
+                    threshold=f">= nominal risk {trigger - stop:.2f}",
+                    passed=eff_risk >= (trigger - stop),
+                    note="Adjusts sizing downward for gappy stocks",
+                )
+            )
+            s6_checks.append(
+                StageCheck(
+                    name="Calculated Whole Share Quantity",
+                    value=f"{sizing.qty} shares",
+                    threshold=">= 1 share",
+                    passed=sizing.qty >= 1,
+                    note=f"Position value: {sizing.position_value:.2f}",
+                )
+            )
+
+            if sizing.qty < 1:
+                s6_rejections.append(f"Position size is 0: {sizing.rejection_reason}")
+
+            s6_status = "PASS" if sizing.qty >= 1 else "BLOCK"
+            stages.append(
+                StageResult(
+                    stage_name="Position Sizer",
+                    status=s6_status,
+                    checks=s6_checks,
+                    rejection_reasons=s6_rejections,
+                )
+            )
+            all_rejections.extend(s6_rejections)
+
+            # ------------------------------------------------------------------
+            # STAGE 7: RISK VALIDATOR (Cost Gate, Heat, Correlation, Circuit Breakers)
+            # ------------------------------------------------------------------
+            from app.engine.risk_validator import RiskValidator
+            validator = RiskValidator(market=market)
+            risk_res = validator.validate(
+                symbol=symbol,
+                entry_price=trigger,
+                stop_loss=stop,
+                qty=sizing.qty,
+                risk_amount=sizing.risk_amount,
+                cost_breakdown=sizing.cost_breakdown,
+                capital=capital,
+                current_open_positions=current_open_positions,
+                current_open_heat=current_open_heat,
+                open_symbols=open_symbols,
+                all_universe_data=all_universe_data,
+            )
+
+            stages.append(
+                StageResult(
+                    stage_name="Risk Validator",
+                    status=risk_res.status,
+                    checks=risk_res.checks,
+                    rejection_reasons=risk_res.rejection_reasons,
+                )
+            )
+            all_rejections.extend(risk_res.rejection_reasons)
 
         # ------------------------------------------------------------------
         # FINAL DECISION: PASS | BLOCK | WAIT
@@ -492,11 +564,11 @@ class DecisionPipeline:
             entry_zone_high=zone_high if chosen_cand else None,
             stop=stop if chosen_cand else None,
             target1=target1 if chosen_cand else None,
-            qty=sizing.qty if sizing.passed else 0,
-            risk_amount=sizing.risk_amount if sizing.passed else 0.0,
-            cost_in_r=sizing.cost_breakdown.cost_in_r if (sizing and sizing.cost_breakdown) else 0.0,
+            qty=sizing.qty if (chosen_cand and sizing and sizing.passed) else 0,
+            risk_amount=sizing.risk_amount if (chosen_cand and sizing and sizing.passed) else 0.0,
+            cost_in_r=sizing.cost_breakdown.cost_in_r if (chosen_cand and sizing and sizing.cost_breakdown) else 0.0,
             stages=stages,
-            all_rejection_reasons=all_rejections,
+            all_rejection_reasons=[r.strip() for r in all_rejections if isinstance(r, str) and r.strip()],
             config_hash=config_hash,
             code_version=self.code_version,
             data_source="ANGEL_ONE" if market == "IN" else "ALPACA",

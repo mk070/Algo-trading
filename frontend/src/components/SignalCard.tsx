@@ -74,28 +74,33 @@ export const SignalCard: React.FC<SignalCardProps> = ({
     }
   };
 
-  const getSetupLabel = (setup?: string) => {
+  const getSetupLabel = (setup?: string, state?: string) => {
+    if (state === 'NO_SETUP') return 'No Setup Detected';
     if (!setup) return 'Setup Pending';
     if (setup === 'VCP') return 'Tight-Base (VCP)';
     if (setup === 'PULLBACK') return 'Pullback 20 EMA';
     if (setup === 'BREAKOUT') return 'Pivot Breakout';
     if (setup === 'MONITORING') return 'Monitoring Base';
-    if (setup === 'NO_SETUP') return 'No Valid Setup';
+    if (setup === 'NO_SETUP') return 'No Setup Detected';
     return setup;
   };
 
   const currencySymbol = signal.market === 'IN' ? '₹' : '$';
   const isActionable = signal.state !== 'NO_SETUP' && signal.state !== 'BLOCKED' && signal.state !== 'INVALIDATED' && (signal.trigger || 0) > 0;
-  const cleanReasons = (signal.reasons || []).filter((r) => typeof r === 'string' && r.trim().length > 0);
+  const cleanReasons = (signal.reasons || []).filter(
+    (r) => typeof r === 'string' && r.trim().length > 0 && !r.includes('price 0.00')
+  );
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 shadow-lg hover:border-slate-700 transition-all">
+    <div className={`bg-slate-900/90 border rounded-xl p-5 flex flex-col gap-4 shadow-lg transition-all ${
+      isActionable ? 'border-slate-800 hover:border-slate-700' : 'border-slate-800/60 opacity-80'
+    }`}>
       {/* Top Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <h3 className="text-xl font-bold tracking-tight text-slate-100">{signal.symbol}</h3>
           <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold border bg-slate-800/80 text-indigo-300 border-indigo-500/20">
-            {getSetupLabel(signal.setup)}
+            {getSetupLabel(signal.setup, signal.state)}
           </span>
           <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${getStateBadge(signal.state)}`}>
             {signal.state.replace('_', ' ')}

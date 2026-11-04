@@ -89,6 +89,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
 
   const selectedSignal = plan?.signals.find((s) => s.symbol === selectedChartSymbol);
 
+  const actionableSignals = (plan?.signals || []).filter(
+    (s) => s.state !== 'NO_SETUP' && s.state !== 'BLOCKED' && (s.trigger || 0) > 0 && s.setup !== 'MONITORING'
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {/* Top Banner: Market Regime & Overview */}
@@ -193,7 +197,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-indigo-400" />
-              Today's Ranked Trade Plan ({plan?.signals.length || 0} Setups)
+              Today's Ranked Trade Plan ({actionableSignals.length} Setups)
             </h2>
             <p className="text-xs text-slate-400">
               Screened from {plan?.universe_size || 0} constituents ({plan?.passed_filters || 0} passed Trend Template).
@@ -210,7 +214,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
               <div key={i} className="h-64 bg-slate-900/50 border border-slate-800 rounded-xl animate-pulse"></div>
             ))}
           </div>
-        ) : !plan?.signals || plan.signals.length === 0 ? (
+        ) : actionableSignals.length === 0 ? (
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-8 text-center flex flex-col items-center justify-center gap-2">
             <Shield className="w-9 h-9 text-amber-500/80 mb-1" />
             <h3 className="text-base font-semibold text-slate-200">
@@ -224,7 +228,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {plan.signals.map((sig) => (
+            {actionableSignals.map((sig) => (
               <SignalCard
                 key={sig.id || sig.symbol}
                 signal={sig}
@@ -376,10 +380,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-200">
-                          {cand.trigger ? `₹${cand.trigger.toFixed(2)}` : '—'}
+                          {cand.trigger ? `${currentMarket === 'IN' ? '₹' : '$'}${cand.trigger.toFixed(2)}` : '—'}
                         </td>
                         <td className="px-4 py-3 text-rose-400">
-                          {cand.stop ? `₹${cand.stop.toFixed(2)}` : '—'}
+                          {cand.stop ? `${currentMarket === 'IN' ? '₹' : '$'}${cand.stop.toFixed(2)}` : '—'}
                         </td>
                         <td className="px-4 py-3 font-sans text-slate-400 text-[11px] max-w-xs truncate" title={cand.first_failing_check || cand.reasons?.[0] || 'Monitoring'}>
                           {cand.first_failing_check || cand.reasons?.[0] || 'Candidate monitored'}

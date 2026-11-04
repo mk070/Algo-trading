@@ -176,7 +176,10 @@ class RiskValidator:
             )
         )
         if not cost_breakdown.passed_gate:
-            rejections.append(cost_breakdown.rejection_reason)
+            rej = (cost_breakdown.rejection_reason or "").strip()
+            if not rej:
+                rej = f"Round-trip transaction costs {cost_breakdown.cost_in_r:.2f}R exceed maximum risk gate {self.risk_cfg.max_cost_in_R:.2f}R"
+            rejections.append(rej)
 
         # 7. Consecutive-Loss Circuit Breaker (pause after 3 consecutive losses)
         max_consecutive_losses = 3
