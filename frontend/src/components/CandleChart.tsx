@@ -123,6 +123,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const chartInstanceRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const isInitialLoadRef = useRef<boolean>(true);
 
   // Timeframe state
   const [timeframe, setTimeframe] = useState<'1D' | '15m'>(initialTimeframe);
@@ -215,6 +216,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
 
   // Initial fetch and on timeframe switch
   useEffect(() => {
+    isInitialLoadRef.current = true;
     fetchBarsData(false);
   }, [fetchBarsData]);
 
@@ -222,7 +224,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       fetchBarsData(true);
-    }, 12000);
+    }, 4000);
     return () => clearInterval(timer);
   }, [fetchBarsData]);
 
@@ -556,16 +558,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       setRenderTick((t) => t + 1);
     });
 
-    // Fit content on initial load — always scroll to the most recent bar
-    chart.timeScale().fitContent();
-    // Then scroll right to ensure latest price is visible with small right margin
-    setTimeout(() => {
-      try {
-        chart.timeScale().scrollToRealTime();
-      } catch {
-        chart.timeScale().fitContent();
-      }
-    }, 50);
+    // Fit content ONLY on initial load or symbol/timeframe switch
+    // Never reset or force scroll when user is inspecting past bars in the middle
+    if (isInitialLoadRef.current) {
+      chart.timeScale().fitContent();
+      setTimeout(() => {
+        try {
+          chart.timeScale().scrollToRealTime();
+        } catch {
+          chart.timeScale().fitContent();
+        }
+      }, 50);
+      isInitialLoadRef.current = false;
+    }
 
     // Auto-resize observer
     const resizeObserver = new ResizeObserver((entries) => {

@@ -239,35 +239,64 @@ def get_bars(
             else:
                 feed_status = "LIVE" if lq.realtime else "DELAYED"
 
-            # 0-Latency Live Quote Injection into the latest daily candle
-            if lq.price > 0 and candle_data and not is_15m:
-                today_str = today.isoformat()
+            # 0-Latency Live Quote Injection into latest daily or 15m candle
+            if lq.price > 0 and candle_data:
                 live_p = float(lq.price)
-                if candle_data[-1]["time"] == today_str:
-                    candle_data[-1]["close"] = round(live_p, 2)
-                    candle_data[-1]["high"] = max(candle_data[-1]["high"], round(float(getattr(lq, "high", None) or live_p), 2))
-                    candle_data[-1]["low"] = min(candle_data[-1]["low"], round(float(getattr(lq, "low", None) or live_p), 2))
-                    if lq.day_volume > 0:
-                        candle_data[-1]["volume"] = float(lq.day_volume)
+                if is_15m:
+                    current_ts = int(now_utc.timestamp())
+                    slot_ts = (current_ts // 900) * 900
+                    last_ts = candle_data[-1]["time"]
+                    if last_ts == slot_ts:
+                        candle_data[-1]["close"] = round(live_p, 2)
+                        candle_data[-1]["high"] = max(candle_data[-1]["high"], round(live_p, 2))
+                        candle_data[-1]["low"] = min(candle_data[-1]["low"], round(live_p, 2))
+                    elif current_ts - last_ts < 3600 * 8:
+                        candle_data.append({
+                            "time": slot_ts,
+                            "open": round(live_p, 2),
+                            "high": round(live_p, 2),
+                            "low": round(live_p, 2),
+                            "close": round(live_p, 2),
+                            "volume": float(getattr(lq, "day_volume", 0.0) or 0.0),
+                            "ema20": candle_data[-1].get("ema20"),
+                            "ema50": candle_data[-1].get("ema50"),
+                            "sma50": candle_data[-1].get("sma50"),
+                            "sma150": candle_data[-1].get("sma150"),
+                            "sma200": candle_data[-1].get("sma200"),
+                            "rsi14": candle_data[-1].get("rsi14"),
+                            "atr14": candle_data[-1].get("atr14"),
+                        })
+                    else:
+                        candle_data[-1]["close"] = round(live_p, 2)
+                        candle_data[-1]["high"] = max(candle_data[-1]["high"], round(live_p, 2))
+                        candle_data[-1]["low"] = min(candle_data[-1]["low"], round(live_p, 2))
                 else:
-                    open_val = float(getattr(lq, "open", None) or live_p)
-                    high_val = max(open_val, live_p, float(getattr(lq, "high", None) or live_p))
-                    low_val = min(open_val, live_p, float(getattr(lq, "low", None) or live_p))
-                    candle_data.append({
-                        "time": today_str,
-                        "open": round(open_val, 2),
-                        "high": round(high_val, 2),
-                        "low": round(low_val, 2),
-                        "close": round(live_p, 2),
-                        "volume": float(lq.day_volume or 0.0),
-                        "ema20": candle_data[-1]["ema20"],
-                        "ema50": candle_data[-1]["ema50"],
-                        "sma50": candle_data[-1]["sma50"],
-                        "sma150": candle_data[-1]["sma150"],
-                        "sma200": candle_data[-1]["sma200"],
-                        "rsi14": candle_data[-1]["rsi14"],
-                        "atr14": candle_data[-1]["atr14"],
-                    })
+                    today_str = today.isoformat()
+                    if candle_data[-1]["time"] == today_str:
+                        candle_data[-1]["close"] = round(live_p, 2)
+                        candle_data[-1]["high"] = max(candle_data[-1]["high"], round(float(getattr(lq, "high", None) or live_p), 2))
+                        candle_data[-1]["low"] = min(candle_data[-1]["low"], round(float(getattr(lq, "low", None) or live_p), 2))
+                        if lq.day_volume > 0:
+                            candle_data[-1]["volume"] = float(lq.day_volume)
+                    else:
+                        open_val = float(getattr(lq, "open", None) or live_p)
+                        high_val = max(open_val, live_p, float(getattr(lq, "high", None) or live_p))
+                        low_val = min(open_val, live_p, float(getattr(lq, "low", None) or live_p))
+                        candle_data.append({
+                            "time": today_str,
+                            "open": round(open_val, 2),
+                            "high": round(high_val, 2),
+                            "low": round(low_val, 2),
+                            "close": round(live_p, 2),
+                            "volume": float(lq.day_volume or 0.0),
+                            "ema20": candle_data[-1]["ema20"],
+                            "ema50": candle_data[-1]["ema50"],
+                            "sma50": candle_data[-1]["sma50"],
+                            "sma150": candle_data[-1]["sma150"],
+                            "sma200": candle_data[-1]["sma200"],
+                            "rsi14": candle_data[-1]["rsi14"],
+                            "atr14": candle_data[-1]["atr14"],
+                        })
     except Exception as e:
         logger.warning(f"Could not inject live quote into chart for {clean_sym}: {e}")
         feed_status = "DISCONNECTED"

@@ -102,6 +102,26 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+# High-priority, zero-latency health and liveness endpoints for Render/orchestration probes
+@app.api_route("/", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+def root():
+    return {
+        "status": "HEALTHY",
+        "service": "algo-trading-backend",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/api/health",
+        "disclaimer": "Signals are rules-based, not advice. Past/backtested performance does not guarantee future results.",
+    }
+
+
+@app.api_route("/health", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+@app.api_route("/healthz", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+@app.api_route("/ping", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+def liveness():
+    return {"status": "HEALTHY", "service": "algo-trading-backend"}
+
+
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     if (FRONTEND_DIST / "assets").exists():
@@ -109,23 +129,9 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("redoc") or full_path.startswith("openapi.json"):
+        if any(full_path.startswith(p) for p in ("api", "docs", "redoc", "openapi.json", "health", "healthz", "ping")):
             raise HTTPException(status_code=404, detail="Not Found")
         index_file = FRONTEND_DIST / "index.html"
         if index_file.exists():
             return FileResponse(index_file)
         return {"app": "Swing Trading Intelligence Platform", "status": "Running"}
-else:
-    @app.api_route("/", methods=["GET", "HEAD"])
-    def root():
-        return {
-            "app": "Swing Trading Intelligence Platform",
-            "version": "1.0.0",
-            "docs": "/docs",
-            "health": "/api/health",
-            "disclaimer": "Signals are rules-based, not advice. Past/backtested performance does not guarantee future results.",
-        }
-
-    @app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
-    def root_health():
-        return {"status": "HEALTHY", "service": "algo-trading-backend"}
