@@ -178,10 +178,17 @@ def get_bars(
     if not is_15m or not candle_data:
         # Daily bars
         start_date = today - datetime.timedelta(days=max(n * 2, 365))
-        bars = provider_manager.get_daily_bars([clean_sym], start_date, today, market=market, db=db)
-        daily_df = bars.get(clean_sym)
+        try:
+            bars = provider_manager.get_daily_bars([clean_sym], start_date, today, market=market, db=db)
+            daily_df = bars.get(clean_sym)
+        except Exception as bars_err:
+            logger.error(f"get_daily_bars crashed for {clean_sym}: {bars_err}")
+            daily_df = None
         if daily_df is None or daily_df.empty:
-            raise HTTPException(status_code=404, detail=f"No bars found for symbol {clean_sym}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Market data temporarily unavailable for {clean_sym}. No data from any provider. Try again shortly."
+            )
 
         daily_df = add_all_indicators(daily_df)
         recent_daily = daily_df.iloc[-min(len(daily_df), n):]

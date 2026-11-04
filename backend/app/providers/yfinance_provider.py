@@ -107,11 +107,9 @@ class YFinanceProvider:
         except Exception as e:
             logger.error(f"YFinance batch download error: {e}")
 
-        # If any requested symbol is missing, generate synthetic bars for testing/backtesting
-        for sym in symbols:
-            clean_s = sym.replace(".NS", "")
-            if clean_s not in results or results[clean_s].empty:
-                results[clean_s] = self._generate_synthetic_bars(clean_s, start, end)
+        # If yfinance returned no real data for a symbol, do NOT generate synthetic bars.
+        # Return empty dict for missing symbols so the caller can raise 404 gracefully.
+        # Synthetic bars were causing "SENSEX at ₹819" / "GOOGL candle mismatch" bugs.
 
         return results
 

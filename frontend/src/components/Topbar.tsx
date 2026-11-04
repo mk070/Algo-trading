@@ -178,7 +178,9 @@ export const Topbar: React.FC<TopbarProps> = ({
               {currentMarket} {regime.status}
             </span>
             <span className="hidden xl:inline text-[11px] font-mono text-slate-400 border-l border-slate-700/60 pl-2">
-              {currentMarket === 'IN' ? 'Nifty: 24,180' : 'S&P: 5,860'}
+              {regime.index_symbol
+                ? `${regime.index_symbol.replace('^', '')}: ${Number(regime.last_close || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                : (currentMarket === 'IN' ? 'NIFTY: 24,180' : 'S&P: 5,860')}
             </span>
           </div>
         )}

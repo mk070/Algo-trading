@@ -196,6 +196,8 @@ class ProviderManager:
         """Multi-worker state synchronization: upserts latest quotes into PostgreSQL."""
         try:
             for sym, q in quotes.items():
+                if q.provider in ('synthetic_fallback', 'mock', 'synthetic_fixture'):
+                    continue
                 existing = (
                     db.query(LatestQuote)
                     .filter(LatestQuote.symbol == sym, LatestQuote.market == market)
@@ -258,6 +260,8 @@ class ProviderManager:
                     .all()
                 )
                 for row in db_quotes:
+                    if row.provider in ('synthetic_fallback', 'mock', 'synthetic_fixture'):
+                        continue
                     row_ex_ts = row.exchange_ts if row.exchange_ts.tzinfo else row.exchange_ts.replace(tzinfo=datetime.timezone.utc)
                     age_sec = (now - row_ex_ts).total_seconds()
                     max_age = 20.0 if row.realtime else 60.0
@@ -334,8 +338,27 @@ class ProviderManager:
                         ask=raw_q.ask,
                     )
                     quotes[sym] = q
-                    if sym in missing:
-                        missing.remove(sym)
+                    clean_alias = sym.replace('BSE:', '').replace('NSE:', '').strip().upper()
+                    quotes[clean_alias] = q
+                    if clean_alias in ('SENSEX', 'BSESN'):
+                        quotes['SENSEX'] = q
+                        quotes['BSE:SENSEX'] = q
+                        quotes['BSESN'] = q
+                    elif clean_alias in ('NIFTY', 'NIFTY50'):
+                        quotes['NIFTY'] = q
+                        quotes['NSE:NIFTY'] = q
+                        quotes['NIFTY50'] = q
+                    elif clean_alias in ('BANKNIFTY',):
+                        quotes['BANKNIFTY'] = q
+                        quotes['NSE:BANKNIFTY'] = q
+                    else:
+                        quotes[f'BSE:{clean_alias}'] = q
+                        quotes[f'NSE:{clean_alias}'] = q
+
+                    for candidate in list(missing):
+                        cand_clean = candidate.replace('BSE:', '').replace('NSE:', '').strip().upper()
+                        if candidate in quotes or cand_clean == clean_alias:
+                            missing.remove(candidate)
             except Exception as e:
                 logger.warning(f"Provider {provider.name} quote failed: {e}")
 

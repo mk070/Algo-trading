@@ -55,10 +55,11 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
 
   // Compute live pulse card metrics
   const getCardData = (name: string, ticker: string, defaultPrice: string, defaultChg: string, defaultPct: string, isDefaultPos: boolean, unit: string) => {
-    const q = liveQuotes[ticker] || liveQuotes[ticker.replace('BSE:', '')];
-    if (q && q.price > 0) {
-      const priceVal = q.price;
-      const prevClose = q.close || priceVal;
+    const rawTicker = ticker.replace('BSE:', '').replace('NSE:', '').trim().toUpperCase();
+    const q = liveQuotes[ticker] || liveQuotes[rawTicker] || liveQuotes[`BSE:${rawTicker}`] || liveQuotes[`NSE:${rawTicker}`];
+    const priceVal = q ? Number(q.price || q.last_price || 0) : 0;
+    if (priceVal > 0) {
+      const prevClose = Number(q.close || q.open || priceVal);
       const chgVal = priceVal - prevClose;
       const pctVal = prevClose > 0 ? (chgVal / prevClose) * 100 : 0;
       const isPos = chgVal >= 0;
@@ -87,14 +88,14 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
 
   const pulseCards = currentMarket === 'IN'
     ? [
-        getCardData('SENSEX', 'BSE:SENSEX', '75,692.78', '+1,233.25', '+1.66%', true, ''),
-        getCardData('RELIANCE', 'RELIANCE', '1,163.55', '-5.20', '-0.44%', false, 'INR'),
-        getCardData('TCS', 'TCS', '2,496.00', '+15.50', '+0.62%', true, 'INR'),
-        getCardData('HDFCBANK', 'HDFCBANK', '692.30', '+7.30', '+1.07%', true, 'INR'),
+        getCardData('SENSEX', 'BSE:SENSEX', '77,301.40', '+383.55', '+0.50%', true, ''),
+        getCardData('RELIANCE', 'RELIANCE', '1,307.90', '+7.90', '+0.61%', true, 'INR'),
+        getCardData('TCS', 'TCS', '2,499.10', '-2.60', '-0.10%', false, 'INR'),
+        getCardData('HDFCBANK', 'HDFCBANK', '725.50', '+25.50', '+3.64%', true, 'INR'),
       ]
     : [
-        getCardData('S&P 500', 'SPY', '758.35', '+1.39', '+0.18%', true, 'USD'),
-        getCardData('Nasdaq 100', 'QQQ', '691.55', '+3.33', '+0.48%', true, 'USD'),
+        getCardData('S&P 500', 'SPY', '766.51', '+1.39', '+0.18%', true, 'USD'),
+        getCardData('Nasdaq 100', 'QQQ', '693.82', '+3.33', '+0.48%', true, 'USD'),
         getCardData('Dow 30', 'DIA', '522.00', '+5.21', '+1.01%', true, 'USD'),
         getCardData('Russell 2000', 'IWM', '281.30', '+2.88', '+1.03%', true, 'USD'),
       ];

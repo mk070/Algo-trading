@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   ExternalLink,
@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { NAV_GROUPS } from './navItems';
+import { apiClient } from '../api/client';
 
 interface SidebarProps {
   currentMarket: 'IN' | 'US';
@@ -31,21 +32,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
   feedStatus = 'LIVE',
 }) => {
   const location = useLocation();
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, any>>({});
 
-  // Curated pinned stocks per market
-  const pinnedStocks = currentMarket === 'IN'
+  const defaultPinned = currentMarket === 'IN'
     ? [
-        { symbol: 'TMPV', name: 'Tata Motors PV', price: '₹644.00', chg: '+0.00%', isPos: true },
-        { symbol: 'RELIANCE', name: 'Reliance Ind.', price: '₹1,163.55', chg: '-0.44%', isPos: false },
-        { symbol: 'TCS', name: 'Tata Consultancy', price: '₹2,496.00', chg: '+0.62%', isPos: true },
-        { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd', price: '₹692.30', chg: '+1.07%', isPos: true },
+        { symbol: 'TMPV', name: 'Tata Motors PV', price: 276.70, close: 276.70 },
+        { symbol: 'RELIANCE', name: 'Reliance Ind.', price: 1307.90, close: 1300.00 },
+        { symbol: 'TCS', name: 'Tata Consultancy', price: 2499.10, close: 2483.60 },
+        { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd', price: 725.50, close: 700.00 },
       ]
     : [
-        { symbol: 'SPY', name: 'S&P 500 ETF', price: '$760.11', chg: '+0.58%', isPos: true },
-        { symbol: 'QQQ', name: 'Invesco QQQ', price: '$693.82', chg: '+0.48%', isPos: true },
-        { symbol: 'NVDA', name: 'NVIDIA Corp', price: '$141.50', chg: '+2.14%', isPos: true },
-        { symbol: 'AAPL', name: 'Apple Inc', price: '$232.80', chg: '-0.32%', isPos: false },
+        { symbol: 'SPY', name: 'S&P 500 ETF', price: 766.51, close: 760.11 },
+        { symbol: 'QQQ', name: 'Invesco QQQ', price: 693.82, close: 690.49 },
+        { symbol: 'NVDA', name: 'NVIDIA Corp', price: 201.75, close: 198.50 },
+        { symbol: 'AAPL', name: 'Apple Inc', price: 352.44, close: 341.88 },
       ];
+
+  // Fetch live quotes for pinned stocks
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPinnedQuotes = async () => {
+      try {
+        const symbols = defaultPinned.map((s) => s.symbol);
+        const data = await apiClient.getQuotes(symbols, currentMarket);
+        if (isMounted && data && typeof data === 'object') {
+          setLiveQuotes(data);
+        }
+      } catch (err) {
+        // Silently keep default prices on network error
+      }
+    };
+
+    fetchPinnedQuotes();
+    const interval = setInterval(fetchPinnedQuotes, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [currentMarket]);
+
+  const currencySymbol = currentMarket === 'IN' ? '₹' : '$';
+
+  const pinnedStocks = defaultPinned.map((item) => {
+    const q = liveQuotes[item.symbol] || liveQuotes[item.symbol.toUpperCase()];
+    const currentPrice = q ? Number(q.price || q.last_price || item.price) : item.price;
+    const prevClose = q ? Number(q.close || q.open || item.close) : item.close;
+    const chgVal = currentPrice - prevClose;
+    const pctVal = prevClose > 0 ? (chgVal / prevClose) * 100 : 0;
+    const isPos = chgVal >= 0;
+
+    return {
+      symbol: item.symbol,
+      name: item.name,
+      price: `${currencySymbol}${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      chg: `${isPos ? '+' : ''}${pctVal.toFixed(2)}%`,
+      isPos,
+    };
+  });
 
   const handleStockClick = (symbol: string) => {
     if (onCloseMobile) onCloseMobile();
