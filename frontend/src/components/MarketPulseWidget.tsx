@@ -49,7 +49,7 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
 
   useEffect(() => {
     fetchLiveMarketData();
-    const interval = setInterval(fetchLiveMarketData, 30000); // 30s auto-refresh
+    const interval = setInterval(fetchLiveMarketData, 4000); // 4s real-time streaming
     return () => clearInterval(interval);
   }, [currentMarket]);
 
@@ -59,9 +59,9 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
     const q = liveQuotes[ticker] || liveQuotes[rawTicker] || liveQuotes[`BSE:${rawTicker}`] || liveQuotes[`NSE:${rawTicker}`];
     const priceVal = q ? Number(q.price || q.last_price || 0) : 0;
     if (priceVal > 0) {
-      const prevClose = Number(q.close || q.open || priceVal);
-      const chgVal = priceVal - prevClose;
-      const pctVal = prevClose > 0 ? (chgVal / prevClose) * 100 : 0;
+      const prevClose = Number(q.prev_close || q.close || q.open || priceVal);
+      const chgVal = q.change !== undefined && q.change !== null ? Number(q.change) : (priceVal - prevClose);
+      const pctVal = q.change_pct !== undefined && q.change_pct !== null ? Number(q.change_pct) : (prevClose > 0 ? (chgVal / prevClose) * 100 : 0);
       const isPos = chgVal >= 0;
 
       return {
@@ -94,10 +94,10 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
         getCardData('HDFCBANK', 'HDFCBANK', '725.50', '+25.50', '+3.64%', true, 'INR'),
       ]
     : [
-        getCardData('S&P 500', 'SPY', '766.51', '+1.39', '+0.18%', true, 'USD'),
-        getCardData('Nasdaq 100', 'QQQ', '693.82', '+3.33', '+0.48%', true, 'USD'),
-        getCardData('Dow 30', 'DIA', '522.00', '+5.21', '+1.01%', true, 'USD'),
-        getCardData('Russell 2000', 'IWM', '281.30', '+2.88', '+1.03%', true, 'USD'),
+        getCardData('S&P 500', 'SPY', '768.18', '+13.80', '+1.83%', true, 'USD'),
+        getCardData('Nasdaq 100', 'QQQ', '695.12', '+11.30', '+1.65%', true, 'USD'),
+        getCardData('Dow 30', 'DIA', '531.84', '+9.84', '+1.89%', true, 'USD'),
+        getCardData('Russell 2000', 'IWM', '283.98', '+2.68', '+0.95%', true, 'USD'),
       ];
 
   const leaderGroups = currentMarket === 'IN'
@@ -114,12 +114,12 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
 
   // Compute live quote rows for sectors
   const formatQuoteRow = (name: string, symbol: string, fallbackVal: string, fallbackChg: string, fallbackPct: string, isFallbackPos: boolean) => {
-    const q = liveQuotes[symbol];
+    const q = liveQuotes[symbol] || liveQuotes[symbol.toUpperCase()];
     if (q && q.price > 0) {
       const priceVal = q.price;
-      const prevClose = q.close || priceVal;
-      const chgVal = priceVal - prevClose;
-      const pctVal = prevClose > 0 ? (chgVal / prevClose) * 100 : 0;
+      const prevClose = q.prev_close || q.close || priceVal;
+      const chgVal = q.change !== undefined && q.change !== null ? Number(q.change) : (priceVal - prevClose);
+      const pctVal = q.change_pct !== undefined && q.change_pct !== null ? Number(q.change_pct) : (prevClose > 0 ? (chgVal / prevClose) * 100 : 0);
       const isPos = chgVal >= 0;
 
       return {

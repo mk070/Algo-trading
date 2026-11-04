@@ -261,7 +261,7 @@ class AngelOneProvider:
             if not token:
                 continue
             try:
-                time.sleep(0.35)
+                time.sleep(0.08)
                 if clean_sym in ("SENSEX", "BSESN"):
                     res = self.smart_api.ltpData("BSE", "SENSEX", token)
                 elif clean_sym in ("NIFTY", "NIFTY50"):
@@ -272,18 +272,29 @@ class AngelOneProvider:
                 if res and res.get("status") and res.get("data"):
                     d = res["data"]
                     last_price = float(d.get("ltp", 0.0))
+                    prev_c = float(d.get("close", last_price))
+                    chg = round(last_price - prev_c, 2) if prev_c > 0 else 0.0
+                    chg_pct = round(((last_price - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0
                     q = Quote(
                         symbol=clean_sym,
                         last_price=last_price,
+                        price=last_price,
                         day_volume=0.0,
                         timestamp=now,
+                        exchange_ts=now,
+                        received_ts=now,
                         source=self.name,
+                        provider=self.name,
                         is_realtime=True,
+                        realtime=True,
                         is_stale=False,
                         open=float(d.get("open", last_price)),
                         high=float(d.get("high", last_price)),
                         low=float(d.get("low", last_price)),
-                        close=float(d.get("close", last_price)),
+                        close=prev_c,
+                        prev_close=prev_c,
+                        change=chg,
+                        change_pct=chg_pct,
                     )
                     quotes_dict[clean_sym] = q
                     quotes_dict[sym] = q

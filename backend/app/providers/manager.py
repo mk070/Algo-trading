@@ -273,6 +273,10 @@ class ProviderManager:
                     max_age = 20.0 if row.realtime else 60.0
                     freshness = QuoteFreshness.FRESH if age_sec <= max_age else QuoteFreshness.STALE
 
+                    prev_c = row.close or row.open or row.price
+                    chg = round(row.price - prev_c, 2) if prev_c > 0 else 0.0
+                    chg_pct = round(((row.price - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0
+
                     q = Quote(
                         symbol=row.symbol,
                         market=row.market,
@@ -287,6 +291,9 @@ class ProviderManager:
                         high=row.high,
                         low=row.low,
                         close=row.close,
+                        prev_close=row.close,
+                        change=chg,
+                        change_pct=chg_pct,
                     )
                     quotes[row.symbol] = q
                     if age_sec <= max_age and row.symbol in missing:
@@ -326,6 +333,10 @@ class ProviderManager:
                     else:
                         freshness = QuoteFreshness.FRESH
 
+                    prev_c = raw_q.prev_close or raw_q.close or raw_q.open or raw_q.last_price
+                    chg = raw_q.change if raw_q.change is not None else (round(raw_q.last_price - prev_c, 2) if prev_c > 0 else 0.0)
+                    chg_pct = raw_q.change_pct if raw_q.change_pct is not None else (round(((raw_q.last_price - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0)
+
                     q = Quote(
                         symbol=sym,
                         market=market,
@@ -339,7 +350,10 @@ class ProviderManager:
                         open=raw_q.open,
                         high=raw_q.high,
                         low=raw_q.low,
-                        close=raw_q.close,
+                        close=raw_q.close or prev_c,
+                        prev_close=prev_c,
+                        change=chg,
+                        change_pct=chg_pct,
                         bid=raw_q.bid,
                         ask=raw_q.ask,
                     )

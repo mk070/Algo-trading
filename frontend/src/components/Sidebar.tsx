@@ -64,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     fetchPinnedQuotes();
-    const interval = setInterval(fetchPinnedQuotes, 15000);
+    const interval = setInterval(fetchPinnedQuotes, 4000); // 4s real-time streaming
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -76,9 +76,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const pinnedStocks = defaultPinned.map((item) => {
     const q = liveQuotes[item.symbol] || liveQuotes[item.symbol.toUpperCase()];
     const currentPrice = q ? Number(q.price || q.last_price || item.price) : item.price;
-    const prevClose = q ? Number(q.close || q.open || item.close) : item.close;
-    const chgVal = currentPrice - prevClose;
-    const pctVal = prevClose > 0 ? (chgVal / prevClose) * 100 : 0;
+    const prevClose = q ? Number(q.prev_close || q.close || q.open || item.close) : item.close;
+    const chgVal = q && q.change !== undefined && q.change !== null ? Number(q.change) : (currentPrice - prevClose);
+    const pctVal = q && q.change_pct !== undefined && q.change_pct !== null ? Number(q.change_pct) : (prevClose > 0 ? (chgVal / prevClose) * 100 : 0);
     const isPos = chgVal >= 0;
 
     return {

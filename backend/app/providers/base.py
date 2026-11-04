@@ -32,6 +32,9 @@ class DecisionQuote(BaseModel):
     high: Optional[float] = None
     low: Optional[float] = None
     close: Optional[float] = None
+    prev_close: Optional[float] = None
+    change: Optional[float] = None
+    change_pct: Optional[float] = None
     bid: Optional[float] = None
     ask: Optional[float] = None
 
@@ -57,7 +60,9 @@ class DecisionQuote(BaseModel):
 
     @property
     def pct_change(self) -> float:
-        ref = self.close or self.open
+        if self.change_pct is not None:
+            return round(float(self.change_pct), 2)
+        ref = self.prev_close or self.close or self.open
         if ref and ref > 0:
             return round(((self.price - ref) / ref) * 100.0, 2)
         return 0.0
@@ -81,6 +86,9 @@ class Quote(BaseModel):
     high: Optional[float] = None
     low: Optional[float] = None
     close: Optional[float] = None
+    prev_close: Optional[float] = None
+    change: Optional[float] = None
+    change_pct: Optional[float] = None
     bid: Optional[float] = None
     ask: Optional[float] = None
 
@@ -140,7 +148,9 @@ class Quote(BaseModel):
 
     @property
     def pct_change(self) -> float:
-        ref = self.close or self.open
+        if self.change_pct is not None:
+            return round(float(self.change_pct), 2)
+        ref = self.prev_close or self.close or self.open
         if ref and ref > 0:
             return round(((self.price - ref) / ref) * 100.0, 2)
         return 0.0

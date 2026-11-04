@@ -223,10 +223,15 @@ class YFinanceProvider:
                 if last_price and float(last_price) > 0:
                     lp = float(last_price)
                     pc = float(prev_close) if prev_close else lp
+                    chg = round(lp - pc, 2)
+                    chg_pct = round(((lp - pc) / pc) * 100.0, 2) if pc > 0 else 0.0
                     q_obj = Quote(
                         symbol=clean_s,
                         price=lp,
                         close=pc,
+                        prev_close=pc,
+                        change=chg,
+                        change_pct=chg_pct,
                         open=float(day_open) if day_open else lp,
                         high=float(day_high) if day_high else lp,
                         low=float(day_low) if day_low else lp,
@@ -252,10 +257,15 @@ class YFinanceProvider:
                     if len(hist) > 0:
                         lp = float(hist["Close"].iloc[-1])
                         pc = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else lp
+                        chg = round(lp - pc, 2)
+                        chg_pct = round(((lp - pc) / pc) * 100.0, 2) if pc > 0 else 0.0
                         q_obj = Quote(
                             symbol=clean_s,
                             price=lp,
                             close=pc,
+                            prev_close=pc,
+                            change=chg,
+                            change_pct=chg_pct,
                             open=float(hist["Open"].iloc[-1]),
                             high=float(hist["High"].iloc[-1]),
                             low=float(hist["Low"].iloc[-1]),

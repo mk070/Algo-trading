@@ -99,25 +99,48 @@ class AlpacaProvider:
                     now = datetime.datetime.utcnow()
                     for sym, snap in data.items():
                         trade = snap.get("latestTrade", {})
-                        price = float(trade.get("p", 0.0))
                         daily_bar = snap.get("dailyBar", {})
+                        prev_bar = snap.get("prevDailyBar", {})
+                        latest_quote = snap.get("latestQuote", {})
+
+                        price = float(trade.get("p", 0.0))
+                        if price <= 0:
+                            price = float(daily_bar.get("c", 0.0)) or float(snap.get("minuteBar", {}).get("c", 0.0))
+
                         vol = float(daily_bar.get("v", 0.0))
                         open_p = float(daily_bar.get("o", price))
                         high_p = float(daily_bar.get("h", price))
                         low_p = float(daily_bar.get("l", price))
-                        close_p = float(daily_bar.get("c", price))
+                        prev_close = float(prev_bar.get("c", 0.0)) or open_p
+
+                        chg = round(price - prev_close, 2) if prev_close > 0 else 0.0
+                        chg_pct = round(((price - prev_close) / prev_close) * 100.0, 2) if prev_close > 0 else 0.0
+
+                        bid_p = float(latest_quote.get("bp", 0.0)) or None
+                        ask_p = float(latest_quote.get("ap", 0.0)) or None
+
                         quotes_dict[sym] = Quote(
                             symbol=sym,
                             last_price=price,
+                            price=price,
                             day_volume=vol,
                             timestamp=now,
+                            exchange_ts=now,
+                            received_ts=now,
                             source=self.name,
+                            provider=self.name,
                             is_realtime=True,
+                            realtime=True,
                             is_stale=False,
                             open=open_p,
                             high=high_p,
                             low=low_p,
-                            close=close_p,
+                            close=prev_close,
+                            prev_close=prev_close,
+                            change=chg,
+                            change_pct=chg_pct,
+                            bid=bid_p,
+                            ask=ask_p,
                         )
         except Exception as e:
             logger.error(f"Alpaca quotes error: {e}")
