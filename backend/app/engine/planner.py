@@ -201,10 +201,16 @@ class Planner:
                 sym, df, rs_rank=stock_rs_rank, index_ret126=index_ret126
             )
 
-            trigger = decision.trigger or (cand.pivot if cand else round(last_price * 1.02, 2))
-            stop = decision.stop or (cand.stop_loss if cand else round(last_price * 0.95, 2))
-            target1 = decision.target1 or round(trigger + 2.0 * max(0.1, trigger - stop), 2)
-            qty = decision.qty if decision.qty and decision.qty > 0 else 1
+            if cand:
+                trigger = decision.trigger or cand.pivot
+                stop = decision.stop or cand.stop_loss
+                target1 = decision.target1 or round(trigger + 2.0 * max(0.1, trigger - stop), 2)
+                qty = decision.qty if (decision.final_decision == "ALLOW" and decision.qty and decision.qty > 0) else 0
+            else:
+                trigger = 0.0
+                stop = 0.0
+                target1 = 0.0
+                qty = 0
 
             is_already_held = sym in held_symbols
             first_failing = decision.all_rejection_reasons[0] if decision.all_rejection_reasons else None
@@ -235,7 +241,13 @@ class Planner:
                 score -= decision.cost_in_r * 5.0
 
             valid_until = session_date + datetime.timedelta(days=2)
-            reasons = decision.all_rejection_reasons if decision.all_rejection_reasons else (cand.reasons if cand else ["No valid base consolidation"])
+            raw_reasons = decision.all_rejection_reasons if decision.all_rejection_reasons else (cand.reasons if cand else ["No valid base consolidation or pullback pattern detected"])
+            reasons = [
+                r for r in raw_reasons
+                if isinstance(r, str) and r.strip() and not ("price 0.00" in r and not cand)
+            ]
+            if not reasons:
+                reasons = ["No valid base consolidation or pullback pattern detected"] if not cand else ["Setup pending breakout confirmation"]
 
             sig = PlannedSignal(
                 symbol=sym,

@@ -40,33 +40,45 @@ def get_trade_plan(
     signals = db.query(Signal).filter(Signal.scan_id == scan_row.id).all()
     sig_dicts = []
     shadow_dicts = []
+    candidate_dicts = []
+
+    ACTIONABLE_STATES = {"VALID_SETUP", "APPROACHING", "TRIGGERED_PROVISIONAL", "TRIGGERED_CONFIRMED"}
+
     for s in signals:
+        reasons_raw = json.loads(s.reasons_json) if s.reasons_json else []
+        clean_reasons = [r for r in reasons_raw if isinstance(r, str) and r.strip()]
         item = {
             "id": s.id,
             "symbol": s.symbol,
             "market": s.market,
             "setup": s.setup,
-            "trigger": s.trigger,
-            "entry_zone_high": s.entry_zone_high,
-            "stop": s.stop,
-            "target1": s.target1,
-            "qty": s.qty,
-            "risk_amount": s.risk_amount,
-            "cost_estimate": s.cost_estimate,
-            "cost_in_r": s.cost_in_r,
+            "trigger": s.trigger if s.trigger and s.trigger > 0 else 0.0,
+            "entry_zone_high": s.entry_zone_high if s.entry_zone_high and s.entry_zone_high > 0 else 0.0,
+            "stop": s.stop if s.stop and s.stop > 0 else 0.0,
+            "target1": s.target1 if s.target1 and s.target1 > 0 else 0.0,
+            "qty": s.qty if s.qty and s.qty > 0 else 0,
+            "risk_amount": s.risk_amount or 0.0,
+            "cost_estimate": s.cost_estimate or 0.0,
+            "cost_in_r": s.cost_in_r or 0.0,
             "rs_rank": s.rs_rank,
             "score": s.score,
             "atr": s.atr,
             "gap95": s.gap95,
             "state": s.state,
-            "reasons": json.loads(s.reasons_json) if s.reasons_json else [],
+            "reasons": clean_reasons,
             "news_coverage": json.loads(s.news_flags_json) if s.news_flags_json else {},
             "valid_until": s.valid_until.isoformat() if s.valid_until else None,
         }
-        if s.setup == "PULLBACK":
-            shadow_dicts.append(item)
+
+        # ONLY actionable, verified setups belong in Trade Plan signals!
+        # Everything else (NO_SETUP, BLOCKED, MONITORING) belongs in candidate_opportunities
+        if s.state in ACTIONABLE_STATES and s.setup in ("VCP", "BREAKOUT", "PULLBACK") and s.trigger and s.trigger > 0:
+            if s.setup == "PULLBACK":
+                shadow_dicts.append(item)
+            else:
+                sig_dicts.append(item)
         else:
-            sig_dicts.append(item)
+            candidate_dicts.append(item)
 
     return {
         "market": market,
@@ -74,6 +86,7 @@ def get_trade_plan(
         "regime": json.loads(scan_row.regime_detail_json) if scan_row.regime_detail_json else {},
         "signals": sig_dicts,
         "shadow_signals": shadow_dicts,
+        "candidate_opportunities": candidate_dicts,
         "universe_size": scan_row.universe_size,
         "passed_filters": scan_row.passed_filters,
         "data_warnings": json.loads(scan_row.data_warnings_json) if scan_row.data_warnings_json else [],

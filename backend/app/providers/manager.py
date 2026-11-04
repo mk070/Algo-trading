@@ -98,10 +98,16 @@ class ProviderManager:
             try:
                 rl = request_layers.get(provider.name)
                 req_key = f"daily_bars:{provider.name}:{market}:{','.join(sorted(missing_symbols))}:{start}:{end}"
+                def _fetch_bars(p=provider, syms=missing_symbols, s=start, e=end, m=market):
+                    try:
+                        return p.daily_bars(syms, s, e, market=m)
+                    except TypeError:
+                        return p.daily_bars(syms, s, e)
+
                 if rl:
-                    bars = rl.execute(req_key, lambda: provider.daily_bars(missing_symbols, start, end), ttl_sec=300.0)
+                    bars = rl.execute(req_key, _fetch_bars, ttl_sec=300.0)
                 else:
-                    bars = provider.daily_bars(missing_symbols, start, end)
+                    bars = _fetch_bars()
 
                 for sym, df in bars.items():
                     if df is not None and not df.empty:

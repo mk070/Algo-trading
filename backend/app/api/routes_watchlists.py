@@ -252,11 +252,14 @@ def get_watchlist_items(
 
         last_price = q.last_price if q else (sig.trigger if sig else None)
         day_change = q.pct_change if q else 0.0
-        trigger = sig.trigger if sig else None
-        stop = sig.stop if sig else None
         setup = sig.setup if sig else "MONITORING"
         state = sig.state if sig else "WATCHLIST"
         rs_rank = sig.rs_rank if sig else 0.50
+
+        # Only valid setups have an actionable trigger and stop loss
+        has_valid_setup = sig is not None and sig.state not in ("NO_SETUP", "MONITORING", "WATCHLIST") and sig.setup in ("VCP", "BREAKOUT", "PULLBACK") and (sig.trigger or 0) > 0
+        trigger = sig.trigger if (has_valid_setup and sig) else None
+        stop = sig.stop if (has_valid_setup and sig) else None
 
         # Check if already held
         is_held = sym in held_symbols
@@ -269,18 +272,19 @@ def get_watchlist_items(
             try:
                 reasons = json.loads(sig.reasons_json)
                 if reasons and isinstance(reasons, list):
-                    failing_check = reasons[0]
+                    clean_reasons = [r for r in reasons if isinstance(r, str) and r.strip() and "price 0.00" not in r]
+                    failing_check = clean_reasons[0] if clean_reasons else None
             except Exception:
                 pass
 
         dist_trigger = (
             ((trigger - last_price) / trigger * 100.0)
-            if (trigger and trigger > 0 and last_price and last_price > 0)
+            if (has_valid_setup and trigger and trigger > 0 and last_price and last_price > 0)
             else None
         )
         dist_stop = (
             ((last_price - stop) / last_price * 100.0)
-            if (stop and stop > 0 and last_price and last_price > 0)
+            if (has_valid_setup and stop and stop > 0 and last_price and last_price > 0)
             else None
         )
 

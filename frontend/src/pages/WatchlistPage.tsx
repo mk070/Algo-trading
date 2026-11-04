@@ -189,21 +189,23 @@ function StockRow({
 
         {/* Trigger */}
         <td className="px-3 py-2.5 text-right font-mono text-xs text-emerald-400 tabular-nums">
-          {row.trigger != null ? fmtPrice(row.trigger, market) : '—'}
+          {row.trigger != null && row.trigger > 0 && row.filter_category !== 'NO_SETUP' ? fmtPrice(row.trigger, market) : <span className="text-slate-500">—</span>}
         </td>
 
         {/* Dist to trigger */}
         <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums">
-          {row.dist_trigger_pct != null ? (
+          {row.trigger != null && row.trigger > 0 && row.filter_category !== 'NO_SETUP' && row.dist_trigger_pct != null ? (
             <span className={row.dist_trigger_pct <= 2.5 ? 'text-amber-400 font-bold' : 'text-slate-400'}>
               {row.dist_trigger_pct > 0 ? `${row.dist_trigger_pct.toFixed(1)}%` : 'Triggered'}
             </span>
-          ) : '—'}
+          ) : (
+            <span className="text-slate-600 font-sans text-[11px]">Building Base</span>
+          )}
         </td>
 
         {/* Stop */}
         <td className="px-3 py-2.5 text-right font-mono text-xs text-rose-400 tabular-nums">
-          {row.stop != null ? fmtPrice(row.stop, market) : '—'}
+          {row.stop != null && row.stop > 0 && row.filter_category !== 'NO_SETUP' ? fmtPrice(row.stop, market) : <span className="text-slate-500">—</span>}
         </td>
 
         {/* Feed */}

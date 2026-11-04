@@ -74,7 +74,19 @@ export const SignalCard: React.FC<SignalCardProps> = ({
     }
   };
 
+  const getSetupLabel = (setup?: string) => {
+    if (!setup) return 'Setup Pending';
+    if (setup === 'VCP') return 'Tight-Base (VCP)';
+    if (setup === 'PULLBACK') return 'Pullback 20 EMA';
+    if (setup === 'BREAKOUT') return 'Pivot Breakout';
+    if (setup === 'MONITORING') return 'Monitoring Base';
+    if (setup === 'NO_SETUP') return 'No Valid Setup';
+    return setup;
+  };
+
   const currencySymbol = signal.market === 'IN' ? '₹' : '$';
+  const isActionable = signal.state !== 'NO_SETUP' && signal.state !== 'BLOCKED' && signal.state !== 'INVALIDATED' && (signal.trigger || 0) > 0;
+  const cleanReasons = (signal.reasons || []).filter((r) => typeof r === 'string' && r.trim().length > 0);
 
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 flex flex-col gap-4 shadow-lg hover:border-slate-700 transition-all">
@@ -83,7 +95,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
         <div className="flex items-center gap-3">
           <h3 className="text-xl font-bold tracking-tight text-slate-100">{signal.symbol}</h3>
           <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold border bg-slate-800/80 text-indigo-300 border-indigo-500/20">
-            {signal.setup === 'VCP' ? 'Tight-Base (VCP)' : 'Pullback 20 EMA'}
+            {getSetupLabel(signal.setup)}
           </span>
           <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${getStateBadge(signal.state)}`}>
             {signal.state.replace('_', ' ')}
@@ -109,26 +121,32 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/70 p-3 rounded-lg border border-slate-800/80">
         <div>
           <span className="text-xs text-slate-400 block">Buy Above Trigger</span>
-          <span className="text-base font-bold text-emerald-400 font-mono">
-            {currencySymbol}{signal.trigger.toFixed(2)}
+          <span className={`text-base font-bold font-mono ${signal.trigger > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {signal.trigger > 0 ? `${currencySymbol}${signal.trigger.toFixed(2)}` : '—'}
           </span>
         </div>
         <div>
           <span className="text-xs text-slate-400 block">Stop Loss</span>
-          <span className="text-base font-bold text-rose-400 font-mono">
-            {currencySymbol}{signal.stop.toFixed(2)}
+          <span className={`text-base font-bold font-mono ${signal.stop > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+            {signal.stop > 0 ? `${currencySymbol}${signal.stop.toFixed(2)}` : '—'}
           </span>
         </div>
         <div>
           <span className="text-xs text-slate-400 block">Target 1 (2R)</span>
-          <span className="text-base font-bold text-cyan-400 font-mono">
-            {currencySymbol}{signal.target1.toFixed(2)}
+          <span className={`text-base font-bold font-mono ${signal.target1 > 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
+            {signal.target1 > 0 ? `${currencySymbol}${signal.target1.toFixed(2)}` : '—'}
           </span>
         </div>
         <div>
           <span className="text-xs text-slate-400 block">Planned Sizing</span>
           <span className="text-base font-bold text-indigo-300 font-mono">
-            {signal.qty} sh <span className="text-xs text-slate-400">({currencySymbol}{signal.risk_amount.toFixed(0)} risk)</span>
+            {signal.qty > 0 ? (
+              <>
+                {signal.qty} sh <span className="text-xs text-slate-400">({currencySymbol}{signal.risk_amount.toFixed(0)} risk)</span>
+              </>
+            ) : (
+              <span className="text-slate-500 text-xs">No Active Risk</span>
+            )}
           </span>
         </div>
       </div>
@@ -141,13 +159,13 @@ export const SignalCard: React.FC<SignalCardProps> = ({
         >
           <span className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            Signal Reasoning ({signal.reasons.length} factors)
+            Signal Reasoning ({cleanReasons.length} factors)
           </span>
           {expandedWhy ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
         {expandedWhy && (
           <ul className="mt-2 text-xs text-slate-300 space-y-1 pl-4 list-disc bg-slate-950/40 p-2.5 rounded border border-slate-800/60">
-            {signal.reasons.map((r, i) => (
+            {cleanReasons.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
@@ -267,13 +285,17 @@ export const SignalCard: React.FC<SignalCardProps> = ({
               <ExternalLink className="w-3.5 h-3.5" /> Chart
             </button>
           )}
-          {onTakeTrade && (
+          {onTakeTrade && isActionable ? (
             <button
               onClick={() => onTakeTrade(signal)}
               className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-md transition-colors"
             >
               I Took This Trade
             </button>
+          ) : (
+            <span className="px-3 py-1.5 rounded-lg bg-slate-800/80 text-slate-500 border border-slate-700/40 text-[11px] font-medium">
+              Not Actionable
+            </span>
           )}
         </div>
       </div>
