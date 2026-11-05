@@ -75,3 +75,27 @@ def test_api_news_endpoint():
     data = resp.json()
     assert isinstance(data, list)
 
+
+def test_api_heatmap_endpoint():
+    resp = client.get("/api/heatmap?market=US")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["market"] == "US"
+    assert "sectors" in data
+    assert "advancing" in data
+    assert "declining" in data
+    assert data["total_stocks"] > 0
+    assert len(data["sectors"]) > 0
+
+
+def test_api_fundamentals_endpoint():
+    resp = client.get("/api/fundamentals/AAPL?market=US")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["symbol"] == "AAPL"
+    assert "overall_score" in data
+    assert "verdict" in data
+    assert "conclusion" in data
+    assert "criteria_checklist" in data
+    assert len(data["criteria_checklist"]) >= 10
+    assert all("status" in c and c["status"] in ["PASS", "CAUTION", "FAIL"] for c in data["criteria_checklist"])

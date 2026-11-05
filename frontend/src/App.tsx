@@ -15,6 +15,7 @@ import { PositionsPage } from './pages/PositionsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
 import { WatchlistPage } from './pages/WatchlistPage';
+import { HeatmapPage } from './pages/HeatmapPage';
 import { API_BASE, apiClient } from './api/client';
 import { RegimeResult } from './types';
 
@@ -252,6 +253,7 @@ export const AppContent: React.FC = () => {
           <Routes>
             <Route path="/" element={<DashboardPage currentMarket={currentMarket} />} />
             <Route path="/watchlist" element={<WatchlistPage currentMarket={currentMarket} />} />
+            <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} />} />
             <Route path="/positions" element={<PositionsPage currentMarket={currentMarket} />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/backtests" element={<BacktestsPage currentMarket={currentMarket} />} />

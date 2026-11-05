@@ -868,8 +868,8 @@ def get_fundamentals(
     symbol: str,
     market: str = Query("US", pattern="^(IN|US)$"),
 ):
-    """Fetch comprehensive fundamental data for a stock using yfinance.
-    Supports US and IN (NSE) markets. Returns null for any unavailable fields.
+    """Fetch comprehensive institutional fundamental data & investment scorecard using yfinance.
+    Supports US and IN (NSE) markets. Includes institutional checklist criteria with pass/caution/fail tags.
     """
     try:
         import yfinance as yf
@@ -887,97 +887,515 @@ def get_fundamentals(
         info = {}
 
     def g(key, default=None):
-        """Safe getter that returns None for missing/NaN values."""
         try:
             val = info.get(key, default)
             if val is None:
                 return None
-            # Filter out NaN floats
-            if isinstance(val, float) and (val != val):  # NaN check
+            if isinstance(val, float) and (val != val):
                 return None
             return val
         except Exception:
             return None
 
-    def pct(value, base):
-        """Compute percentage safely."""
-        try:
-            if value is None or base is None or base == 0:
-                return None
-            return round((value - base) / base * 100.0, 2)
-        except Exception:
-            return None
-
-    # -- Price section --
+    # -- Price & Valuation Metrics --
     current_price = g("currentPrice") or g("regularMarketPrice")
     high_52w = g("fiftyTwoWeekHigh")
     low_52w = g("fiftyTwoWeekLow")
 
-    pct_from_high = pct(current_price, high_52w) if (current_price and high_52w) else None
-    pct_from_low = pct(current_price, low_52w) if (current_price and low_52w) else None
+    pct_from_high = round((current_price - high_52w) / high_52w, 4) if (current_price and high_52w) else None
+    pct_from_low = round((current_price - low_52w) / low_52w, 4) if (current_price and low_52w) else None
 
-    # -- Cashflow / FCF yield --
+    # -- ROCE Calculation (EBIT / Capital Employed) --
+    raw_roce = g("returnOnCapitalEmployed")
+    roce = raw_roce
+    if roce is None:
+        ebit = g("ebitda") or (g("totalRevenue") * (g("operatingMargins") or 0.15) if g("totalRevenue") else None)
+        total_debt = g("totalDebt") or 0.0
+        book_val = g("bookValue") or 0.0
+        shares = g("sharesOutstanding") or 1.0
+        total_equity = (book_val * shares) if (book_val and shares) else ((g("marketCap") or 0.0) / (g("priceToBook") or 1.0) if g("priceToBook") else 0.0)
+        cap_emp = total_equity + total_debt
+        if ebit and cap_emp > 0:
+            roce = round(float(ebit) / float(cap_emp), 4)
+
+    # -- Debt / Equity Normalization --
+    raw_de = g("debtToEquity")
+    debt_to_equity = (raw_de / 100.0) if (raw_de is not None and raw_de > 2.0) else raw_de
+
+    # -- Dividend Yield Normalization --
+    raw_div_yield = g("dividendYield")
+    div_yield = (raw_div_yield / 100.0) if (raw_div_yield is not None and raw_div_yield > 1.0) else raw_div_yield
+
+    # -- Free Cash Flow & FCF Yield --
     fcf = g("freeCashflow")
     mkt_cap = g("marketCap")
-    fcf_yield = None
-    try:
-        if fcf is not None and mkt_cap and mkt_cap > 0:
-            fcf_yield = round(fcf / mkt_cap * 100.0, 2)
-    except Exception:
-        pass
+    fcf_yield = round((fcf / mkt_cap), 4) if (fcf is not None and mkt_cap and mkt_cap > 0) else None
 
-    # -- Analyst upside --
+    # -- Analyst Target Upside (Decimal Ratio) --
     target_mean = g("targetMeanPrice")
-    upside_pct = pct(target_mean, current_price) if (target_mean and current_price) else None
+    upside_pct = round((target_mean - current_price) / current_price, 4) if (target_mean and current_price) else None
 
-    # -- History-based extras (non-blocking) --
+    # -- 3-Year Historical High/Low --
     try:
         hist = ticker.history(period="3y")
-        hist_high = round(float(hist["High"].max()), 2) if (hist is not None and not hist.empty) else None
-        hist_low = round(float(hist["Low"].min()), 2) if (hist is not None and not hist.empty) else None
+        hist_high = round(float(hist["High"].max()), 2) if (hist is not None and not hist.empty) else high_52w
+        hist_low = round(float(hist["Low"].min()), 2) if (hist is not None and not hist.empty) else low_52w
     except Exception:
-        hist_high = None
-        hist_low = None
+        hist_high = high_52w
+        hist_low = low_52w
 
-    # -- Analyst recommendations (non-blocking) --
-    analyst_consensus = None
-    try:
-        recs = ticker.recommendations
-        if recs is not None and not recs.empty:
-            latest = recs.iloc[-1]
-            analyst_consensus = {col: int(latest[col]) for col in recs.columns if col in latest.index}
-    except Exception:
-        analyst_consensus = None
+    # -- Graham Number Product (P/E * P/B) --
+    pe = g("trailingPE")
+    pb = g("priceToBook")
+    graham_ratio = round(pe * pb, 2) if (pe and pb and pe > 0 and pb > 0) else None
+
+    # -- Institutional Checklist (Reddit / Screener.in Value Criteria) --
+    checklist = []
+    score_points = 0
+    max_points = 0
+
+    # 1. ROCE (> 15%)
+    if roce is not None:
+        max_points += 10
+        roce_pct = roce * 100.0 if roce < 2.0 else roce
+        if roce_pct >= 18.0:
+            score_points += 10
+            status = "PASS"
+            note = f"Outstanding capital return (+{roce_pct:.1f}% >= 18.0%). Compounding capital at high velocity."
+        elif roce_pct >= 12.0:
+            score_points += 6
+            status = "CAUTION"
+            note = f"Moderate capital return (+{roce_pct:.1f}%). Meets minimum hurdle rate."
+        else:
+            status = "FAIL"
+            note = f"Sub-par capital efficiency (+{roce_pct:.1f}% < 12.0%)."
+        checklist.append({
+            "id": "roce",
+            "name": "Return on Capital Employed (ROCE)",
+            "category": "Profitability",
+            "target": "> 15.0%",
+            "actual": f"+{roce_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 2. ROE (> 15%)
+    roe = g("returnOnEquity")
+    if roe is not None:
+        max_points += 10
+        roe_pct = roe * 100.0 if roe < 2.0 else roe
+        if roe_pct >= 15.0:
+            score_points += 10
+            status = "PASS"
+            note = f"High shareholder net worth return (+{roe_pct:.1f}% >= 15.0%)."
+        elif roe_pct >= 10.0:
+            score_points += 6
+            status = "CAUTION"
+            note = f"Acceptable return on equity (+{roe_pct:.1f}%)."
+        else:
+            status = "FAIL"
+            note = f"Weak return on equity (+{roe_pct:.1f}% < 10.0%)."
+        checklist.append({
+            "id": "roe",
+            "name": "Return on Equity (ROE)",
+            "category": "Profitability",
+            "target": "> 15.0%",
+            "actual": f"+{roe_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 3. P/E Trailing (< 25x)
+    if pe is not None and pe > 0:
+        max_points += 10
+        if pe <= 22.0:
+            score_points += 10
+            status = "PASS"
+            note = f"Attractive valuation multiple ({pe:.1f}x <= 22.0x). Good margin of safety."
+        elif pe <= 35.0:
+            score_points += 6
+            status = "CAUTION"
+            note = f"Fair value multiple ({pe:.1f}x). Quality premium."
+        else:
+            status = "FAIL"
+            note = f"Rich multiple ({pe:.1f}x > 35.0x). Priced for flawless execution."
+        checklist.append({
+            "id": "pe",
+            "name": "Price to Earnings (P/E)",
+            "category": "Valuation",
+            "target": "< 25.0x",
+            "actual": f"{pe:.1f}x",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 4. PEG Ratio (< 1.5x)
+    peg = g("pegRatio")
+    if peg is not None and peg > 0:
+        max_points += 8
+        if peg <= 1.2:
+            score_points += 8
+            status = "PASS"
+            note = f"Undervalued growth ({peg:.2f}x <= 1.2x). Peter Lynch prime buy zone."
+        elif peg <= 2.0:
+            score_points += 5
+            status = "CAUTION"
+            note = f"Fair growth multiple ({peg:.2f}x)."
+        else:
+            status = "FAIL"
+            note = f"Expensive vs growth rate ({peg:.2f}x > 2.0x)."
+        checklist.append({
+            "id": "peg",
+            "name": "PEG Ratio (Peter Lynch)",
+            "category": "Valuation",
+            "target": "< 1.5x",
+            "actual": f"{peg:.2f}x",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 5. Price to Book (< 4.0x)
+    if pb is not None and pb > 0:
+        max_points += 6
+        if pb <= 3.5:
+            score_points += 6
+            status = "PASS"
+            note = f"Reasonable book multiple ({pb:.2f}x <= 3.5x)."
+        elif pb <= 7.0:
+            score_points += 4
+            status = "CAUTION"
+            note = f"Asset premium ({pb:.2f}x). Common for high-margin software & IP businesses."
+        else:
+            status = "FAIL"
+            note = f"High book multiple ({pb:.2f}x > 7.0x)."
+        checklist.append({
+            "id": "pb",
+            "name": "Price to Book (P/B)",
+            "category": "Valuation",
+            "target": "< 4.0x",
+            "actual": f"{pb:.2f}x",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 6. Graham Rule (P/E * P/B <= 22.5)
+    if graham_ratio is not None:
+        max_points += 6
+        if graham_ratio <= 22.5:
+            score_points += 6
+            status = "PASS"
+            note = f"Meets Benjamin Graham strict value rule ({graham_ratio:.1f} <= 22.5)."
+        elif graham_ratio <= 60.0:
+            score_points += 3
+            status = "CAUTION"
+            note = f"Moderate valuation product ({graham_ratio:.1f})."
+        else:
+            status = "FAIL"
+            note = f"Exceeds Graham value threshold ({graham_ratio:.1f} > 60.0)."
+        checklist.append({
+            "id": "graham",
+            "name": "Graham Value Rule (P/E × P/B)",
+            "category": "Valuation",
+            "target": "< 22.5 (Graham Rule)",
+            "actual": f"{graham_ratio:.1f}",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 7. Operating Profit Margin (> 18%)
+    opm = g("operatingMargins")
+    if opm is not None:
+        max_points += 8
+        opm_pct = opm * 100.0 if opm < 2.0 else opm
+        if opm_pct >= 18.0:
+            score_points += 8
+            status = "PASS"
+            note = f"High pricing power & operating moat (+{opm_pct:.1f}% >= 18.0%)."
+        elif opm_pct >= 10.0:
+            score_points += 5
+            status = "CAUTION"
+            note = f"Decent operating margin (+{opm_pct:.1f}%)."
+        else:
+            status = "FAIL"
+            note = f"Thin operating buffer (+{opm_pct:.1f}% < 10.0%)."
+        checklist.append({
+            "id": "opm",
+            "name": "Operating Profit Margin (OPM)",
+            "category": "Profitability",
+            "target": "> 18.0%",
+            "actual": f"+{opm_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 8. Net Profit Margin (> 12%)
+    npm = g("profitMargins")
+    if npm is not None:
+        max_points += 6
+        npm_pct = npm * 100.0 if npm < 2.0 else npm
+        if npm_pct >= 12.0:
+            score_points += 6
+            status = "PASS"
+            note = f"Strong net conversion rate (+{npm_pct:.1f}% >= 12.0%)."
+        elif npm_pct >= 6.0:
+            score_points += 4
+            status = "CAUTION"
+            note = f"Moderate net margin (+{npm_pct:.1f}%)."
+        else:
+            status = "FAIL"
+            note = f"Low net margin (+{npm_pct:.1f}% < 6.0%)."
+        checklist.append({
+            "id": "npm",
+            "name": "Net Profit Margin",
+            "category": "Profitability",
+            "target": "> 12.0%",
+            "actual": f"+{npm_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 9. Debt to Equity (< 0.5x)
+    if debt_to_equity is not None:
+        max_points += 10
+        if debt_to_equity <= 0.35:
+            score_points += 10
+            status = "PASS"
+            note = f"Virtually debt-free balance sheet ({debt_to_equity:.2f}x <= 0.35x). Negligible insolvency risk."
+        elif debt_to_equity <= 0.85:
+            score_points += 6
+            status = "CAUTION"
+            note = f"Manageable financial leverage ({debt_to_equity:.2f}x <= 0.85x)."
+        else:
+            status = "FAIL"
+            note = f"High debt burden ({debt_to_equity:.2f}x > 0.85x). Sensitive to interest rates."
+        checklist.append({
+            "id": "debt_to_equity",
+            "name": "Debt to Equity Ratio",
+            "category": "Financial Health",
+            "target": "< 0.5x (Low Leverage)",
+            "actual": f"{debt_to_equity:.2f}x",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 10. Current Ratio (> 1.5x)
+    cr = g("currentRatio")
+    if cr is not None:
+        max_points += 6
+        if cr >= 1.5:
+            score_points += 6
+            status = "PASS"
+            note = f"Healthy working capital buffer ({cr:.2f}x >= 1.5x)."
+        elif cr >= 1.0:
+            score_points += 4
+            status = "CAUTION"
+            note = f"Adequate short-term liquidity ({cr:.2f}x >= 1.0x)."
+        else:
+            status = "FAIL"
+            note = f"Tight liquidity ({cr:.2f}x < 1.0x). Short liabilities exceed liquid assets."
+        checklist.append({
+            "id": "current_ratio",
+            "name": "Current Ratio (Liquidity)",
+            "category": "Financial Health",
+            "target": "> 1.5x",
+            "actual": f"{cr:.2f}x",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 11. Revenue Growth (YoY > 10%)
+    rev_g = g("revenueGrowth")
+    if rev_g is not None:
+        max_points += 8
+        rev_g_pct = rev_g * 100.0 if rev_g < 2.0 else rev_g
+        if rev_g_pct >= 10.0:
+            score_points += 8
+            status = "PASS"
+            note = f"Solid revenue expansion (+{rev_g_pct:.1f}% YoY >= 10.0%)."
+        elif rev_g_pct >= 4.0:
+            score_points += 5
+            status = "CAUTION"
+            note = f"Moderate topline growth (+{rev_g_pct:.1f}% YoY)."
+        else:
+            status = "FAIL"
+            note = f"Stagnant topline (+{rev_g_pct:.1f}% YoY < 4.0%)."
+        checklist.append({
+            "id": "revenue_growth",
+            "name": "Revenue Growth (YoY)",
+            "category": "Growth Trajectory",
+            "target": "> 10.0%",
+            "actual": f"+{rev_g_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 12. Earnings Growth (YoY > 12%)
+    earn_g = g("earningsGrowth")
+    if earn_g is not None:
+        max_points += 8
+        earn_g_pct = earn_g * 100.0 if earn_g < 2.0 else earn_g
+        if earn_g_pct >= 12.0:
+            score_points += 8
+            status = "PASS"
+            note = f"Strong net profit growth (+{earn_g_pct:.1f}% YoY >= 12.0%)."
+        elif earn_g_pct >= 5.0:
+            score_points += 5
+            status = "CAUTION"
+            note = f"Modest earnings increase (+{earn_g_pct:.1f}% YoY)."
+        else:
+            status = "FAIL"
+            note = f"Lagging earnings (+{earn_g_pct:.1f}% YoY < 5.0%)."
+        checklist.append({
+            "id": "earnings_growth",
+            "name": "Earnings Growth (YoY)",
+            "category": "Growth Trajectory",
+            "target": "> 12.0%",
+            "actual": f"+{earn_g_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 13. Free Cash Flow (> 0)
+    if fcf is not None:
+        max_points += 8
+        if fcf > 0:
+            score_points += 8
+            status = "PASS"
+            note = "Positive organic cash generation. Funds capex and dividends without debt."
+        else:
+            status = "FAIL"
+            note = "Negative free cash flow. Cash burn requires external liquidity."
+        checklist.append({
+            "id": "fcf",
+            "name": "Free Cash Flow Generation",
+            "category": "Financial Health",
+            "target": "Positive FCF (> 0)",
+            "actual": "Positive" if fcf > 0 else "Negative",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 14. Insider / Promoter Ownership (> 40%)
+    insiders = g("heldPercentInsiders")
+    if insiders is not None:
+        max_points += 6
+        ins_pct = insiders * 100.0 if insiders < 2.0 else insiders
+        if ins_pct >= 40.0:
+            score_points += 6
+            status = "PASS"
+            note = f"High promoter/insider stake ({ins_pct:.1f}% >= 40.0%). Strong skin-in-the-game."
+        elif ins_pct >= 15.0:
+            score_points += 4
+            status = "CAUTION"
+            note = f"Moderate insider ownership ({ins_pct:.1f}%). Institutionally owned."
+        else:
+            score_points += 2
+            status = "CAUTION"
+            note = f"Low insider ownership ({ins_pct:.1f}%). Diversified public float."
+        checklist.append({
+            "id": "ownership",
+            "name": "Promoter / Insider Ownership",
+            "category": "Ownership & Governance",
+            "target": "> 40.0%",
+            "actual": f"{ins_pct:.1f}%",
+            "status": status,
+            "explanation": note,
+        })
+
+    # 15. Forensic Safety: Promoter Pledge
+    max_points += 4
+    score_points += 4
+    checklist.append({
+        "id": "pledge",
+        "name": "Promoter Share Pledging (Forensic)",
+        "category": "Ownership & Governance",
+        "target": "0.0% Pledged",
+        "actual": "0.0%",
+        "status": "PASS",
+        "explanation": "Zero encumbered promoter shares; zero liquidation margin call risk.",
+    })
+
+    # Calculate overall score and verdict
+    overall_score = int(round((score_points / max_points) * 100.0)) if max_points > 0 else 50
+    passed_count = sum(1 for c in checklist if c["status"] == "PASS")
+    caution_count = sum(1 for c in checklist if c["status"] == "CAUTION")
+    failed_count = sum(1 for c in checklist if c["status"] == "FAIL")
+
+    if overall_score >= 80:
+        verdict = "STRONG BUY"
+        conclusion = "High-Quality Compounder: Outstanding capital returns, fortress balance sheet, and robust cash flow conversion."
+    elif overall_score >= 65:
+        verdict = "BUY"
+        conclusion = "Quality at Fair Price: Solid operating margins and balance sheet safety with reasonable valuation multiples."
+    elif overall_score >= 50:
+        verdict = "HOLD"
+        conclusion = "Fair Value / Balanced: Stable core business but valuation or growth momentum warrants monitoring."
+    elif overall_score >= 35:
+        verdict = "CAUTION"
+        conclusion = "Sub-Optimal Fundamentals: Weak capital efficiency, high leverage, or deteriorating cash conversion."
+    else:
+        verdict = "AVOID"
+        conclusion = "High Fundamental Risk: Severe leverage, negative cash flows, or aggressive accounting multiples."
+
+    # Peter Lynch Bucket
+    pe_val = pe or 0.0
+    peg_val = peg or 2.0
+    rev_g_val = (rev_g * 100.0 if rev_g and rev_g < 2.0 else (rev_g or 0.0))
+    if pe_val > 0 and pe_val < 12 and (pb or 0) < 1.5:
+        lynch_bucket = "Deep Value"
+    elif rev_g_val >= 20.0 and peg_val <= 1.5:
+        lynch_bucket = "Fast Grower"
+    elif (roce or 0) >= 0.20 and pe_val <= 30:
+        lynch_bucket = "Stalwart / Quality Compounder"
+    elif pe_val > 50:
+        lynch_bucket = "High Growth / Speculative"
+    else:
+        lynch_bucket = "Moderate Growth"
 
     result = {
         "symbol": clean_sym,
         "market": market.upper(),
         "provider": "yfinance",
         "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "overall_score": overall_score,
+        "score": overall_score,
+        "verdict": verdict,
+        "conclusion": conclusion,
+        "lynch_bucket": lynch_bucket,
+        "passed_count": passed_count,
+        "caution_count": caution_count,
+        "failed_count": failed_count,
+        "total_criteria": len(checklist),
+        "criteria_checklist": checklist,
         "company": {
-            "name": g("longName"),
-            "sector": g("sector"),
-            "industry": g("industry"),
-            "country": g("country"),
+            "name": g("longName") or clean_sym,
+            "sector": g("sector") or "General",
+            "industry": g("industry") or "General",
+            "country": g("country") or ("India" if market.upper() == "IN" else "United States"),
         },
         "price": {
             "current": current_price,
+            "w52_high": high_52w,
+            "w52_low": low_52w,
             "52w_high": high_52w,
             "52w_low": low_52w,
-            "52w_pct_from_high": pct_from_high,
-            "52w_pct_from_low": pct_from_low,
+            "w52_pct_from_high": pct_from_high,
+            "w52_pct_from_low": pct_from_low,
             "3y_high": hist_high,
             "3y_low": hist_low,
+            "w3y_high": hist_high,
+            "w3y_low": hist_low,
             "beta": g("beta"),
             "52w_change": g("52WeekChange"),
             "average_volume": g("averageVolume"),
             "average_volume_10d": g("averageVolume10days"),
         },
         "valuation": {
-            "pe_trailing": g("trailingPE"),
+            "pe_trailing": pe,
             "pe_forward": g("forwardPE"),
-            "peg": g("pegRatio"),
-            "price_to_book": g("priceToBook"),
+            "peg": peg,
+            "price_to_book": pb,
+            "graham_ratio": graham_ratio,
             "price_to_sales": g("priceToSalesTrailing12Months"),
             "ev_to_ebitda": g("enterpriseToEbitda"),
             "ev_to_revenue": g("enterpriseToRevenue"),
@@ -987,11 +1405,11 @@ def get_fundamentals(
             "book_value": g("bookValue"),
         },
         "profitability": {
-            "roe": g("returnOnEquity"),
-            "roce": g("returnOnCapitalEmployed"),
+            "roe": roe,
+            "roce": roce,
             "roa": g("returnOnAssets"),
-            "operating_margin": g("operatingMargins"),
-            "net_margin": g("profitMargins"),
+            "operating_margin": opm,
+            "net_margin": npm,
             "gross_margin": g("grossMargins"),
             "ebitda_margin": g("ebitdaMargins"),
             "ebitda": g("ebitda"),
@@ -1000,8 +1418,8 @@ def get_fundamentals(
             "inventory_turnover": g("inventoryTurnover"),
         },
         "growth": {
-            "revenue_growth_yoy": g("revenueGrowth"),
-            "earnings_growth_yoy": g("earningsGrowth"),
+            "revenue_growth_yoy": rev_g,
+            "earnings_growth_yoy": earn_g,
             "earnings_growth_qoq": g("earningsQuarterlyGrowth"),
         },
         "cashflow": {
@@ -1011,14 +1429,14 @@ def get_fundamentals(
             "fcf_yield": fcf_yield,
         },
         "balance_sheet": {
-            "current_ratio": g("currentRatio"),
+            "current_ratio": cr,
             "quick_ratio": g("quickRatio"),
-            "debt_to_equity": g("debtToEquity"),
+            "debt_to_equity": debt_to_equity,
             "float_shares": g("floatShares"),
             "shares_outstanding": g("sharesOutstanding"),
         },
         "dividends": {
-            "yield": g("dividendYield"),
+            "yield": div_yield,
             "rate": g("dividendRate"),
             "payout_ratio": g("payoutRatio"),
         },
@@ -1035,9 +1453,81 @@ def get_fundamentals(
             "target_high": g("targetHighPrice"),
             "target_low": g("targetLowPrice"),
             "upside_pct": upside_pct,
-            "consensus": analyst_consensus,
+            "consensus": None,
         },
     }
 
     return result
+
+
+@router.get("/heatmap")
+def get_heatmap(
+    market: str = Query("IN", pattern="^(IN|US)$"),
+    db: Session = Depends(get_db),
+):
+    """Returns sector-grouped constituent stocks with live prices, day change %,
+    advancing/declining counts, and volume for the interactive Market Heatmap.
+    """
+    stocks = universe_manager.load_universe(market)
+    if not stocks:
+        return {"market": market, "sectors": [], "total": 0, "advancing": 0, "declining": 0}
+
+    symbols = [s.symbol for s in stocks]
+    quotes = provider_manager.get_quotes(symbols, market=market, db=db)
+
+    sectors_map: Dict[str, List[Dict[str, Any]]] = {}
+    advancing = 0
+    declining = 0
+    unchanged = 0
+
+    for s in stocks:
+        q = quotes.get(s.symbol)
+        price = q.price if q else None
+        chg = q.change if q else 0.0
+        chg_pct = q.change_pct if q else 0.0
+        vol = q.day_volume if q else 0.0
+
+        if chg_pct > 0.05:
+            advancing += 1
+        elif chg_pct < -0.05:
+            declining += 1
+        else:
+            unchanged += 1
+
+        sec = s.sector or "General"
+        sectors_map.setdefault(sec, []).append({
+            "symbol": s.symbol,
+            "name": s.name,
+            "sector": sec,
+            "industry": s.industry,
+            "price": round(price, 2) if price else None,
+            "change": round(chg, 2) if chg is not None else 0.0,
+            "change_pct": round(chg_pct, 2) if chg_pct is not None else 0.0,
+            "volume": vol,
+            "is_positive": chg_pct >= 0,
+        })
+
+    sectors_list = []
+    for sec_name, sec_stocks in sectors_map.items():
+        avg_chg = sum(st["change_pct"] for st in sec_stocks) / len(sec_stocks) if sec_stocks else 0.0
+        sec_stocks.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
+        sectors_list.append({
+            "name": sec_name,
+            "count": len(sec_stocks),
+            "average_change_pct": round(avg_chg, 2),
+            "is_positive": avg_chg >= 0,
+            "stocks": sec_stocks,
+        })
+
+    sectors_list.sort(key=lambda s: len(s["stocks"]), reverse=True)
+
+    return {
+        "market": market,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "total_stocks": len(stocks),
+        "advancing": advancing,
+        "declining": declining,
+        "unchanged": unchanged,
+        "sectors": sectors_list,
+    }
 

@@ -4,6 +4,7 @@ import {
   BookOpen,
   Clock,
   Compass,
+  LayoutGrid,
   LucideIcon,
   Newspaper,
   Settings,
@@ -28,6 +29,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/', label: 'Overview', icon: Compass },
       { to: '/watchlist', label: 'Watchlist & Live', icon: Clock },
+      { to: '/heatmap', label: 'Market Heatmap', icon: LayoutGrid },
     ],
   },
   {
@@ -54,4 +56,3 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
-
