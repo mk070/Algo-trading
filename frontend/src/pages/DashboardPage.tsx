@@ -23,9 +23,10 @@ import { Signal, TradePlan } from '../types';
 
 interface DashboardPageProps {
   currentMarket: 'IN' | 'US';
+  onMarketChange?: (market: 'IN' | 'US') => void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) => {
+export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onMarketChange }) => {
   const [plan, setPlan] = useState<TradePlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -193,6 +194,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
       {/* Market Breadth & Sector Heatmap */}
       <MarketPulseWidget
         currentMarket={currentMarket}
+        onMarketChange={onMarketChange}
         onSelectSymbol={handleOpenChart}
       />
 

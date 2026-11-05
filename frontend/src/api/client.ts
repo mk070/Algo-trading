@@ -165,7 +165,7 @@ export const apiClient = {
     return fetchJson<Record<string, any>>(`${API_BASE}/quotes?symbols=${encodeURIComponent(symbols.join(','))}&market=${market}`);
   },
 
-  async getBars(symbol: string, market: string = 'IN', tfOrN: string | number = '1d', n: number = 250): Promise<BarsResponse> {
+  async getBars(symbol: string, market: string = 'IN', tfOrN: string | number = '1d', n: number = 600): Promise<BarsResponse> {
     const tf = typeof tfOrN === 'string' ? tfOrN : '1d';
     const limit = typeof tfOrN === 'number' ? tfOrN : n;
     return fetchJson<BarsResponse>(`${API_BASE}/bars/${symbol}?market=${market}&tf=${tf}&n=${limit}`);

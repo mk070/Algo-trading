@@ -21,6 +21,7 @@ import {
 import { API_BASE } from '../api/client';
 import { ChartModal } from '../components/ChartModal';
 import { FundamentalReport } from '../components/FundamentalReport';
+import { TradingViewStockHeatmap } from '../components/TradingViewStockHeatmap';
 
 interface StockHeatmapItem {
   symbol: string;
@@ -54,6 +55,7 @@ interface HeatmapResponse {
 
 interface HeatmapPageProps {
   currentMarket: 'IN' | 'US';
+  onMarketChange?: (market: 'IN' | 'US') => void;
 }
 
 function getTileStyles(pct: number) {
@@ -129,8 +131,9 @@ function getTileStyles(pct: number) {
   };
 }
 
-export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket }) => {
+export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket, onMarketChange }) => {
   const [market, setMarket] = useState<'IN' | 'US'>(currentMarket);
+  const [viewMode, setViewMode] = useState<'tradingview' | 'constituents'>('tradingview');
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +254,10 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket }) => {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
             <button
-              onClick={() => setMarket('IN')}
+              onClick={() => {
+                setMarket('IN');
+                if (onMarketChange) onMarketChange('IN');
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 market === 'IN'
                   ? 'bg-indigo-600 text-white shadow-md'
@@ -262,7 +268,10 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket }) => {
               <span>India NSE</span>
             </button>
             <button
-              onClick={() => setMarket('US')}
+              onClick={() => {
+                setMarket('US');
+                if (onMarketChange) onMarketChange('US');
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 market === 'US'
                   ? 'bg-indigo-600 text-white shadow-md'
@@ -271,6 +280,32 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket }) => {
             >
               <span>🇺🇸</span>
               <span>US S&P 500</span>
+            </button>
+          </div>
+
+          {/* Mode Switcher */}
+          <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1">
+            <button
+              onClick={() => setViewMode('tradingview')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                viewMode === 'tradingview'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>TradingView Heatmap</span>
+            </button>
+            <button
+              onClick={() => setViewMode('constituents')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                viewMode === 'constituents'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Constituents & Audit</span>
             </button>
           </div>
 

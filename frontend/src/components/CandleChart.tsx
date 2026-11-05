@@ -184,6 +184,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   }, [drawings, symbol]);
 
   const lastBarRef = useRef<CandleBar | null>(null);
+  const userPanRangeRef = useRef<{ from: number; to: number } | null>(null);
   const prevPriceRef = useRef<number | null>(null);
   const [priceFlash, setPriceFlash] = useState<'UP' | 'DOWN' | null>(null);
 
@@ -202,7 +203,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       setError(null);
 
       const tfParam = timeframe.toLowerCase();
-      const data: BarsResponse = await apiClient.getBars(symbol, market, tfParam, 200);
+      const data: BarsResponse = await apiClient.getBars(symbol, market, tfParam, 600);
 
       if (data && data.bars && data.bars.length > 0) {
         setChartBars(data.bars);
@@ -228,14 +229,15 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   // Initial fetch and on timeframe switch
   useEffect(() => {
     isInitialLoadRef.current = true;
+    userPanRangeRef.current = null;
     fetchBarsData(false);
   }, [fetchBarsData]);
 
-  // Periodic 4-second bar dataset sync
+  // Periodic 15-second bar dataset sync (retains user scroll & zoom range)
   useEffect(() => {
     const timer = setInterval(() => {
       fetchBarsData(true);
-    }, 4000);
+    }, 15000);
     return () => clearInterval(timer);
   }, [fetchBarsData]);
 
@@ -621,6 +623,13 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       }
     });
 
+    // Track visible logical range so panning left is never snapped back to the right
+    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (range) {
+        userPanRangeRef.current = range;
+      }
+    });
+
     // Subscribe to visible time range changes to re-align drawings
     chart.timeScale().subscribeVisibleTimeRangeChange(() => {
       setRenderTick((t) => t + 1);
@@ -638,6 +647,13 @@ export const CandleChart: React.FC<CandleChartProps> = ({
         }
       }, 50);
       isInitialLoadRef.current = false;
+      userPanRangeRef.current = null;
+    } else if (userPanRangeRef.current) {
+      try {
+        chart.timeScale().setVisibleLogicalRange(userPanRangeRef.current);
+      } catch {
+        // preserve user scrolled position
+      }
     }
 
     // Auto-resize observer
@@ -878,38 +894,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
           )}
         </div>
 
-        {/* OHLCV Crosshair Ticker Header */}
-        {activeBar && (
-          <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-slate-300">
-            <span>
-              O: <span className="text-slate-100 font-semibold">{activeBar.open.toFixed(2)}</span>
-            </span>
-            <span>
-              H: <span className="text-emerald-400 font-semibold">{activeBar.high.toFixed(2)}</span>
-            </span>
-            <span>
-              L: <span className="text-rose-400 font-semibold">{activeBar.low.toFixed(2)}</span>
-            </span>
-            <span>
-              C: <span className="text-indigo-300 font-bold">{activeBar.close.toFixed(2)}</span>
-            </span>
-            {activeBar.volume > 0 && (
-              <span className="text-slate-400">
-                Vol: <span className="text-slate-200 font-semibold">{(activeBar.volume / 1000).toFixed(0)}k</span>
-              </span>
-            )}
-            {activeBar.rsi14 && (
-              <span>
-                RSI: <span className="text-purple-400 font-semibold">{activeBar.rsi14.toFixed(1)}</span>
-              </span>
-            )}
-            {activeBar.atr14 && (
-              <span>
-                ATR: <span className="text-cyan-400 font-semibold">{activeBar.atr14.toFixed(2)}</span>
-              </span>
-            )}
-          </div>
-        )}
+
       </div>
 
       {/* ⚠ DELAYED DATA BANNER — always shown, prevents acting on stale chart prices */}
@@ -1487,6 +1472,50 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       </>
     )}
   </div>
+
+      {/* 4. Bottom Status & Crosshair Bar: Live OHLCV, RSI, ATR, and Range Info */}
+      <div className="px-4 py-2.5 bg-slate-950/90 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        {activeBar ? (
+          <div className="flex flex-wrap items-center gap-3 text-slate-300">
+            <span>
+              O: <span className="text-slate-100 font-semibold">{activeBar.open.toFixed(2)}</span>
+            </span>
+            <span>
+              H: <span className="text-emerald-400 font-semibold">{activeBar.high.toFixed(2)}</span>
+            </span>
+            <span>
+              L: <span className="text-rose-400 font-semibold">{activeBar.low.toFixed(2)}</span>
+            </span>
+            <span>
+              C: <span className="text-indigo-300 font-bold">{activeBar.close.toFixed(2)}</span>
+            </span>
+            {activeBar.volume > 0 && (
+              <span className="text-slate-400">
+                Vol: <span className="text-slate-200 font-semibold">{(activeBar.volume / 1000).toFixed(0)}k</span>
+              </span>
+            )}
+            {activeBar.rsi14 && (
+              <span>
+                RSI: <span className="text-purple-400 font-semibold">{activeBar.rsi14.toFixed(1)}</span>
+              </span>
+            )}
+            {activeBar.atr14 && (
+              <span>
+                ATR: <span className="text-cyan-400 font-semibold">{activeBar.atr14.toFixed(2)}</span>
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="text-slate-500 text-[11px] flex items-center gap-2">
+            <span>Hover / drag crosshair over any candle to inspect OHLCV, RSI & ATR</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3 text-[11px] text-slate-500">
+          <span>{chartBars.length} Bars Loaded</span>
+          <span>•</span>
+          <span>{timeframe} Interval</span>
+        </div>
+      </div>
     </div>
   );
 };

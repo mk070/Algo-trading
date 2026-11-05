@@ -1,19 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronRight, RefreshCw, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, ExternalLink, LayoutGrid, RefreshCw, Table, TrendingUp } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { TradingViewStockHeatmap } from './TradingViewStockHeatmap';
 
 interface MarketPulseWidgetProps {
   currentMarket: 'IN' | 'US';
+  onMarketChange?: (market: 'IN' | 'US') => void;
   onOpenChart?: (symbol: string) => void;
   onSelectSymbol?: (symbol: string) => void;
 }
 
 export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
   currentMarket,
+  onMarketChange,
   onOpenChart,
   onSelectSymbol,
 }) => {
   const [activeLeaderGroup, setActiveLeaderGroup] = useState<string>('group1');
+  const [rightPanelView, setRightPanelView] = useState<'heatmap' | 'quotes'>('heatmap');
   const [liveQuotes, setLiveQuotes] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -213,14 +217,63 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
         </button>
       </div>
 
-      {/* Markets Header */}
-      <div>
-        <h1 className="text-2xl font-black text-slate-100 tracking-tight">Markets</h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          {currentMarket === 'IN'
-            ? 'India · NSE / BSE · live quotes via Angel One SmartAPI'
-            : 'United States · NYSE / NASDAQ · live quotes via Alpaca IEX Real-Time Feed'}
-        </p>
+      {/* Markets Header & Country Filter Pills (OpenStock Exact Match) */}
+      <div className="space-y-3">
+        <div>
+          <h1 className="text-2xl font-black text-slate-100 tracking-tight">Markets</h1>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {currentMarket === 'IN'
+              ? 'India · open · live data via Angel One SmartAPI'
+              : 'United States · open now · live data via Alpaca IEX'}
+          </p>
+        </div>
+
+        {/* Horizontal country pills matching OpenStock layout */}
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
+          {[
+            { id: 'US', label: 'United States', available: true },
+            { id: 'IN', label: 'India', available: true },
+            { id: 'DE', label: 'Germany', available: false },
+            { id: 'CA', label: 'Canada', available: false },
+            { id: 'AU', label: 'Australia', available: false },
+            { id: 'SA', label: 'Saudi Arabia', available: false },
+            { id: 'CRYPTO', label: 'Crypto', available: false },
+            { id: 'FOREX', label: 'Forex', available: false },
+          ].map((country) => {
+            const isActive =
+              (currentMarket === 'US' && country.id === 'US') ||
+              (currentMarket === 'IN' && country.id === 'IN');
+            return (
+              <button
+                key={country.id}
+                onClick={() => {
+                  if (country.available && onMarketChange) {
+                    onMarketChange(country.id as 'IN' | 'US');
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border ${
+                  isActive
+                    ? 'bg-emerald-950/80 border-emerald-500/80 text-emerald-300 font-semibold shadow-sm ring-1 ring-emerald-500/30'
+                    : country.available
+                    ? 'bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                    : 'bg-slate-900/30 border-slate-800/40 text-slate-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isActive ? 'bg-emerald-400' : 'bg-slate-500'
+                  }`}
+                />
+                <span>{country.label}</span>
+                {!country.available && (
+                  <span className="text-[9px] uppercase px-1 py-0.5 bg-slate-800/80 rounded text-slate-500">
+                    Soon
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Pulse Section: 4 High-Impact Index Cards */}
@@ -345,23 +398,66 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
           </div>
         </div>
 
-        {/* Right Column (2 cols): Grouped Quotes Table */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+        {/* Right Column (2 cols): S&P 500 / Nifty 50 Heatmap + Quotes Table Toggle */}
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col justify-between shadow-sm">
+          <div className="px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-slate-950/40">
             <div>
-              <h3 className="font-bold text-sm text-slate-200">Quotes</h3>
+              <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <span>{currentMarket === 'IN' ? 'Nifty 50 heatmap' : 'S&P 500 heatmap'}</span>
+                <span className="text-[10px] font-mono font-normal text-emerald-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Real-time
+                </span>
+              </h3>
               <p className="text-[11px] text-slate-400">
-                {currentMarket === 'IN' ? 'India leaders by group' : 'US leaders by group'}
+                Sized by market cap, coloured by today's move
               </p>
             </div>
-            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-              Live Feed
-            </span>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 text-xs">
+                <button
+                  onClick={() => setRightPanelView('heatmap')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${
+                    rightPanelView === 'heatmap'
+                      ? 'bg-slate-800 text-white font-semibold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-3 h-3" />
+                  <span>Heatmap</span>
+                </button>
+                <button
+                  onClick={() => setRightPanelView('quotes')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition ${
+                    rightPanelView === 'quotes'
+                      ? 'bg-slate-800 text-white font-semibold shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Table className="w-3 h-3" />
+                  <span>Quotes Table</span>
+                </button>
+              </div>
+
+              <a
+                href="/heatmap"
+                className="hidden sm:flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-slate-700 bg-slate-950 px-2.5 py-1 rounded-lg transition"
+                title="Open full-page institutional heatmap"
+              >
+                <span>Full View</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
 
-          <div className="overflow-x-auto scrollbar-none">
-            <table className="w-full text-xs text-left">
+          {rightPanelView === 'heatmap' ? (
+            <div className="p-3 bg-slate-950/60 min-h-[350px]">
+              <TradingViewStockHeatmap market={currentMarket} height={340} hasTopBar={false} />
+            </div>
+          ) : (
+            <div className="overflow-x-auto scrollbar-none">
+              <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
                   <th className="px-4 py-2">Name</th>
@@ -435,6 +531,7 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
     </div>

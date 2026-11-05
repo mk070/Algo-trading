@@ -132,7 +132,7 @@ def get_quotes(symbols: str = Query(..., description="Comma-separated symbols"),
 def get_bars(
     symbol: str,
     tf: str = "1d",
-    n: int = 250,
+    n: int = 600,
     market: str = "IN",
     db: Session = Depends(get_db),
 ):
@@ -159,7 +159,7 @@ def get_bars(
             "1h": "ONE_HOUR", "60m": "ONE_HOUR", "one_hour": "ONE_HOUR",
         }
         mapped_interval = interval_map.get(clean_tf, "FIFTEEN_MINUTE")
-        intraday_days = 2 if clean_tf in ("1m", "3m") else (5 if clean_tf in ("5m", "15m") else 14)
+        intraday_days = 10 if clean_tf in ("1m", "3m") else (45 if clean_tf in ("5m", "15m") else 90)
         bars_dict = provider_manager.get_intraday_bars([clean_sym], interval=mapped_interval, days=intraday_days, market=clean_mkt)
         df_intra = bars_dict.get(clean_sym)
         if df_intra is not None and not df_intra.empty:
@@ -189,7 +189,7 @@ def get_bars(
 
     if not is_intraday or not candle_data:
         # Daily bars
-        start_date = today - datetime.timedelta(days=max(n * 2, 365))
+        start_date = today - datetime.timedelta(days=max(n * 2, 1460))
         try:
             bars = provider_manager.get_daily_bars([clean_sym], start_date, today, market=market, db=db)
             daily_df = bars.get(clean_sym)

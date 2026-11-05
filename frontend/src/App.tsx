@@ -257,9 +257,9 @@ export const AppContent: React.FC = () => {
         {/* Primary Page Content Canvas */}
         <main className="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 lg:p-6 min-w-0">
           <Routes>
-            <Route path="/" element={<DashboardPage currentMarket={currentMarket} />} />
+            <Route path="/" element={<DashboardPage currentMarket={currentMarket} onMarketChange={setCurrentMarket} />} />
             <Route path="/watchlist" element={<WatchlistPage currentMarket={currentMarket} />} />
-            <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} />} />
+            <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} onMarketChange={setCurrentMarket} />} />
             <Route path="/positions" element={<PositionsPage currentMarket={currentMarket} />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/backtests" element={<BacktestsPage currentMarket={currentMarket} />} />
