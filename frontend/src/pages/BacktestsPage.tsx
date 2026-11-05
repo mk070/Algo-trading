@@ -15,6 +15,7 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
   const [metrics, setMetrics] = useState<BacktestMetrics | null>(null);
   const [monteCarlo, setMonteCarlo] = useState<MonteCarloData | null>(null);
   const [trades, setTrades] = useState<any[]>([]);
+  const [dataCoverage, setDataCoverage] = useState<any>(null);
   const [setupFilter, setSetupFilter] = useState<'ALL' | 'VCP' | 'PULLBACK'>('ALL');
   const [capital, setCapital] = useState(17500);
 
@@ -38,6 +39,7 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
       setMetrics(res.metrics);
       setMonteCarlo(res.monte_carlo);
       setTrades(res.trades || []);
+      setDataCoverage(res.data_coverage || null);
     } catch (e) {
       alert('Backtest execution error: ' + e);
     } finally {
@@ -100,6 +102,7 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
               <p className="text-xs text-slate-400">
                 Event-driven daily simulation strictly enforcing conservative fill rules (Section 12.2) and full trading costs.
               </p>
+              <p className="mt-1 text-[11px] text-amber-300">Max drawdown uses daily mark-to-market equity, includes open positions and liquidates remaining positions at the test end.</p>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -148,6 +151,11 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
           {/* Results View */}
           {metrics && (
             <div className="flex flex-col gap-6">
+              {dataCoverage && (
+                <div className={`rounded-lg border p-3 text-xs ${dataCoverage.warning ? 'border-amber-800 bg-amber-950/40 text-amber-300' : 'border-slate-700 bg-slate-900 text-slate-300'}`}>
+                  Data coverage: requested {dataCoverage.requested_start}–{dataCoverage.requested_end}; available {dataCoverage.actual_start || 'none'}–{dataCoverage.actual_end || 'none'} ({dataCoverage.sessions} sessions, {dataCoverage.symbols_with_bars} symbols). {dataCoverage.warning || ''}
+                </div>
+              )}
               {/* Key Metrics */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
@@ -161,9 +169,9 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
                   <span className="text-[10px] text-slate-500 block mt-1">Winning trades %</span>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
-                  <span className="text-xs text-slate-400 block mb-1">Profit Factor</span>
+                  <span className="text-xs text-slate-400 block mb-1">Net Profit Factor</span>
                   <span className="text-xl font-bold font-mono text-indigo-300">{metrics.profit_factor}</span>
-                  <span className="text-[10px] text-slate-500 block mt-1">Gross win / Gross loss</span>
+                  <span className="text-[10px] text-slate-500 block mt-1">Net wins / net losses, after costs</span>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                   <span className="text-xs text-slate-400 block mb-1">Expectancy / Trade</span>
@@ -175,7 +183,7 @@ export const BacktestsPage: React.FC<BacktestsPageProps> = ({ currentMarket }) =
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
                   <span className="text-xs text-slate-400 block mb-1">Max Drawdown</span>
                   <span className="text-xl font-bold font-mono text-rose-400">-{metrics.max_drawdown_pct}%</span>
-                  <span className="text-[10px] text-slate-500 block mt-1">Peak-to-trough</span>
+            <span className="text-[10px] text-slate-500 block mt-1">Daily marked-to-market peak-to-trough</span>
                 </div>
               </div>
 

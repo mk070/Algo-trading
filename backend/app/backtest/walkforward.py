@@ -47,8 +47,8 @@ def run_walk_forward_analysis(
         return WalkForwardResult(
             total_windows=0,
             windows=[],
-            robustness_score_pct=100.0,
-            passed_validation=True,
+            robustness_score_pct=0.0,
+            passed_validation=False,
         )
 
     start_date = sorted_dates[0]
@@ -101,6 +101,6 @@ def run_walk_forward_analysis(
         total_windows=len(windows),
         windows=windows,
         robustness_score_pct=round(robustness_pct, 1),
-        passed_validation=robustness_pct >= 70.0,
+        passed_validation=bool(windows) and robustness_pct >= 70.0,
     )
 

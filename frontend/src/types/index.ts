@@ -160,7 +160,7 @@ export interface BacktestMetrics {
   max_drawdown_pct: number;
   max_drawdown_duration_days: number;
   total_costs: number;
-  costs_pct_of_gross: number;
+  costs_pct_of_gross: number | null;
   sharpe_ratio: number;
   acceptance_gates: GateCheck[];
   all_gates_passed: boolean;

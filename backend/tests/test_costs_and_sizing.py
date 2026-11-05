@@ -33,6 +33,15 @@ def test_indian_cost_model_breakdown():
     assert breakdown.passed_gate is True
 
 
+def test_simulator_can_separate_cost_model_slippage_from_slipped_fill_prices():
+    model = CostModel(market="IN")
+    full = model.calculate_round_trip(1000.0, 10, 500.0)
+    fees_only = model.calculate_round_trip(1000.0, 10, 500.0, include_slippage=False)
+    assert full.slippage > 0
+    assert fees_only.slippage == 0
+    assert round(full.total_cost - fees_only.total_cost, 2) == full.slippage
+
+
 def test_cost_gate_rejects_small_capital_uneconomical_trades():
     """Section 4.3: With small account size (e.g. INR 17,500), 0.5% risk is INR 87.5.
     Round-trip fixed charges (DP ~15 + STT + taxes) consume > 0.25R (> ~22 INR),

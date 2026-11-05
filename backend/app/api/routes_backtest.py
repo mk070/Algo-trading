@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import pandas as pd
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -39,6 +40,25 @@ def run_backtest(req: BacktestRequest, db: Session = Depends(get_db)):
     bars_dict = provider_manager.get_daily_bars(
         symbols, start_d - datetime.timedelta(days=100), end_d, market=req.market, db=db
     )
+    available_dates = sorted({
+        pd.Timestamp(bar_date).date()
+        for frame in bars_dict.values()
+        if frame is not None and not frame.empty and "date" in frame
+        for bar_date in frame["date"].tolist()
+        if pd.notna(bar_date)
+    })
+    actual_start = available_dates[0] if available_dates else None
+    actual_end = available_dates[-1] if available_dates else None
+    data_coverage = {
+        "requested_start": start_d.isoformat(),
+        "requested_end": end_d.isoformat(),
+        "actual_start": actual_start.isoformat() if hasattr(actual_start, "isoformat") else str(actual_start) if actual_start else None,
+        "actual_end": actual_end.isoformat() if hasattr(actual_end, "isoformat") else str(actual_end) if actual_end else None,
+        "sessions": len(available_dates),
+        "symbols_with_bars": sum(1 for frame in bars_dict.values() if frame is not None and not frame.empty),
+    }
+    if actual_start is None or actual_start > start_d:
+        data_coverage["warning"] = "The stored data starts after the requested test period; results cover only the available dates."
 
     simulator = BacktestSimulator(market=req.market)
     sim_result = simulator.run(
@@ -63,6 +83,7 @@ def run_backtest(req: BacktestRequest, db: Session = Depends(get_db)):
                 "metrics": sim_result["metrics"],
                 "monte_carlo": mc_result.model_dump(),
                 "survivorship_bias_notice": sim_result["survivorship_bias_notice"],
+                "data_coverage": data_coverage,
             }
         ),
         status="COMPLETED",
@@ -97,6 +118,7 @@ def run_backtest(req: BacktestRequest, db: Session = Depends(get_db)):
         "trades_count": len(sim_result["trades"]),
         "trades": sim_result["trades"][:50],  # preview top 50
         "survivorship_bias_notice": sim_result["survivorship_bias_notice"],
+        "data_coverage": data_coverage,
     }
 
 
@@ -164,6 +186,7 @@ def get_backtest_run(run_id: int, db: Session = Depends(get_db)):
         "status": run_record.status,
         "metrics": metrics_data.get("metrics"),
         "monte_carlo": metrics_data.get("monte_carlo"),
+        "data_coverage": metrics_data.get("data_coverage"),
         "survivorship_bias_notice": metrics_data.get("survivorship_bias_notice"),
         "trades": [
             {

@@ -28,7 +28,7 @@ class CostModel:
         self.mkt_cfg = settings.get_market_config(self.market)
 
     def calculate_round_trip(
-        self, price: float, qty: int, risk_amount: float
+        self, price: float, qty: int, risk_amount: float, include_slippage: bool = True
     ) -> CostBreakdown:
         if qty <= 0 or price <= 0:
             return CostBreakdown(
@@ -79,7 +79,7 @@ class CostModel:
 
             # 8. Slippage
             slip_pct = self.mkt_cfg.slippage_pct / 100.0
-            slippage = total_turnover * slip_pct
+            slippage = total_turnover * slip_pct if include_slippage else 0.0
 
             total_cost = (
                 brokerage
@@ -98,7 +98,7 @@ class CostModel:
             regulatory = (self.cfg.regulatory_pct / 100.0) * sell_turnover
             fx_spread = (self.cfg.fx_spread_pct / 100.0) * total_turnover
             slip_pct = self.mkt_cfg.slippage_pct / 100.0
-            slippage = total_turnover * slip_pct
+            slippage = total_turnover * slip_pct if include_slippage else 0.0
 
             brokerage = commission
             stt = 0.0
