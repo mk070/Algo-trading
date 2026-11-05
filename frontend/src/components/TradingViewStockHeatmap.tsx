@@ -9,11 +9,12 @@ interface TradingViewStockHeatmapProps {
 export const TradingViewStockHeatmap: React.FC<TradingViewStockHeatmapProps> = ({
   market,
   height = '100%',
-  hasTopBar = false,
+  hasTopBar = true,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const dataSource = market === 'IN' ? 'NIFTY50' : 'SPX500';
+  const dataSource = market === 'IN' ? 'NIFTY 50' : 'SPX500';
+  const exchanges = market === 'IN' ? ['BSE', 'NSE'] : [];
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -36,7 +37,7 @@ export const TradingViewStockHeatmap: React.FC<TradingViewStockHeatmapProps> = (
     script.async = true;
 
     const widgetConfig = {
-      exchanges: [],
+      exchanges: exchanges,
       dataSource: dataSource,
       grouping: 'sector',
       blockSize: 'market_cap_basic',
@@ -45,7 +46,7 @@ export const TradingViewStockHeatmap: React.FC<TradingViewStockHeatmapProps> = (
       symbolUrl: '',
       colorTheme: 'dark',
       hasTopBar: hasTopBar,
-      isDataSetEnabled: false,
+      isDataSetEnabled: true,
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,
@@ -70,7 +71,7 @@ export const TradingViewStockHeatmap: React.FC<TradingViewStockHeatmapProps> = (
     <div
       ref={containerRef}
       className="w-full rounded-xl overflow-hidden bg-slate-950 border border-slate-800/80"
-      style={{ height: resolvedHeight, minHeight: '340px' }}
+      style={{ height: resolvedHeight, minHeight: '360px' }}
     />
   );
 };
