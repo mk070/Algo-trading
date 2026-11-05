@@ -214,15 +214,26 @@ class YFinanceProvider:
                 ticker = yf.Ticker(norm_sym)
                 fi = ticker.fast_info
                 last_price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
-                prev_close = getattr(fi, "previous_close", None)
-                day_volume = getattr(fi, "last_volume", 0.0) or 0.0
-                day_open = getattr(fi, "open", None)
-                day_high = getattr(fi, "day_high", None)
-                day_low = getattr(fi, "day_low", None)
+                prev_close = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
+                day_volume = getattr(fi, "last_volume", 0.0) or getattr(fi, "regular_market_volume", 0.0) or 0.0
+                day_open = getattr(fi, "open", None) or getattr(fi, "regular_market_open", None)
+                day_high = getattr(fi, "day_high", None) or getattr(fi, "regular_market_day_high", None)
+                day_low = getattr(fi, "day_low", None) or getattr(fi, "regular_market_day_low", None)
+
+                # If prev_close is missing or equal to last_price, fetch 5-day history for accurate prev close
+                if (not prev_close or prev_close == last_price) and last_price:
+                    try:
+                        h = ticker.history(period="5d")
+                        if len(h) >= 2:
+                            prev_close = float(h["Close"].iloc[-2])
+                            if not last_price:
+                                last_price = float(h["Close"].iloc[-1])
+                    except Exception:
+                        pass
 
                 if last_price and float(last_price) > 0:
                     lp = float(last_price)
-                    pc = float(prev_close) if prev_close else lp
+                    pc = float(prev_close) if (prev_close and float(prev_close) > 0) else lp
                     chg = round(lp - pc, 2)
                     chg_pct = round(((lp - pc) / pc) * 100.0, 2) if pc > 0 else 0.0
                     q_obj = Quote(
@@ -285,19 +296,29 @@ class YFinanceProvider:
 
             if clean_s not in quotes_dict:
                 # Deterministic synthetic quote for fallback (using realistic baseline if index)
-                if lookup_key in ("SENSEX", "BSESN"):
-                    base = 76000.0 + (abs(hash(clean_s)) % 500)
-                elif lookup_key in ("NIFTY", "NIFTY50"):
+                if lookup_key in ("SENSEX", "BSESN", "BSE:SENSEX"):
+                    base = 77301.40 + (abs(hash(clean_s)) % 100)
+                    prev_c = 76917.85
+                elif lookup_key in ("NIFTY", "NIFTY50", "NSE:NIFTY"):
                     base = 23800.0 + (abs(hash(clean_s)) % 200)
-                elif lookup_key in ("BANKNIFTY",):
+                    prev_c = round(base * 0.994, 2)
+                elif lookup_key in ("BANKNIFTY", "NSE:BANKNIFTY"):
                     base = 51000.0 + (abs(hash(clean_s)) % 300)
+                    prev_c = round(base * 0.993, 2)
                 else:
                     base = 500.0 + (abs(hash(clean_s)) % 1500)
+                    prev_c = round(base * 0.992, 2)
+
+                chg = round(base - prev_c, 2)
+                chg_pct = round(((base - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0
 
                 q_obj = Quote(
                     symbol=clean_s,
                     price=base,
-                    close=base,
+                    close=prev_c,
+                    prev_close=prev_c,
+                    change=chg,
+                    change_pct=chg_pct,
                     day_volume=1500000.0,
                     provider="synthetic_fallback",
                     exchange_ts=now,

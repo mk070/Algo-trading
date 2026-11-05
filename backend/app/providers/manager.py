@@ -220,7 +220,7 @@ class ProviderManager:
                     existing.open = q.open
                     existing.high = q.high
                     existing.low = q.low
-                    existing.close = q.close
+                    existing.close = q.prev_close or q.close
                 else:
                     new_q = LatestQuote(
                         symbol=sym,
@@ -235,7 +235,7 @@ class ProviderManager:
                         open=q.open,
                         high=q.high,
                         low=q.low,
-                        close=q.close,
+                        close=q.prev_close or q.close,
                     )
                     db.add(new_q)
             db.commit()
@@ -273,7 +273,7 @@ class ProviderManager:
                     max_age = 20.0 if row.realtime else 60.0
                     freshness = QuoteFreshness.FRESH if age_sec <= max_age else QuoteFreshness.STALE
 
-                    prev_c = row.close or row.open or row.price
+                    prev_c = row.close if (row.close and row.close != row.price) else (row.open if (row.open and row.open != row.price) else row.price)
                     chg = round(row.price - prev_c, 2) if prev_c > 0 else 0.0
                     chg_pct = round(((row.price - prev_c) / prev_c) * 100.0, 2) if prev_c > 0 else 0.0
 

@@ -83,6 +83,63 @@ class AlpacaProvider:
 
         return results
 
+    def intraday_bars(
+        self, symbols: List[str], interval: str = "15m", days: int = 5
+    ) -> Dict[str, pd.DataFrame]:
+        """Fetch US intraday bars (1m, 5m, 15m, 30m, 1h) from Alpaca IEX real-time feed."""
+        results: Dict[str, pd.DataFrame] = {}
+        if not self.is_configured() or not symbols:
+            return results
+
+        tf_map = {
+            "1m": "1Min", "1min": "1Min", "one_minute": "1Min",
+            "5m": "5Min", "5min": "5Min", "five_minute": "5Min",
+            "15m": "15Min", "15min": "15Min", "fifteen_minute": "15Min",
+            "30m": "30Min", "30min": "30Min", "thirty_minute": "30Min",
+            "1h": "1Hour", "60m": "1Hour", "one_hour": "1Hour",
+        }
+        alpaca_tf = tf_map.get(interval.lower(), "15Min")
+
+        end = datetime.datetime.now(datetime.timezone.utc)
+        start = end - datetime.timedelta(days=days)
+        symbols_str = ",".join(symbols)
+        url = f"{self.data_url}/stocks/bars"
+        params = {
+            "symbols": symbols_str,
+            "timeframe": alpaca_tf,
+            "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "feed": "iex",
+            "limit": 1000,
+        }
+
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.get(url, headers=self._headers(), params=params)
+                if resp.status_code == 200:
+                    bars_data = resp.json().get("bars", {})
+                    for sym, bars in bars_data.items():
+                        df = pd.DataFrame(bars)
+                        if not df.empty:
+                            df = df.rename(
+                                columns={
+                                    "t": "timestamp",
+                                    "o": "open",
+                                    "h": "high",
+                                    "l": "low",
+                                    "c": "close",
+                                    "v": "volume",
+                                }
+                            )
+                            df["timestamp"] = pd.to_datetime(df["timestamp"])
+                            df["adj_close"] = df["close"]
+                            df["source"] = self.name
+                            results[sym] = df
+        except Exception as e:
+            logger.error(f"Alpaca intraday bars error: {e}")
+
+        return results
+
     def quotes(self, symbols: List[str]) -> Dict[str, Quote]:
         quotes_dict: Dict[str, Quote] = {}
         if not self.is_configured():

@@ -41,7 +41,7 @@ import { TradingViewRealtimeChart } from './TradingViewRealtimeChart';
 export interface CandleChartProps {
   symbol: string;
   market?: 'IN' | 'US';
-  initialTimeframe?: '1D' | '15m';
+  initialTimeframe?: string;
   bars?: CandleBar[];
   trigger?: number;
   stop?: number;
@@ -126,7 +126,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const isInitialLoadRef = useRef<boolean>(true);
 
   // Timeframe state
-  const [timeframe, setTimeframe] = useState<'1D' | '15m'>(initialTimeframe);
+  const [timeframe, setTimeframe] = useState<string>(initialTimeframe || '1D');
 
   // Bars and Metadata state
   const [chartBars, setChartBars] = useState<CandleBar[]>(initialBars || []);
@@ -183,6 +183,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     } catch {}
   }, [drawings, symbol]);
 
+  const lastBarRef = useRef<CandleBar | null>(null);
+  const prevPriceRef = useRef<number | null>(null);
+  const [priceFlash, setPriceFlash] = useState<'UP' | 'DOWN' | null>(null);
+
+  // Keep lastBarRef in sync with chartBars
+  useEffect(() => {
+    if (chartBars && chartBars.length > 0) {
+      lastBarRef.current = chartBars[chartBars.length - 1];
+    }
+  }, [chartBars]);
+
   // Fetch Bars function
   const fetchBarsData = useCallback(async (isPolling: boolean = false) => {
     if (!symbol) return;
@@ -190,7 +201,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       if (!isPolling) setLoading(true);
       setError(null);
 
-      const tfParam = timeframe === '15m' ? '15m' : '1d';
+      const tfParam = timeframe.toLowerCase();
       const data: BarsResponse = await apiClient.getBars(symbol, market, tfParam, 200);
 
       if (data && data.bars && data.bars.length > 0) {
@@ -220,13 +231,70 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     fetchBarsData(false);
   }, [fetchBarsData]);
 
-  // Live polling every 12 seconds for active current bar updates
+  // Periodic 4-second bar dataset sync
   useEffect(() => {
     const timer = setInterval(() => {
       fetchBarsData(true);
     }, 4000);
     return () => clearInterval(timer);
   }, [fetchBarsData]);
+
+  // Ultra-Low Latency 2s Live Quote Streaming Loop (Bloomberg Terminal & Brokerage live ticking mode)
+  useEffect(() => {
+    if (!symbol) return;
+
+    let isMounted = true;
+    const streamTick = async () => {
+      try {
+        const quotes = await apiClient.getQuotes([symbol], market);
+        const rawSym = symbol.replace('BSE:', '').replace('NSE:', '').trim().toUpperCase();
+        const q = quotes[symbol] || quotes[rawSym] || quotes[`BSE:${rawSym}`] || quotes[`NSE:${rawSym}`];
+
+        if (isMounted && q && Number(q.price) > 0) {
+          const livePrice = Number(q.price);
+
+          // Flash direction indicator
+          if (prevPriceRef.current != null && prevPriceRef.current !== livePrice) {
+            setPriceFlash(livePrice > prevPriceRef.current ? 'UP' : 'DOWN');
+            setTimeout(() => {
+              if (isMounted) setPriceFlash(null);
+            }, 800);
+          }
+          prevPriceRef.current = livePrice;
+          setCurrentPrice(livePrice);
+          if (q.exchange_ts) setLastQuoteTime(q.exchange_ts);
+          if (q.realtime) setFeedStatus('LIVE');
+
+          // Smoothly inject tick into active candlestick series without full canvas reload
+          if (candleSeriesRef.current && lastBarRef.current) {
+            const currentLast = lastBarRef.current;
+            const updatedBar: CandleBar = {
+              ...currentLast,
+              close: livePrice,
+              high: Math.max(Number(currentLast.high || livePrice), livePrice),
+              low: Math.min(Number(currentLast.low || livePrice), livePrice),
+            };
+            lastBarRef.current = updatedBar;
+            candleSeriesRef.current.update({
+              time: updatedBar.time as Time,
+              open: updatedBar.open,
+              high: updatedBar.high,
+              low: updatedBar.low,
+              close: updatedBar.close,
+            });
+          }
+        }
+      } catch (e) {
+        // Silent catch on live tick poll
+      }
+    };
+
+    const quoteTimer = setInterval(streamTick, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(quoteTimer);
+    };
+  }, [symbol, market]);
 
   // Trigger, Stop, Target effective values
   const effectiveTrigger = strategyData?.trigger || propTrigger;
@@ -724,13 +792,31 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             </span>
           </div>
 
-          {/* Timeframe Selector */}
+          {/* Live Price Flash Badge (Bloomberg / Brokerage Terminal Style) */}
+          {currentPrice != null && (
+            <div
+              className={`flex items-center gap-1 font-mono font-bold text-sm px-2.5 py-0.5 rounded-lg border transition-all duration-300 ${
+                priceFlash === 'UP'
+                  ? 'bg-emerald-950 border-emerald-500 text-emerald-300 ring-2 ring-emerald-500/50'
+                  : priceFlash === 'DOWN'
+                  ? 'bg-rose-950 border-rose-500 text-rose-300 ring-2 ring-rose-500/50'
+                  : 'bg-slate-950/90 border-slate-700 text-white'
+              }`}
+            >
+              <span className="text-xs text-slate-400">{market === 'IN' ? '₹' : '$'}</span>
+              <span>{currentPrice.toFixed(2)}</span>
+              {priceFlash === 'UP' && <span className="text-[10px] text-emerald-400">▲</span>}
+              {priceFlash === 'DOWN' && <span className="text-[10px] text-rose-400">▼</span>}
+            </div>
+          )}
+
+          {/* Timeframe Selector with Full Resolutions */}
           <div className="flex items-center bg-slate-950/80 rounded-lg p-0.5 border border-slate-800">
-            {(['1D', '15m'] as const).map((tf) => (
+            {(['1m', '5m', '15m', '1h', '1D', '1W'] as const).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
                   timeframe === tf
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
@@ -1244,6 +1330,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             symbol={symbol}
             market={market}
             height={isExpanded ? 720 : 560}
+            initialInterval={
+              timeframe === '15m'
+                ? '15'
+                : timeframe === '5m'
+                ? '5'
+                : timeframe === '1m'
+                ? '1'
+                : timeframe === '1h'
+                ? '60'
+                : timeframe === '1W'
+                ? 'W'
+                : 'D'
+            }
           />
         ) : (
           <>

@@ -61,6 +61,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket }) =
 
   useEffect(() => {
     fetchPlan();
+    // 8s auto-refresh for live trade plan setups and trigger breaches without page reload
+    const interval = setInterval(() => {
+      fetchPlan();
+    }, 8000);
+    return () => clearInterval(interval);
   }, [currentMarket]);
 
   const handleOpenChart = async (symbol: string) => {

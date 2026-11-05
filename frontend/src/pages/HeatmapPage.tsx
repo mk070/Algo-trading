@@ -582,3 +582,4 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket }) => {
     </div>
   );
 };
+

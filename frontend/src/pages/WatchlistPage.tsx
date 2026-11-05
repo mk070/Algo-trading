@@ -128,6 +128,7 @@ function StockRow({
   onOpenFundamentals,
   expanded,
   onToggleExpand,
+  flash,
 }: {
   row: WatchlistItemData;
   market: 'IN' | 'US';
@@ -136,6 +137,7 @@ function StockRow({
   onOpenFundamentals: (sym: string) => void;
   expanded: boolean;
   onToggleExpand: (sym: string) => void;
+  flash?: 'UP' | 'DOWN';
 }) {
   const isUp = row.day_change_pct >= 0;
 
@@ -166,9 +168,17 @@ function StockRow({
           </div>
         </td>
 
-        {/* Price */}
+        {/* Price with Real-time Tick Glow Flash */}
         <td className="px-3 py-2.5 text-right">
-          <span className="font-mono font-bold text-slate-100 text-sm tabular-nums">
+          <span
+            className={`font-mono font-bold text-sm tabular-nums px-2 py-0.5 rounded transition-all duration-300 ${
+              flash === 'UP'
+                ? 'bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-400 font-black'
+                : flash === 'DOWN'
+                ? 'bg-rose-500/30 text-rose-300 ring-1 ring-rose-400 font-black'
+                : 'text-slate-100'
+            }`}
+          >
             {fmtPrice(row.last_price, market)}
           </span>
         </td>
@@ -330,16 +340,45 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({ currentMarket }) =
     }
   };
 
-  const fetchItems = async (wlId: number) => {
+  const [priceFlashes, setPriceFlashes] = useState<Record<string, 'UP' | 'DOWN'>>({});
+  const itemsRef = React.useRef<WatchlistItemData[]>([]);
+  itemsRef.current = items;
+
+  const fetchItems = async (wlId: number, isSilent = false) => {
     try {
-      setRefreshing(true);
+      if (!isSilent) setRefreshing(true);
       const res = await apiClient.getWatchlistItems(wlId);
-      setItems(res?.items || []);
+      if (res?.items) {
+        // Compute live price diffs to flash tickers (Bloomberg Terminal mode)
+        const oldItems = itemsRef.current;
+        const newFlashes: Record<string, 'UP' | 'DOWN'> = {};
+        res.items.forEach((newItem: any) => {
+          const oldItem = oldItems.find((it) => it.symbol === newItem.symbol);
+          if (oldItem && oldItem.last_price != null && newItem.last_price != null && oldItem.last_price !== newItem.last_price) {
+            newFlashes[newItem.symbol] = newItem.last_price > oldItem.last_price ? 'UP' : 'DOWN';
+          }
+        });
+
+        if (Object.keys(newFlashes).length > 0) {
+          setPriceFlashes((prev) => ({ ...prev, ...newFlashes }));
+          setTimeout(() => {
+            setPriceFlashes((prev) => {
+              const copy = { ...prev };
+              Object.keys(newFlashes).forEach((k) => delete copy[k]);
+              return copy;
+            });
+          }, 800);
+        }
+
+        setItems(res.items);
+      }
     } catch (e) {
-      console.error('Error fetching watchlist items:', e);
+      if (!isSilent) console.error('Error fetching watchlist items:', e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!isSilent) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
@@ -350,13 +389,13 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({ currentMarket }) =
   }, [currentMarket]);
 
   useEffect(() => {
-    if (activeListId) fetchItems(activeListId);
+    if (activeListId) fetchItems(activeListId, false);
   }, [activeListId]);
 
-  // 15s polling
+  // Real-time 2.5s polling without reload (Bloomberg Terminal & brokerage app mode)
   useEffect(() => {
     if (!activeListId) return;
-    const interval = setInterval(() => fetchItems(activeListId), 15000);
+    const interval = setInterval(() => fetchItems(activeListId, true), 2500);
     return () => clearInterval(interval);
   }, [activeListId]);
 
@@ -727,6 +766,7 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({ currentMarket }) =
                     onOpenFundamentals={setFundamentalSymbol}
                     expanded={expandedRows.has(row.symbol)}
                     onToggleExpand={toggleRow}
+                    flash={priceFlashes[row.symbol]}
                   />
                 ))}
               </tbody>

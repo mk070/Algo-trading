@@ -34,6 +34,7 @@ export const AppContent: React.FC = () => {
   const [activeTabs, setActiveTabs] = useState<WorkspaceTab[]>([
     { id: 'overview', label: 'Overview', to: '/' },
     { id: 'watchlist', label: 'Watchlist', to: '/watchlist' },
+    { id: 'heatmap', label: 'Market Heatmap', to: '/heatmap' },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>('overview');
 
@@ -126,6 +127,11 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     fetchRegime();
+    // 5s periodic background refresh for topbar market index points & regime
+    const interval = setInterval(() => {
+      fetchRegime();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [currentMarket]);
 
   // Global keyboard shortcut for Quick Search (Ctrl/Cmd + K)

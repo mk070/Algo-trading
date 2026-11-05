@@ -146,7 +146,7 @@ class AngelOneProvider:
         return False
 
     def get_token(self, symbol: str) -> Optional[str]:
-        clean_sym = symbol.replace(".NS", "").replace(".BO", "").upper()
+        clean_sym = symbol.replace(".NS", "").replace(".BO", "").replace("BSE:", "").replace("NSE:", "").strip().upper()
         if clean_sym in self.instrument_map:
             return self.instrument_map[clean_sym]["token"]
         # Seeded known tokens for core Nifty 50 stocks & major indices as reliable fallbacks
@@ -173,11 +173,11 @@ class AngelOneProvider:
         return known_tokens.get(clean_sym)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=4))
-    def _fetch_candles_raw(self, token: str, interval: str, from_date: str, to_date: str) -> List:
+    def _fetch_candles_raw(self, token: str, interval: str, from_date: str, to_date: str, exchange: str = "NSE") -> List:
         """Call getCandleData with rate limiting (approx 3 req/sec)."""
         time.sleep(0.35)
         historic_param = {
-            "exchange": "NSE",
+            "exchange": exchange,
             "symboltoken": token,
             "interval": interval,
             "fromdate": from_date,
@@ -202,7 +202,9 @@ class AngelOneProvider:
                 logger.warning(f"No Angel One token found for {sym}")
                 continue
             try:
-                res = self._fetch_candles_raw(token, "ONE_DAY", from_date_str, to_date_str)
+                is_bse = (token == "99919000") or ("BSE" in sym.upper()) or (sym.upper() in ("SENSEX", "BSESN"))
+                exchange = "BSE" if is_bse else "NSE"
+                res = self._fetch_candles_raw(token, "ONE_DAY", from_date_str, to_date_str, exchange=exchange)
                 if res and res.get("status") and res.get("data"):
                     # Format: [datetime_str, open, high, low, close, volume]
                     rows = res["data"]
@@ -237,7 +239,9 @@ class AngelOneProvider:
             if not token:
                 continue
             try:
-                res = self._fetch_candles_raw(token, interval, from_date_str, to_date_str)
+                is_bse = (token == "99919000") or ("BSE" in sym.upper()) or (sym.upper() in ("SENSEX", "BSESN"))
+                exchange = "BSE" if is_bse else "NSE"
+                res = self._fetch_candles_raw(token, interval, from_date_str, to_date_str, exchange=exchange)
                 if res and res.get("status") and res.get("data"):
                     df = pd.DataFrame(
                         res["data"],

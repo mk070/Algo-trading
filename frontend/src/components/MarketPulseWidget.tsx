@@ -28,9 +28,9 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
   const usSectorTickers = ['AAPL', 'NVDA', 'MSFT', 'AVGO', 'JPM', 'BRK.B'];
   const inSectorTickers = ['HDFCBANK', 'ICICIBANK', 'SBIN', 'KOTAKBANK', 'AXISBANK', 'TCS', 'INFY', 'WIPRO', 'HCLTECH', 'TECHM'];
 
-  // Fetch real-time quotes dynamically from backend
-  const fetchLiveMarketData = async () => {
-    setLoading(true);
+  // Fetch real-time quotes dynamically from backend (Bloomberg Terminal style silent refresh)
+  const fetchLiveMarketData = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const symbolsToFetch = currentMarket === 'US'
         ? [...usPulseTickers, ...usSectorTickers]
@@ -41,15 +41,15 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
         setLiveQuotes(data);
       }
     } catch (e) {
-      console.warn('Error fetching live pulse quotes:', e);
+      if (!isSilent) console.warn('Error fetching live pulse quotes:', e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLiveMarketData();
-    const interval = setInterval(fetchLiveMarketData, 4000); // 4s real-time streaming
+    fetchLiveMarketData(false);
+    const interval = setInterval(() => fetchLiveMarketData(true), 2500); // 2.5s real-time streaming without loader flicker
     return () => clearInterval(interval);
   }, [currentMarket]);
 
@@ -205,7 +205,7 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
           </span>
         </div>
         <button
-          onClick={fetchLiveMarketData}
+          onClick={() => fetchLiveMarketData(false)}
           className="text-indigo-400 font-semibold hover:underline flex items-center gap-1"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

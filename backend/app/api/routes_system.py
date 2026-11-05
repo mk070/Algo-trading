@@ -142,22 +142,34 @@ def get_bars(
     clean_sym = symbol.strip().upper()
     clean_mkt = market.strip().upper()
     today = datetime.date.today()
-    is_15m = tf.lower() in ("15m", "fifteen_minute", "15min")
+    clean_tf = tf.lower().strip()
+    is_intraday = clean_tf in ("1m", "3m", "5m", "15m", "30m", "1h", "60m", "one_minute", "five_minute", "fifteen_minute", "15min")
 
     daily_df = None
     candle_data = []
 
-    if is_15m:
-        bars_dict = provider_manager.get_intraday_bars([clean_sym], interval="FIFTEEN_MINUTE", days=7, market=clean_mkt)
-        df_15m = bars_dict.get(clean_sym)
-        if df_15m is not None and not df_15m.empty:
-            df_15m = df_15m.copy()
-            time_col = "timestamp" if "timestamp" in df_15m.columns else ("datetime" if "datetime" in df_15m.columns else df_15m.columns[0])
-            df_15m["timestamp"] = pd.to_datetime(df_15m[time_col])
-            df_15m = df_15m.sort_values("timestamp").reset_index(drop=True)
-            df_15m = add_all_indicators(df_15m)
-            recent_15m = df_15m.iloc[-min(len(df_15m), n):]
-            for _, r in recent_15m.iterrows():
+    if is_intraday:
+        # Map clean_tf to provider interval standard
+        interval_map = {
+            "1m": "ONE_MINUTE", "one_minute": "ONE_MINUTE",
+            "3m": "THREE_MINUTE", "three_minute": "THREE_MINUTE",
+            "5m": "FIVE_MINUTE", "five_minute": "FIVE_MINUTE",
+            "15m": "FIFTEEN_MINUTE", "15min": "FIFTEEN_MINUTE", "fifteen_minute": "FIFTEEN_MINUTE",
+            "30m": "THIRTY_MINUTE", "thirty_minute": "THIRTY_MINUTE",
+            "1h": "ONE_HOUR", "60m": "ONE_HOUR", "one_hour": "ONE_HOUR",
+        }
+        mapped_interval = interval_map.get(clean_tf, "FIFTEEN_MINUTE")
+        intraday_days = 2 if clean_tf in ("1m", "3m") else (5 if clean_tf in ("5m", "15m") else 14)
+        bars_dict = provider_manager.get_intraday_bars([clean_sym], interval=mapped_interval, days=intraday_days, market=clean_mkt)
+        df_intra = bars_dict.get(clean_sym)
+        if df_intra is not None and not df_intra.empty:
+            df_intra = df_intra.copy()
+            time_col = "timestamp" if "timestamp" in df_intra.columns else ("datetime" if "datetime" in df_intra.columns else df_intra.columns[0])
+            df_intra["timestamp"] = pd.to_datetime(df_intra[time_col])
+            df_intra = df_intra.sort_values("timestamp").reset_index(drop=True)
+            df_intra = add_all_indicators(df_intra)
+            recent_intra = df_intra.iloc[-min(len(df_intra), n):]
+            for _, r in recent_intra.iterrows():
                 ts_val = int(pd.to_datetime(r["timestamp"]).timestamp())
                 candle_data.append({
                     "time": ts_val,
@@ -175,7 +187,7 @@ def get_bars(
                     "atr14": round(float(r["atr14"]), 2) if pd.notna(r.get("atr14")) else None,
                 })
 
-    if not is_15m or not candle_data:
+    if not is_intraday or not candle_data:
         # Daily bars
         start_date = today - datetime.timedelta(days=max(n * 2, 365))
         try:
@@ -242,9 +254,10 @@ def get_bars(
             # 0-Latency Live Quote Injection into latest daily or 15m candle
             if lq.price > 0 and candle_data:
                 live_p = float(lq.price)
-                if is_15m:
+                if is_intraday:
                     current_ts = int(now_utc.timestamp())
-                    slot_ts = (current_ts // 900) * 900
+                    slot_sec = 60 if clean_tf in ('1m','1min') else (300 if clean_tf in ('5m','5min') else (900 if clean_tf in ('15m','15min') else (1800 if clean_tf in ('30m','30min') else 3600)))
+                    slot_ts = (current_ts // slot_sec) * slot_sec
                     last_ts = candle_data[-1]["time"]
                     if last_ts == slot_ts:
                         candle_data[-1]["close"] = round(live_p, 2)
@@ -388,7 +401,7 @@ def get_bars(
     return {
         "symbol": clean_sym,
         "market": market,
-        "timeframe": "15m" if is_15m else "1d",
+        "timeframe": clean_tf,
         "provider": provider_name,
         "feed_status": feed_status,
         "last_quote_time": last_quote_time,

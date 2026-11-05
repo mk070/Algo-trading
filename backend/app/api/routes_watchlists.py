@@ -247,11 +247,19 @@ def get_watchlist_items(
     results = []
     for it in items:
         sym = it.symbol
-        q = quotes.get(sym)
+        q = quotes.get(sym) or quotes.get(f"BSE:{sym}") or quotes.get(f"NSE:{sym}") or quotes.get(sym.replace("BSE:", "").replace("NSE:", ""))
         sig = sig_map.get(sym)
 
-        last_price = q.last_price if q else (sig.trigger if sig else None)
-        day_change = q.pct_change if q else 0.0
+        last_price = (q.price or q.last_price) if q else (sig.trigger if sig else None)
+        day_change = 0.0
+        if q:
+            if q.change_pct is not None:
+                day_change = float(q.change_pct)
+            elif hasattr(q, "pct_change"):
+                day_change = float(q.pct_change)
+            elif getattr(q, "prev_close", None) and float(q.prev_close) > 0 and q.price:
+                day_change = round(((q.price - q.prev_close) / q.prev_close) * 100.0, 2)
+
         setup = sig.setup if sig else "MONITORING"
         state = sig.state if sig else "WATCHLIST"
         rs_rank = sig.rs_rank if sig else 0.50
