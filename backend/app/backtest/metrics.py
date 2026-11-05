@@ -19,7 +19,13 @@ class BacktestMetrics(BaseModel):
     cagr_pct: float
     total_pnl: float
     total_return_pct: float
-    profit_factor: float
+    gross_profit: float = 0.0
+    gross_loss: float = 0.0
+    net_profit: float = 0.0
+    net_loss: float = 0.0
+    profit_factor: float  # Net profit factor
+    net_profit_factor: float = 0.0
+    gross_profit_factor: float = 0.0
     expectancy_r: float
     avg_win_r: float
     avg_loss_r: float
@@ -46,7 +52,13 @@ def compute_backtest_metrics(
             cagr_pct=0.0,
             total_pnl=0.0,
             total_return_pct=0.0,
+            gross_profit=0.0,
+            gross_loss=0.0,
+            net_profit=0.0,
+            net_loss=0.0,
             profit_factor=0.0,
+            net_profit_factor=0.0,
+            gross_profit_factor=0.0,
             expectancy_r=0.0,
             avg_win_r=0.0,
             avg_loss_r=0.0,
@@ -76,11 +88,19 @@ def compute_backtest_metrics(
     losing_trades = len(losses)
     win_rate = (winning_trades / total_trades) * 100.0 if total_trades > 0 else 0.0
 
-    # P&L and R multiples in SimulatedTrade are net of costs. Keep PF net as
-    # well; gross profit before fees is calculated separately for cost drag.
+    # P&L and R multiples in SimulatedTrade are net of costs.
+    # Gross and net profits/losses are computed separately for full accounting transparency.
+    gross_pnls = [float(t.get("gross_pnl", t["pnl"] + t.get("costs", 0.0))) for t in trades]
+    gross_wins = [g for g in gross_pnls if g > 0]
+    gross_losses = [abs(g) for g in gross_pnls if g < 0]
+    gross_profit = sum(gross_wins)
+    gross_loss = sum(gross_losses)
+    gross_profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0.0)
+
     net_profit = sum(wins)
     net_loss = abs(sum(losses))
     profit_factor = (net_profit / net_loss) if net_loss > 0 else (99.0 if net_profit > 0 else 0.0)
+    net_profit_factor = profit_factor
 
     win_r = [r for r in r_mults if r > 0]
     loss_r = [abs(r) for r in r_mults if r <= 0]
@@ -162,8 +182,7 @@ def compute_backtest_metrics(
     if underwater_since is not None and last_trade_day is not None:
         max_dd_duration_days = max(max_dd_duration_days, (last_trade_day - underwater_since).days)
 
-    gross_profit_before_costs = sum(max(float(t["pnl"]) + float(t.get("costs", 0.0)), 0.0) for t in trades)
-    costs_pct = (total_costs / gross_profit_before_costs * 100.0) if gross_profit_before_costs > 0 else None
+    costs_pct = (total_costs / gross_profit * 100.0) if gross_profit > 0 else None
     sharpe = (np.mean(pnls) / np.std(pnls) * np.sqrt(252)) if len(pnls) > 1 and np.std(pnls) > 0 else 0.0
 
     # Acceptance Gates (Section 12.4)
@@ -210,7 +229,13 @@ def compute_backtest_metrics(
         cagr_pct=round(cagr_pct, 1),
         total_pnl=round(total_pnl, 2),
         total_return_pct=round(total_return_pct, 1),
+        gross_profit=round(gross_profit, 2),
+        gross_loss=round(gross_loss, 2),
+        net_profit=round(net_profit, 2),
+        net_loss=round(net_loss, 2),
         profit_factor=round(profit_factor, 2),
+        net_profit_factor=round(net_profit_factor, 2),
+        gross_profit_factor=round(gross_profit_factor, 2),
         expectancy_r=round(expectancy_r, 2),
         avg_win_r=round(avg_win_r, 2),
         avg_loss_r=round(avg_loss_r, 2),

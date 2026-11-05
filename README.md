@@ -94,10 +94,47 @@ cmd /c "cd frontend && npm run dev"
 ```
 - Open browser at: **`http://localhost:5173`** (API requests automatically proxy to port 8000).
 
-### E. Run Automated Test Suite
+### E. Run Automated Test Suite & Backtester Validity Regression Suite
+
+Run the full deterministic validity test suite offline (mocking/disabling external network, Telegram, and broker endpoints):
+
 ```powershell
-& "backend\.venv\Scripts\python.exe" -m pytest backend/tests -v
+# Run the 16-point deterministic Backtester Validity Audit test suite
+backend\.venv\Scripts\python.exe -m pytest backend/tests/test_backtester_validity.py -v
+
+# Run all offline engine, sizing, cost, and backtesting test suites
+backend\.venv\Scripts\python.exe -m pytest backend/tests/test_backtester_validity.py backend/tests/test_backtest_fills.py backend/tests/test_backtest_metrics.py backend/tests/test_costs_and_sizing.py backend/tests/test_no_lookahead.py backend/tests/test_scenario_lab.py backend/tests/test_no_broker_order.py backend/tests/test_indicators.py backend/tests/test_risk_validator.py -v
 ```
+
+---
+
+## 4. Backtester Validity Audit & Reconciled Engine Protocols
+
+A complete validity audit of the backtesting engine was performed to verify accounting correctness, execution mechanics, and validation integrity:
+
+1. **Accounting Correctness & Exact Reconciliation:**
+   - **Gross P&L:** Calculated before costs: `gross_pnl = (exit_ref - entry_ref) * qty`.
+   - **Cost Deductions:** Brokerage, taxes, exchange/SEBI charges, stamp duty, DP charges, and slippage are deducted exactly once.
+   - **Slippage Accounting:** Fill prices incorporate adverse slippage (`entry * (1 + slip)`, `exit * (1 - slip)`). The regulatory fee model calculates costs with `include_slippage=False` so slippage is never double-counted.
+   - **Reconciliation Invariant:** For every simulated trade: `trade.gross_pnl - trade.costs == trade.pnl`. For the portfolio: `gross_profit - gross_loss - total_costs == total_pnl`.
+   - **Cost Drag:** Calculated with gross profit as denominator: `costs_pct = (total_costs / gross_profit) * 100%`. If gross profit is zero (e.g. net loss scenario), cost drag evaluates to `None` and the gate cleanly fails.
+2. **Execution & Fill Rules (Conservative Bias):**
+   - **Partial Profit:** 2R target realizes configured partial quantity (e.g. 50%), adjusts remaining quantity, moves stop to breakeven, and aggregates legs into an auditable trade record.
+   - **Gap-Through Fills:** Buy stops that gap up fill at `open * (1 + slip)`. Stop losses that gap down fill at `open * (1 - slip)`.
+   - **Same-Bar Ambiguity:** If a daily candle touches both stop and target, the engine strictly applies the conservative **stop-first assumption**.
+   - **Next-Open Exits:** Exits triggered by closing conditions (SMA50 trend-break, time stop) queue an `exit_pending` state and execute on the next session's open.
+   - **Pending-Order Risk & Duplicate Prevention:** Pending orders reserve position count and portfolio heat capacity. Duplicate entries for an instrument already open or pending are strictly prevented.
+   - **End-of-Test Liquidation:** Open positions at the conclusion of the test are liquidated at the final available close price.
+3. **Daily Mark-to-Market Equity & Drawdown:**
+   - Daily equity curve tracks realized P&L plus marked-to-market unrealized P&L of open positions (net of estimated regulatory round-trip fees and adverse exit slippage).
+   - Maximum drawdown is computed from the daily equity curve high-water mark, capturing open-position adverse excursion.
+   - Explicit warnings (`data_warnings`) are emitted when missing bars or anomalous date gaps are encountered.
+4. **Walk-Forward Validation Protocol:**
+   - Insufficient history (< 300 bars) returns `status="INSUFFICIENT_DATA"` (never auto-passes).
+   - Empty validation windows (0 trades) strictly fail (`passed=False`).
+   - Training windows and test windows are strictly non-overlapping (`test_start = train_end + 1 day`).
+   - Optional holdout period (`holdout_months`) reserves final out-of-sample data untouched.
+   - Trials count is explicitly recorded (`trials_recorded`), and no strategy is auto-approved solely based on rank.
 
 ## Deploy Frontend on Vercel and Backend on Render
 

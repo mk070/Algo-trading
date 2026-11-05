@@ -542,6 +542,25 @@ Metrics: CAGR, total return, volatility, Sharpe/Sortino (clearly labelled), max 
 ### 12.5 What free data cannot backtest
 Free intraday history is short (for example only a limited window of 15-minute bars), so the **15-minute confirmation and intraday volume-pace rules cannot be validated over many years**. Backtests therefore use **daily bars with conservative fills** (Section 12.2), and the intraday confirmation is validated through **paper trading and forward logging** (store each alert's price, 15-minute candle, volume pace and the price actually available a few minutes later to measure slippage). Report this limitation on every backtest page.
 
+### 12.6 Reconciled Accounting & Execution Invariants (Audit-Verified 2026-11-05)
+1. **Gross vs. Net P&L Consistency:**
+   - `Gross_PnL = (exit_reference - entry_reference) * qty` (or sum across partial and remaining legs).
+   - `Total_Costs = Round_Trip_Brokerage_Taxes + Entry_Slippage + Exit_Slippages`.
+   - `Net_PnL = Gross_PnL - Total_Costs`.
+   - At trade level: `trade.gross_pnl - trade.costs == trade.pnl`.
+   - At portfolio level: `gross_profit - gross_loss - total_costs == total_pnl` and `net_profit - net_loss == total_pnl`.
+2. **Slippage Deducted Once:** Slippage is applied directly to execution fill prices (`fill_price = trigger * (1 + slip_pct)` for entries, `exit_price = exit_ref * (1 - slip_pct)` for exits). `CostModel.calculate_round_trip` is called with `include_slippage=False` to strictly prevent double-counting.
+3. **Conservative Same-Candle Ambiguity:** When a daily candle's high touches the profit target and its low touches the stop loss, the simulator assumes the **stop was hit first** (conservative bias).
+4. **Next-Open Exits:** Exits triggered by daily close conditions (SMA50 trend break, time stops) are queued as `exit_pending` and filled at the next session's `open * (1 - slip_pct)`.
+5. **Pending Order Reservation & Duplicate Prevention:** Pending orders reserve position count and portfolio heat. Instruments already open or pending cannot generate duplicate entries.
+6. **Mark-to-Market Equity & Drawdown:** Daily portfolio equity tracks realized P&L plus marked-to-market unrealized P&L (net of estimated round-trip costs and adverse exit slippage). Maximum drawdown is evaluated from the complete daily equity curve rather than closed-trade steps alone.
+7. **Walk-Forward Validation Protocol:**
+   - Windows with insufficient history (< 300 bars) return `status="INSUFFICIENT_DATA"` (never auto-pass).
+   - Empty validation windows (0 trades) are strictly rejected (`passed=False`).
+   - Training windows (`curr_start` to `train_end`) and out-of-sample testing windows (`train_end + 1 day` to `test_end`) are strictly non-overlapping.
+   - Final holdout data (`holdout_months`) is set aside untouched and is excluded from parameter optimization.
+   - Trials count is explicitly recorded (`trials_recorded`), and strategies are never approved solely by virtue of rank.
+
 ---
 
 ## 13. PAPER TRADING MODE

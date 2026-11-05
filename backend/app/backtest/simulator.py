@@ -27,6 +27,7 @@ class SimulatedTrade(BaseModel):
     exit_reason: str
     qty: int
     pnl: float
+    gross_pnl: float = 0.0
     r_multiple: float
     costs: float
     holding_days: int
@@ -64,11 +65,12 @@ class BacktestSimulator:
         total_risk = risk_per_share * original_qty
         if pos.get("partial_qty", 0):
             reason = f"Partial Target + {reason}"
+        gross_pnl = round(net_pnl + actual_cost, 2)
         return SimulatedTrade(
             symbol=pos["symbol"], setup=pos["setup"], entry_date=pos["entry_date"],
             entry_price=round(pos["entry_price"], 4), exit_date=exit_date,
             exit_price=round(exit_price, 4), exit_reason=reason,
-            qty=original_qty, pnl=round(net_pnl, 2),
+            qty=original_qty, pnl=round(net_pnl, 2), gross_pnl=gross_pnl,
             r_multiple=round(net_pnl / total_risk, 4) if total_risk > 0 else 0.0,
             costs=round(actual_cost, 2), holding_days=pos["days_held"],
         )
@@ -83,6 +85,17 @@ class BacktestSimulator:
         setup_filter: str = "ALL",  # ALL, VCP, PULLBACK
     ) -> Dict:
         init_capital = capital or self.mkt_cfg.capital
+        data_warnings: List[str] = []
+
+        # Check for gaps and missing trading days in input data
+        for sym, df in bars_data.items():
+            if df is not None and len(df) > 1 and "date" in df.columns:
+                d_list = sorted(list(df["date"]))
+                for i in range(1, len(d_list)):
+                    d_prev, d_curr = d_list[i - 1], d_list[i]
+                    b_days = pd.bdate_range(d_prev, d_curr)
+                    if len(b_days) > 2:  # Skipped business day(s)
+                        data_warnings.append(f"Missing bar(s) detected for {sym} between {d_prev} and {d_curr}")
 
         # Enrich all bars
         enriched: Dict[str, pd.DataFrame] = {}
@@ -105,6 +118,7 @@ class BacktestSimulator:
                 "trades": [],
                 "metrics": compute_backtest_metrics([]).model_dump(),
                 "equity_curve": [{"date": str(datetime.date.today()), "equity": init_capital}],
+                "data_warnings": data_warnings,
             }
 
         open_positions: List[Dict] = []
@@ -119,9 +133,11 @@ class BacktestSimulator:
                 sym = order["symbol"]
                 df = enriched.get(sym)
                 if df is None:
+                    data_warnings.append(f"Missing data frame for pending order {sym} on {current_date}")
                     continue
                 day_bar = df[df["date"] == current_date]
                 if day_bar.empty:
+                    data_warnings.append(f"Missing bar for pending order {sym} on {current_date}")
                     remaining_orders.append(order)
                     continue
 
@@ -173,10 +189,12 @@ class BacktestSimulator:
                 sym = pos["symbol"]
                 df = enriched.get(sym)
                 if df is None:
+                    data_warnings.append(f"Missing data frame for open position {sym} on {current_date}")
                     active_positions.append(pos)
                     continue
                 day_bar = df[df["date"] == current_date]
                 if day_bar.empty:
+                    data_warnings.append(f"Missing bar for open position {sym} on {current_date}")
                     active_positions.append(pos)
                     continue
 
@@ -270,6 +288,11 @@ class BacktestSimulator:
                 for sym, df in enriched.items():
                     if len(open_positions) + len(pending_orders) >= self.mkt_cfg.max_open_positions:
                         break
+
+                    # Duplicate entry prevention: skip if instrument already held or pending
+                    if any(p["symbol"] == sym for p in open_positions) or any(o["symbol"] == sym for o in pending_orders):
+                        continue
+
                     sub_df = df[df["date"] <= current_date]
                     if len(sub_df) < 55:
                         continue
@@ -362,6 +385,7 @@ class BacktestSimulator:
             "trades": trades_dicts,
             "metrics": metrics.model_dump(),
             "equity_curve": daily_equity_curve,
+            "data_warnings": data_warnings,
             "survivorship_bias_notice": "Optimistic: survivorship bias present (current index constituents used for historical backtest).",
         }
 
