@@ -28,16 +28,24 @@ class RelationshipCreateRequest(BaseModel):
 @router.get("/news")
 def get_news_events(
     symbol: Optional[str] = None,
+    market: Optional[str] = None,
     days: int = 14,
     severity: Optional[str] = None,
     materiality: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Returns classified corporate events (RED, AMBER, GREEN) with original URLs, timestamps,
-    syndication clusters, price moves, and deterministic summaries.
+    syndication clusters, price moves, and deterministic summaries for the selected market.
     """
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
     query = db.query(NewsEvent).filter(NewsEvent.published_at >= cutoff)
+
+    target_mkt = market.strip().upper() if market else None
+    if target_mkt:
+        u_stocks = universe_manager.load_universe(target_mkt)
+        mkt_syms = {s.symbol for s in u_stocks}
+        if mkt_syms:
+            query = query.filter(NewsEvent.symbol.in_(mkt_syms))
 
     if symbol:
         query = query.filter(NewsEvent.symbol == symbol.strip().upper())
@@ -49,10 +57,10 @@ def get_news_events(
     events = query.order_by(NewsEvent.published_at.desc()).limit(100).all()
 
     if not events:
-        # If no events exist yet, automatically poll live financial media news for core stocks
+        # If no events exist yet, automatically poll live financial media news for core stocks in target market
         try:
-            mkt = "US" if symbol and any(c.isascii() and c in ("AAPL", "TSLA", "MSFT", "NVDA") for c in [symbol]) else "IN"
-            top_stocks = [symbol] if symbol else (["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"] if mkt == "IN" else ["AAPL", "TSLA", "NVDA", "MSFT"])
+            mkt = target_mkt or ("US" if symbol and any(c.isascii() and c in ("AAPL", "TSLA", "MSFT", "NVDA") for c in [symbol]) else "IN")
+            top_stocks = [symbol] if symbol else (["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"] if mkt == "IN" else ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL"])
             news_engine.poll_financial_news(top_stocks, market=mkt, db=db)
             events = query.order_by(NewsEvent.published_at.desc()).limit(100).all()
         except Exception as e:
@@ -63,7 +71,7 @@ def get_news_events(
     if unique_syms:
         try:
             from app.providers.manager import provider_manager
-            quotes = provider_manager.get_quotes(unique_syms, market="IN")
+            quotes = provider_manager.get_quotes(unique_syms, market=target_mkt or "IN")
         except Exception as qe:
             logger.debug(f"Could not load live quotes for news: {qe}")
 

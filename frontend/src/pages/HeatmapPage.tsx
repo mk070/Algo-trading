@@ -147,6 +147,11 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket, onMarke
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
   const [fundamentalSymbol, setFundamentalSymbol] = useState<string | null>(null);
 
+  // Synchronize heatmap market mode immediately whenever site-wide market changes
+  useEffect(() => {
+    setMarketMode(currentMarket);
+  }, [currentMarket]);
+
   // Active constituent market query target
   const constituentMarket: 'IN' | 'US' = marketMode === 'BOTH' ? (currentMarket || 'US') : marketMode;
 

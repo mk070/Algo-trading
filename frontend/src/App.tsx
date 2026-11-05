@@ -20,7 +20,20 @@ import { API_BASE, apiClient } from './api/client';
 import { RegimeResult } from './types';
 
 export const AppContent: React.FC = () => {
-  const [currentMarket, setCurrentMarket] = useState<'IN' | 'US'>('IN');
+  const [currentMarket, setCurrentMarket] = useState<'IN' | 'US'>(() => {
+    try {
+      const saved = localStorage.getItem('algo_trading_market');
+      if (saved === 'IN' || saved === 'US') return saved;
+    } catch {}
+    return 'IN';
+  });
+
+  const handleMarketChange = (newMarket: 'IN' | 'US') => {
+    setCurrentMarket(newMarket);
+    try {
+      localStorage.setItem('algo_trading_market', newMarket);
+    } catch {}
+  };
   const [regime, setRegime] = useState<RegimeResult | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [liveAlertToast, setLiveAlertToast] = useState<any | null>(null);
@@ -194,7 +207,7 @@ export const AppContent: React.FC = () => {
         {/* Sticky Topbar with Workspace Tabs & Market Controls */}
         <Topbar
           currentMarket={currentMarket}
-          onMarketChange={setCurrentMarket}
+          onMarketChange={handleMarketChange}
           regime={regime}
           isStreaming={isStreaming}
           onRefresh={fetchRegime}
@@ -257,13 +270,13 @@ export const AppContent: React.FC = () => {
         {/* Primary Page Content Canvas */}
         <main className="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 lg:p-6 min-w-0">
           <Routes>
-            <Route path="/" element={<DashboardPage currentMarket={currentMarket} onMarketChange={setCurrentMarket} />} />
+            <Route path="/" element={<DashboardPage currentMarket={currentMarket} onMarketChange={handleMarketChange} />} />
             <Route path="/watchlist" element={<WatchlistPage currentMarket={currentMarket} />} />
-            <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} onMarketChange={setCurrentMarket} />} />
+            <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} onMarketChange={handleMarketChange} />} />
             <Route path="/positions" element={<PositionsPage currentMarket={currentMarket} />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/backtests" element={<BacktestsPage currentMarket={currentMarket} />} />
-            <Route path="/news" element={<NewsPage />} />
+            <Route path="/news" element={<NewsPage currentMarket={currentMarket} />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/system" element={<SystemHealthPage />} />
           </Routes>

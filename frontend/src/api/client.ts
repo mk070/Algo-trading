@@ -248,10 +248,13 @@ export const apiClient = {
     });
   },
 
-  async getNews(symbol?: string, days: number = 14) {
+  async getNews(symbol?: string, days: number = 14, market?: string) {
     try {
-      const url = symbol ? `${API_BASE}/news?symbol=${symbol}&days=${days}` : `${API_BASE}/news?days=${days}`;
-      const res = await fetch(url);
+      const params = new URLSearchParams();
+      if (symbol) params.append('symbol', symbol);
+      if (days) params.append('days', days.toString());
+      if (market) params.append('market', market);
+      const res = await fetch(`${API_BASE}/news?${params.toString()}`);
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data) ? data : [];

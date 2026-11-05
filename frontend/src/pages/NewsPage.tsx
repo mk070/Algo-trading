@@ -26,7 +26,11 @@ import { apiClient } from '../api/client';
 import { ChartModal } from '../components/ChartModal';
 import { EarningsAnalysisResult } from '../types';
 
-export const NewsPage: React.FC = () => {
+interface NewsPageProps {
+  currentMarket?: 'IN' | 'US';
+}
+
+export const NewsPage: React.FC<NewsPageProps> = ({ currentMarket = 'US' }) => {
   const [activeTab, setActiveTab] = useState<'DISCLOSURES' | 'SOURCES' | 'EARNINGS'>('DISCLOSURES');
   const [events, setEvents] = useState<any[]>([]);
   const [sourcesHealth, setSourcesHealth] = useState<any[]>([]);
@@ -38,28 +42,35 @@ export const NewsPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
 
+  // Earnings Analyst state
+  const [earningsSymbol, setEarningsSymbol] = useState(currentMarket === 'IN' ? 'RELIANCE' : 'AAPL');
+  const [earningsMarket, setEarningsMarket] = useState<'IN' | 'US'>(currentMarket);
+
+  // Sync market when parent changes market
+  useEffect(() => {
+    setEarningsMarket(currentMarket);
+    setEarningsSymbol(currentMarket === 'IN' ? 'RELIANCE' : 'AAPL');
+    fetchNews(currentMarket);
+  }, [currentMarket]);
+
   const handleRefreshNews = async () => {
     try {
       setRefreshing(true);
-      await apiClient.refreshNews('IN');
-      await fetchNews();
+      await apiClient.refreshNews(currentMarket);
+      await fetchNews(currentMarket);
     } catch (e) {
       console.error('Error refreshing news:', e);
     } finally {
       setRefreshing(false);
     }
   };
-
-  // Earnings Analyst state
-  const [earningsSymbol, setEarningsSymbol] = useState('RELIANCE');
-  const [earningsMarket, setEarningsMarket] = useState<'IN' | 'US'>('IN');
   const [earningsData, setEarningsData] = useState<EarningsAnalysisResult | null>(null);
   const [earningsLoading, setEarningsLoading] = useState(false);
 
-  const fetchNews = async () => {
+  const fetchNews = async (targetMarket: string = currentMarket) => {
     try {
       setLoading(true);
-      const data = await apiClient.getNews(searchSymbol || undefined, 14);
+      const data = await apiClient.getNews(searchSymbol || undefined, 14, targetMarket);
       setEvents(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error fetching news:', e);
@@ -100,8 +111,8 @@ export const NewsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchNews();
-  }, [searchSymbol]);
+    fetchNews(currentMarket);
+  }, [searchSymbol, currentMarket]);
 
   useEffect(() => {
     if (activeTab === 'SOURCES') {

@@ -76,6 +76,10 @@ def job_live_monitor_in(db):
     live_monitor.tick_market(market="IN", db=db)
 
 
+def job_live_monitor_us(db):
+    live_monitor.tick_market(market="US", db=db)
+
+
 def job_kite_sync(db):
     if provider_manager.kite.is_authenticated():
         logger.info("Syncing Kite Personal holdings and positions...")
@@ -153,8 +157,8 @@ def job_poll_media_news(db):
     """
     logger.info("Polling real-time financial media news (Yahoo Finance, Reuters, Moneycontrol)...")
     from app.engine.universe import universe_manager
-    in_stocks = [s.symbol for s in universe_manager.load_universe("IN")][:12]
-    us_stocks = [s.symbol for s in universe_manager.load_universe("US")][:8]
+    in_stocks = [s.symbol for s in universe_manager.load_universe("IN")][:25]
+    us_stocks = [s.symbol for s in universe_manager.load_universe("US")][:20]
     news_engine.poll_financial_news(in_stocks, market="IN", db=db)
     news_engine.poll_financial_news(us_stocks, market="US", db=db)
 
@@ -187,6 +191,12 @@ def start_scheduler():
             replace_existing=True,
         )
         scheduler.add_job(
+            log_job_execution("live_monitor_US", job_live_monitor_us),
+            IntervalTrigger(seconds=30),
+            id="live_monitor_US",
+            replace_existing=True,
+        )
+        scheduler.add_job(
             log_job_execution("news_poll_P0", job_poll_news_p0),
             IntervalTrigger(minutes=15),
             id="news_poll_P0",
@@ -206,7 +216,7 @@ def start_scheduler():
         )
         scheduler.add_job(
             log_job_execution("news_media_poll", job_poll_media_news),
-            IntervalTrigger(minutes=20),
+            IntervalTrigger(minutes=5),
             id="news_media_poll",
             replace_existing=True,
         )
