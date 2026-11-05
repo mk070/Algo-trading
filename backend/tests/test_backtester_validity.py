@@ -334,14 +334,14 @@ def test_end_of_test_liquidation():
     assert trade["exit_date"] == dates[70]
 
 
-# 12. Missing Bars and Inconsistent Data Warnings
+# 12. Missing Bars, Suspended Instruments, and Exchange Calendar Discrimination
 def test_missing_bars_and_inconsistent_data_warning():
     """Verify that missing bars during an open position produce explicit data warnings."""
     dates = pd.date_range("2025-01-01", periods=80, freq="B").date
     df = generate_constant_bars("MISSING_SYM", 80, 100.0)
 
-    # Drop bar 63 completely (creates a missing bar while position is held)
-    df_missing = df.drop(index=[63]).reset_index(drop=True)
+    # Drop bar 64 (2025-04-01 Tuesday, a normal open trading day)
+    df_missing = df.drop(index=[64]).reset_index(drop=True)
 
     sig = SetupCandidate(
         symbol="MISSING_SYM", setup="VCP", pivot=99.5, trigger=100.0,
@@ -355,6 +355,37 @@ def test_missing_bars_and_inconsistent_data_warning():
     assert "data_warnings" in res
     assert len(res["data_warnings"]) > 0
     assert any("Missing bar" in w for w in res["data_warnings"])
+
+
+def test_exchange_holidays_not_treated_as_missing_sessions():
+    """Verify that official exchange holidays (e.g. Good Friday) are NOT flagged as missing data gaps."""
+    # Dates spanning 2025-04-14 (Mon) to 2025-04-22 (Tue)
+    # Good Friday was 2025-04-18 (Friday). Thursday 2025-04-17 -> Monday 2025-04-21 has no Friday bar.
+    dates_with_holiday = [
+        datetime.date(2025, 4, 14),
+        datetime.date(2025, 4, 15),
+        datetime.date(2025, 4, 16),
+        datetime.date(2025, 4, 17),  # Thursday
+        # Friday 2025-04-18 is Good Friday (Official NSE & US holiday) - No bar
+        datetime.date(2025, 4, 21),  # Monday
+        datetime.date(2025, 4, 22),
+    ]
+    # Expand to 35 bars to meet minimum bar threshold
+    all_dates = [datetime.date(2025, 2, 1) + datetime.timedelta(days=i) for i in range(25)] + dates_with_holiday
+    df_clean = pd.DataFrame({
+        "date": all_dates,
+        "open": [100.0] * len(all_dates),
+        "high": [101.0] * len(all_dates),
+        "low": [99.0] * len(all_dates),
+        "close": [100.0] * len(all_dates),
+        "adj_close": [100.0] * len(all_dates),
+        "volume": [500000.0] * len(all_dates),
+    })
+
+    sim_in = BacktestSimulator(market="IN")
+    res_in = sim_in.run({"HOLIDAY_TEST": df_clean})
+    # Good Friday 2025-04-18 is an official NSE holiday, so it must NOT trigger a warning
+    assert not any("2025-04-18" in w for w in res_in.get("data_warnings", []))
 
 
 # 13. Cost-Drag Calculation

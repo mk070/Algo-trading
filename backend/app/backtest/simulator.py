@@ -5,6 +5,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from app.backtest.metrics import BacktestMetrics, compute_backtest_metrics
+from app.engine.calendars import is_exchange_holiday, get_expected_trading_days
 from app.engine.costs import CostModel
 from app.engine.gaprisk import calculate_effective_risk_per_share, compute_gap95
 from app.engine.indicators import add_all_indicators
@@ -87,15 +88,22 @@ class BacktestSimulator:
         init_capital = capital or self.mkt_cfg.capital
         data_warnings: List[str] = []
 
-        # Check for gaps and missing trading days in input data
+        # Check for gaps and missing trading days in input data using official exchange calendars
         for sym, df in bars_data.items():
             if df is not None and len(df) > 1 and "date" in df.columns:
                 d_list = sorted(list(df["date"]))
                 for i in range(1, len(d_list)):
                     d_prev, d_curr = d_list[i - 1], d_list[i]
                     b_days = pd.bdate_range(d_prev, d_curr)
-                    if len(b_days) > 2:  # Skipped business day(s)
-                        data_warnings.append(f"Missing bar(s) detected for {sym} between {d_prev} and {d_curr}")
+                    skipped_trading_days = [
+                        d.date() for d in b_days[1:-1]
+                        if not is_exchange_holiday(self.market, d.date())
+                    ]
+                    if skipped_trading_days:
+                        data_warnings.append(
+                            f"Missing bar(s) detected for {sym} between {d_prev} and {d_curr}: "
+                            f"skipped open session(s) {skipped_trading_days} (missing provider data or suspended instrument)"
+                        )
 
         # Enrich all bars
         enriched: Dict[str, pd.DataFrame] = {}
@@ -137,7 +145,7 @@ class BacktestSimulator:
                     continue
                 day_bar = df[df["date"] == current_date]
                 if day_bar.empty:
-                    data_warnings.append(f"Missing bar for pending order {sym} on {current_date}")
+                    data_warnings.append(f"Missing bar for pending order {sym} on trading session {current_date} (missing provider data or suspended instrument)")
                     remaining_orders.append(order)
                     continue
 
@@ -194,7 +202,7 @@ class BacktestSimulator:
                     continue
                 day_bar = df[df["date"] == current_date]
                 if day_bar.empty:
-                    data_warnings.append(f"Missing bar for open position {sym} on {current_date}")
+                    data_warnings.append(f"Missing bar for open position {sym} on trading session {current_date} (missing provider data or suspended instrument)")
                     active_positions.append(pos)
                     continue
 
