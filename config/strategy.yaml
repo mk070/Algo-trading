@@ -102,6 +102,7 @@ vcp:                                # Setup V
   confirm_timeframe_min: 15
   require_contraction: true          # false = simple 55-day-high baseline for ablation
   chase_limit_atr: 1.0
+  pivot_excludes_signal_day: false  # owner approval required before enabling
 
 exits:
   breakeven_at_R: 1.0

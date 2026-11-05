@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BarChart3, Layers, Maximize2, Minimize2, X, Zap } from 'lucide-react';
 import { CandleChart } from './CandleChart';
 import { TradingViewRealtimeChart } from './TradingViewRealtimeChart';
+import { tradingViewChartUrl } from '../utils/tradingView';
 
 interface ChartModalProps {
   isOpen: boolean;
@@ -87,6 +88,9 @@ export const ChartModal: React.FC<ChartModalProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            <a href={tradingViewChartUrl(symbol, market)} target="_blank" rel="noreferrer" className="flex min-h-[32px] items-center gap-1 rounded-lg border border-slate-700 px-2 text-[10px] text-slate-300 hover:bg-slate-800" title="Open symbol on TradingView">
+              Open in TradingView <Zap className="h-3 w-3" />
+            </a>
             <button
               onClick={() => setIsFullScreen(!isFullScreen)}
               className="p-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors hidden sm:flex items-center justify-center"

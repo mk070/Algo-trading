@@ -1,5 +1,7 @@
 # SWING SIGNAL PLATFORM: BUILD SPEC FOR AN AI CODING AGENT
 
+> **Implementation addendum (2026-11-05):** `DESIGN.md` is the active frontend design reference. `DESIGN_old.md` is retained for historical comparison only. The Research Desk flow is Scout → Technician → Fundamentalist → Newsdesk → Planner → Risk Manager → Bull / Bear → Judge → Messenger; these roles are deterministic views, not separate agents.
+
 > Hand this whole file to the coding agent (Claude Code, Cursor, etc.) as the single source of truth.
 > Stack: **Python 3.11+ (FastAPI)** backend, **React + TypeScript (Vite)** frontend, **Neon PostgreSQL** (exclusive database platform), free data sources only, free background hosting.
 > A working prototype of the signal logic exists in `swing_signals.py` (provided alongside). Port and extend it; do not discard its logic.
@@ -825,3 +827,26 @@ budget:
 **v2.2 (review corrections):** Angel One and Zerodha promoted to core integrations; yfinance demoted to fallback; WebSocket monitoring with strict freshness limits replaces 5-minute polling (the old 20-minute stale threshold was far too loose for breakouts); explicit news timestamps, de-duplication and coverage statuses with UNKNOWN never treated as clear; licensed-news and optional AI-summary extension points with guardrails; live valuation with source provenance; Zerodha CSV import supported from v1; Setup V is the only live setup at launch with Setup P in shadow mode; risk baseline returned to a conservative 0.5% per trade and 2% open risk for both markets, with a higher-risk India "small-account mode" only as an explicit opt-in; unconfirmed decisions (capital, US provider, budgets) kept configurable.
 
 **v2.4 (Neon PostgreSQL Mandate):** Neon PostgreSQL is established as the sole application database from the beginning. No SQLite support, no secondary adapters, and no migration paths from SQLite. All models standardized with `TIMESTAMPTZ`, Alembic handles reviewed migrations, connection pooling is configured with `QueuePool` and `pool_pre_ping=True` for Neon serverless wakeups, and test suites utilize isolated rollback fixtures to guarantee actual trading records are never deleted or modified.
+
+---
+
+## 22. RESEARCH DESK AND FUNDAMENTAL LIGHTS IMPLEMENTATION ADDENDUM
+
+The current implementation adds the following without changing existing technical thresholds:
+
+- Every production `/api` route requires the `APP_TOKEN` bearer credential. Render sets `ENV=production`, generates the token, and runs Alembic migrations before FastAPI starts. Health probe routes remain public.
+- Signal list responses include the persisted decision audit stages and a structured first blocked check. The dashboard and signal cards render the stage, check, measured value, threshold and note.
+- `vcp.pivot_excludes_signal_day` defaults to `false`. When explicitly enabled, the candidate pivot excludes the signal bar and a qualifying close at/above the prior pivot is labeled `BROKE_OUT_TODAY`; it is not presented as a fresh near-pivot setup. Do not enable the default without owner review of paired counts and backtest results.
+- The evening plan has a separate `PRE_BREAKOUT_WATCHLIST` tier for valid VCP bases below the pivot with the existing technical checks and calculated plan. Intraday APPROACHING monitoring remains as implemented.
+- `/api/research/pivot-impact` compares both pivot policies using the same stored daily bars, universe slice, cost model and backtest window. `/api/research/lead-time` compares stored 55-day breakout events with first retained Scanner + Setup Validator pass audits; it reports audit coverage caveats.
+- `config/fundamentals.yaml` holds heuristic thresholds and defaults to `warn`. The traffic-light evaluator labels yfinance unofficial/incomplete and returns UNKNOWN for missing values. A user-initiated normalized CSV import is available. Snapshots are attached to signals, surfaced in the Fundamentalist role, and reported against forward journal outcomes. `block_on_red` is explicit opt-in; `warn` records a review reason without changing trigger, stop or size.
+- The dashboard Research Desk presents the ten roles in the order defined by `DESIGN.md`, with stage stepper, role chips, template cases, Judge checklist strength and state legend. Value Radar returns research-only ideas from stored snapshots and routes no trades around the existing pipeline.
+- Charts retain lightweight-charts, local drawing persistence, and now include Fibonacci retracement/extension lines, a TradingView link and visual-only Pine export.
+
+Known limitations: historical scan signals are not retained for every session, so lead-time estimates can undercount earlier scanner flags. yfinance does not consistently provide sector-median valuation, promoter pledge/holding history, reliably consolidated filings or point-in-time restatements. The fundamental lights are informational heuristics, not validated. Intraday historical depth and accuracy remain insufficient for multi-year 1H/4H backtests. Gemini summarization, ABCD and automated Fibonacci-pullback strategies, holdout-based candidate selection and the full Strategy Lab protocol remain separate work; Fibonacci chart drawings are manual only. Free-tier AI limits and terms must be verified before enabling Gemini. The connected Neon database inspected during implementation did not yet contain `signals.fundamentals_json`; apply Alembic migration `003` before using snapshot-backed fundamentals routes.
+
+### 22.1 Stored-data reproduction snapshot (2026-11-05)
+
+- The India research window covered 60 stored market sessions, 2026-08-14 through 2026-11-05, on the same 30-symbol slice for both pivot policies. Each policy produced 1 candidate session and 0 `BROKE_OUT_TODAY` classifications. Both backtests produced 0 trades, so the paired result is inconclusive and shows no measured performance difference. The signal-day-excluded flag remains off.
+- The lead-time calculation found 38 stored 55-day breakout events in the India universe, with 100% lacking an earlier retained Scanner + Setup Validator pass audit. This is an audit-retention coverage result, not proof the scanner never flagged those stocks: stored qualifying passes are concentrated on 2026-11-02 through 2026-11-04.
+- Grasim has 60 daily bars from 2026-08-10 through 2026-11-04, but only four retained India scan sessions (2026-11-02 through 2026-11-05). Its retained 2026-11-05 signal is a blocked PULLBACK. The first retained failure is Scanner / Market Regime (`WEAK` vs `BULLISH or CAUTION`); the setup stage also records two trend-template failures. This cannot reconstruct the requested 60-session setup-stage history or confirm a prior VCP breakout from retained records.

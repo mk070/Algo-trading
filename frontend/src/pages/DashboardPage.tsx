@@ -28,19 +28,22 @@ interface DashboardPageProps {
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onMarketChange }) => {
   const [plan, setPlan] = useState<TradePlan | null>(null);
+  const [valueIdeas, setValueIdeas] = useState<any[]>([]);
+  const [valueRadarAdded, setValueRadarAdded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [selectedChartSymbol, setSelectedChartSymbol] = useState<string | null>(null);
   const [chartBars, setChartBars] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [tradeModalSignal, setTradeModalSignal] = useState<Signal | null>(null);
-  const [oppFilter, setOppFilter] = useState<'ALL' | 'SETUPS' | 'APPROACHING' | 'BLOCKED' | 'HELD'>('ALL');
+  const [oppFilter, setOppFilter] = useState<'ALL' | 'SETUPS' | 'APPROACHING' | 'BLOCKED' | 'HELD' | 'TREND' | 'FUNDAMENTALS' | 'NEWS' | 'RISK' | 'PASS' | 'PRE_BREAKOUT'>('ALL');
 
   const fetchPlan = async () => {
     try {
       setLoading(true);
       const data = await apiClient.getTradePlan(currentMarket);
       setPlan(data);
+      apiClient.getValueRadar(currentMarket).then(setValueIdeas).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error fetching trade plan:', e);
     } finally {
@@ -53,6 +56,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       setScanning(true);
       const data = await apiClient.runScan(currentMarket);
       setPlan(data);
+      apiClient.getValueRadar(currentMarket).then(setValueIdeas).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error running scan:', e);
     } finally {
@@ -93,11 +97,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
     }
   };
 
+  const handleAddValueIdea = async (symbol: string) => {
+    try {
+      const lists: any[] = await apiClient.getWatchlists(currentMarket);
+      const target = lists.find((list) => list.is_default) || lists[0];
+      if (!target) throw new Error('No watchlist is available for this market.');
+      await apiClient.addWatchlistItem(target.id, { symbol, source: 'VALUE_RADAR', notes: 'Research idea; not a trade signal.' });
+      setValueRadarAdded((previous) => ({ ...previous, [symbol]: true }));
+    } catch (error) {
+      alert(`Could not add ${symbol} to a watchlist: ${error}`);
+    }
+  };
+
   const selectedSignal = plan?.signals.find((s) => s.symbol === selectedChartSymbol);
 
   const actionableSignals = (plan?.signals || []).filter(
     (s) => s.state !== 'NO_SETUP' && s.state !== 'BLOCKED' && (s.trigger || 0) > 0 && s.setup !== 'MONITORING'
   );
+  const candidates = plan?.candidate_opportunities || [];
+  const funnel = [
+    { key: 'ALL' as const, label: 'Scanned', count: plan?.universe_size || 0 },
+    { key: 'TREND' as const, label: 'Trend OK', count: candidates.filter((s) => s.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.checks?.filter((c) => c.name.includes('Trend Template') && c.passed).length === s.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.checks?.filter((c) => c.name.includes('Trend Template')).length).length },
+    { key: 'SETUPS' as const, label: 'Setup', count: candidates.filter((s) => s.setup !== 'MONITORING').length },
+    { key: 'FUNDAMENTALS' as const, label: 'Fundamentals OK', count: candidates.filter((s) => s.fundamentals?.red_count === 0 && (s.fundamentals?.unknown_count || 0) === 0).length },
+    { key: 'NEWS' as const, label: 'News clear', count: candidates.filter((s) => s.news_coverage?.status === 'CLEAR').length },
+    { key: 'RISK' as const, label: 'Risk OK', count: candidates.filter((s) => s.decision_stages?.find((x) => x.stage_name === 'Risk Validator')?.status === 'PASS').length },
+    { key: 'PASS' as const, label: 'PASS', count: candidates.filter((s) => s.decision_stages?.every((x) => x.status === 'PASS')).length },
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -199,6 +225,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       />
 
       {/* Primary Section: Today's Ranked Trade Plan */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+        <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Research funnel · click a stage to filter candidates</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {funnel.map((item, index) => <React.Fragment key={item.key}>
+            {index > 0 && <span className="text-slate-600">›</span>}
+            <button onClick={() => setOppFilter(item.key)} className={`rounded-lg border px-3 py-2 text-left ${oppFilter === item.key ? 'border-indigo-500 bg-indigo-950/40' : 'border-slate-800 bg-slate-950/40 hover:border-slate-600'}`}>
+              <span className="block text-[10px] text-slate-400">{item.label}</span><span className="font-mono text-sm font-bold text-slate-100">{item.count}</span>
+            </button>
+          </React.Fragment>)}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400" aria-label="Signal state legend">
+        <span className="font-bold uppercase tracking-wide text-slate-500">State legend</span>
+        {[['WATCHLIST', 'Watching'], ['PRE_BREAKOUT_WATCHLIST', 'Pre-breakout'], ['APPROACHING', 'Approaching'], ['TRIGGERED_PROVISIONAL', 'Triggered / confirming'], ['TRIGGERED_CONFIRMED', 'Confirmed'], ['BROKE_OUT_TODAY', 'Extended / do not chase'], ['BLOCKED', 'Blocked with first failed gate'], ['INVALIDATED', 'Invalidated'], ['EXPIRED', 'Expired'], ['WAIT', 'Waiting for checks']].map(([key, label]) => <span key={key} className={`rounded border px-2 py-1 ${key === 'BLOCKED' || key === 'INVALIDATED' ? 'border-rose-900 text-rose-300' : key === 'APPROACHING' || key.includes('BREAKOUT') ? 'border-amber-800 text-amber-300' : key.includes('TRIGGERED') ? 'border-emerald-800 text-emerald-300' : 'border-slate-700 text-slate-400'}`}>{label}</span>)}
+      </div>
+
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <div className="flex items-center justify-between"><div><h2 className="text-sm font-bold text-slate-100">Value Radar <span className="ml-1 rounded border border-amber-800 px-1.5 py-0.5 text-[9px] text-amber-300">RESEARCH IDEA</span></h2><p className="mt-1 text-[10px] text-slate-500">Cheap stocks can stay cheap. Every idea still goes through the normal pipeline and risk checks.</p></div><span className="font-mono text-xs text-slate-400">{valueIdeas.length} ideas</span></div>
+        {valueIdeas.length ? <div className="mt-3 flex flex-wrap gap-2">{valueIdeas.map((idea) => <div key={idea.symbol} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 hover:border-amber-700"><a href={idea.detail_url || undefined} target="_blank" rel="noreferrer"><span className="font-mono text-xs font-bold text-slate-100">{idea.symbol}</span><span className="ml-2 rounded bg-amber-950 px-1 text-[9px] text-amber-300">VALUE_RADAR</span><span className="mt-1 block text-[10px] text-slate-500">{idea.stabilizing} · quality {idea.quality.status}</span></a><button type="button" onClick={() => handleAddValueIdea(idea.symbol)} disabled={Boolean(valueRadarAdded[idea.symbol])} className="mt-2 block rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-amber-700 disabled:text-emerald-400">{valueRadarAdded[idea.symbol] ? 'Added to watchlist' : 'Add to watchlist'}</button></div>)}</div> : <p className="mt-3 text-xs text-slate-500">No stored snapshots currently meet the research criteria.</p>}
+      </section>
+
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -246,6 +294,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
           </div>
         )}
       </div>
+
+      {plan?.pre_breakout_watchlist && plan.pre_breakout_watchlist.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-amber-800/70 bg-slate-900">
+          <div className="border-b border-slate-800 p-4"><h3 className="text-sm font-bold text-amber-200">Pre-breakout watchlist ({plan.pre_breakout_watchlist.length})</h3><p className="mt-1 text-xs text-slate-400">Valid VCP base below its pivot. Trigger, stop and planned quantity are shown for review before a breakout.</p></div>
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-950 text-slate-400"><tr><th className="p-3">Symbol</th><th className="p-3">State</th><th className="p-3">Trigger</th><th className="p-3">Stop</th><th className="p-3">Qty</th><th className="p-3">Reason</th></tr></thead><tbody className="divide-y divide-slate-800">{plan.pre_breakout_watchlist.map((item) => <tr key={item.id || item.symbol}><td className="p-3 font-semibold text-slate-100">{item.symbol}</td><td className="p-3 text-amber-300">PRE-BREAKOUT</td><td className="p-3 font-mono">{currentMarket === 'IN' ? '₹' : '$'}{item.trigger.toFixed(2)}</td><td className="p-3 font-mono text-rose-300">{currentMarket === 'IN' ? '₹' : '$'}{item.stop.toFixed(2)}</td><td className="p-3 font-mono">{item.qty || '—'}</td><td className="p-3 text-slate-400">{item.reasons?.[0] || 'Contraction and volume dry-up checks passed'}</td></tr>)}</tbody></table></div>
+        </section>
+      )}
 
       {/* Opportunity & Candidate Watchlist Radar */}
       {plan?.candidate_opportunities && plan.candidate_opportunities.length > 0 && (
@@ -313,6 +368,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {plan.candidate_opportunities
                   .filter((cand) => {
+                    if (oppFilter === 'TREND') return cand.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.checks?.filter((c) => c.name.includes('Trend Template')).every((c) => c.passed) || false;
+                    if (oppFilter === 'FUNDAMENTALS') return cand.fundamentals?.red_count === 0 && cand.fundamentals?.unknown_count === 0;
+                    if (oppFilter === 'NEWS') return cand.news_coverage?.status === 'CLEAR';
+                    if (oppFilter === 'RISK') return cand.decision_stages?.find((x) => x.stage_name === 'Risk Validator')?.status === 'PASS';
+                    if (oppFilter === 'PASS') return cand.decision_stages?.every((x) => x.status === 'PASS');
+                    if (oppFilter === 'PRE_BREAKOUT') return cand.state === 'PRE_BREAKOUT_WATCHLIST';
                     if (oppFilter === 'SETUPS') return cand.setup !== 'MONITORING';
                     if (oppFilter === 'APPROACHING') return cand.state === 'APPROACHING';
                     if (oppFilter === 'BLOCKED') return cand.state === 'BLOCKED';
@@ -344,6 +405,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
                               </span>
                             ))}
                           </div>
+                          <div className="mt-1 flex flex-wrap gap-1 font-sans">
+                            {[
+                              ['Technical', cand.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.status || 'WAIT'],
+                              ['Fundamental', cand.fundamentals?.red_count ? 'WARN' : cand.fundamentals?.unknown_count === 0 ? 'PASS' : 'UNKNOWN'],
+                              ['News', cand.news_coverage?.status || 'UNKNOWN'],
+                              ['Risk', cand.decision_stages?.find((x) => x.stage_name === 'Risk Validator')?.status || 'WAIT'],
+                            ].map(([label, status]) => <span key={label} title={`${label}: ${status}`} className={`rounded border px-1 py-0.5 text-[8px] ${status === 'PASS' || status === 'CLEAR' ? 'border-emerald-900 text-emerald-300' : status === 'BLOCK' || status === 'BLOCKED' ? 'border-rose-900 text-rose-300' : status === 'UNKNOWN' ? 'border-dashed border-slate-700 text-slate-500' : 'border-amber-900 text-amber-300'}`}>{label}: {status}</span>)}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-sans font-semibold ${
@@ -357,7 +426,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
                           </span>
                         </td>
                         <td className="px-4 py-3 font-sans">
-                          {isHeld ? (
+                          {cand.state === 'BROKE_OUT_TODAY' ? (
+                            <span className="rounded border border-amber-800 bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold text-amber-200">BROKE OUT TODAY · DO NOT CHASE</span>
+                          ) : cand.state === 'PRE_BREAKOUT_WATCHLIST' ? (
+                            <span className="rounded border border-amber-800 bg-amber-950/50 px-2 py-0.5 text-[10px] font-bold text-amber-200">PRE-BREAKOUT WATCHLIST</span>
+                          ) : isHeld ? (
                             <span className="px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800 text-[10px] font-bold">
                               ALREADY HELD
                             </span>
@@ -392,8 +465,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
                         <td className="px-4 py-3 text-rose-400">
                           {cand.stop ? `${currentMarket === 'IN' ? '₹' : '$'}${cand.stop.toFixed(2)}` : '—'}
                         </td>
-                        <td className="px-4 py-3 font-sans text-slate-400 text-[11px] max-w-xs truncate" title={cand.first_failing_check || cand.reasons?.[0] || 'Monitoring'}>
-                          {cand.first_failing_check || cand.reasons?.[0] || 'Candidate monitored'}
+                        <td className="px-4 py-3 font-sans text-[11px] max-w-xs truncate" title={cand.blocked_reason?.note || cand.first_failing_check || cand.reasons?.[0] || 'Monitoring'}>
+                          {cand.state === 'BLOCKED' && cand.blocked_reason ? <span className="text-rose-300"><strong>BLOCKED: {cand.blocked_reason.stage}</strong> / {cand.blocked_reason.check}: <span className="font-mono">{cand.blocked_reason.value}</span> vs <span className="font-mono">{cand.blocked_reason.threshold}</span></span> : <span className="text-slate-400">{cand.first_failing_check || cand.reasons?.[0] || 'Candidate monitored'}</span>}
                         </td>
                         <td className="px-4 py-3 text-right font-sans">
                           <button

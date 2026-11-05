@@ -107,6 +107,16 @@ The frontend uses `/api` locally by default. For a separate Vercel frontend and 
 2. Add the `VITE_API_BASE_URL` environment variable in Vercel, using the public Render backend origin, for example `https://your-service.onrender.com` (no trailing slash required). The frontend appends `/api` automatically.
 3. Redeploy the Vercel project after setting or changing the variable. `VITE_*` values are included in the public frontend build; never put credentials or other secrets in them.
 4. Configure backend credentials and secrets separately in Render's environment settings.
+   Render must set `ENV=production` and a long random `APP_TOKEN`; keep that value private and enter it in the production workspace unlock prompt. The Render manifest generates this secret for a new service.
+5. Database schema changes are applied by `alembic upgrade head` in the Render start command before FastAPI starts.
+
+### Production access and secrets
+
+- Render uses `ENV=production` and a generated `APP_TOKEN`. Every `/api` route requires the matching bearer token; the health probe paths (`/health`, `/healthz`, `/ping`) remain public for Render.
+- The production frontend asks for the token at runtime and keeps it in session storage. Never place it in a `VITE_*` variable.
+- `.env.example` contains placeholders only. The repository workflow scans current files and Git history for secrets.
+- A Telegram bot credential was committed in an earlier README revision. Treat it as compromised: revoke it with BotFather, create a replacement, configure it only in Render or local `.env`, then rewrite Git history to remove the old credential before relying on the historical scan.
+- Apply database migrations before startup; the Render start command runs `alembic upgrade head`.
 
 The Vite development server continues to proxy `/api` to `http://127.0.0.1:8000` when `VITE_API_BASE_URL` is unset.
 
@@ -223,20 +233,22 @@ The platform includes a zero-friction, one-time Telegram integration for outboun
 
 > **Strict Architectural Boundary:** Telegram is strictly an outbound notification channel. No BUY/SELL execution commands or broker order placements are ever accepted or routed through Telegram. Bot tokens are kept securely on the backend and are never sent to the browser.
 
+Never paste a live token or chat ID into this README. The values below are examples/placeholders only.
+
 ### Step-by-Step Setup
 
 1. **Create Bot on Telegram:**
    - Open Telegram and message [@BotFather](https://t.me/BotFather).
    - Send `/newbot`, name your bot (e.g. `MySwingTraderBot`), and choose a username ending in `bot` (e.g. `SwingMaster7_bot`).
-   - Copy the HTTP API token provided by BotFather (e.g. `9186942205:AAF...`).
+   - Copy the HTTP API token provided by BotFather. Never paste it into documentation, issues, screenshots, or commits.
 2. **Find Your Numeric Chat ID:**
    - Message [@userinfobot](https://t.me/userinfobot) or [@raw_data_bot](https://t.me/raw_data_bot) on Telegram.
    - It will reply with your unique numeric Telegram user ID (e.g. `909235485`).
    - *Important:* Open your newly created bot in Telegram and click **Start** (or send `/start`) so the bot has permission to message you.
 3. **Configure Environment Variables in `.env`:**
    ```bash
-   TELEGRAM_BOT_TOKEN=9186942205:AAFjv4ZqugmoNjFAhxlqDnj9GRc7ZxhUO7I
-   TELEGRAM_CHAT_ID=909235485
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   TELEGRAM_CHAT_ID=your_telegram_chat_id
    ```
 4. **Verify in Settings Page:**
    - Open the web dashboard at `http://127.0.0.1:8000/settings`.
@@ -285,7 +297,7 @@ Telegram is reserved only for meaningful, actionable trading signals:
 
 | Variable | Description | Required | Source / Provider |
 |---|---|---|---|
-| `APP_TOKEN` | Bearer token for API protection | Optional (Dev) | User-defined secret |
+| `APP_TOKEN` | Bearer token for API protection | **Required in production** | User-defined long random secret |
 | `ENV` | `development` or `production` | Optional | Application setting |
 | `DATABASE_URL` | Neon PostgreSQL connection string (`sslmode=require`) | Required | Neon Console (`postgresql://neondb_owner:***@...`) |
 | `ANGELONE_API_KEY` | Angel One SmartAPI key | Required for IN Live | SmartAPI Developer Portal |

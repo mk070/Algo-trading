@@ -93,6 +93,7 @@ class Signal(Base):
     gap95 = Column(Float, nullable=True)
     reasons_json = Column(Text, nullable=True)
     news_flags_json = Column(Text, nullable=True)
+    fundamentals_json = Column(Text, nullable=True)  # latest informational light snapshot
     sources_json = Column(Text, default='["AUTO"]')  # ["AUTO", "WATCHLIST:MyFocus", ...]
     state = Column(
         String(30),

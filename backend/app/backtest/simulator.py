@@ -10,7 +10,7 @@ from app.engine.gaprisk import calculate_effective_risk_per_share, compute_gap95
 from app.engine.indicators import add_all_indicators
 from app.engine.regime import evaluate_market_regime
 from app.engine.screener import screener_engine
-from app.engine.setups import setup_engine
+from app.engine.setups import SetupEngine, setup_engine
 from app.engine.sizing import PositionSizer
 from app.settings import settings
 
@@ -35,10 +35,11 @@ class SimulatedTrade(BaseModel):
 class BacktestSimulator:
     """Event-driven daily backtesting simulator strictly implementing Section 12.2 fill rules."""
 
-    def __init__(self, market: str = "IN"):
+    def __init__(self, market: str = "IN", setup_engine_override: Optional[SetupEngine] = None):
         self.market = market.upper()
         self.mkt_cfg = settings.get_market_config(self.market)
         self.sizer = PositionSizer(self.market)
+        self.setup_engine = setup_engine_override or setup_engine
         self.cost_model = CostModel(self.market)
         self.slip_pct = self.mkt_cfg.slippage_pct / 100.0
 
@@ -253,9 +254,15 @@ class BacktestSimulator:
                     # Check Setups
                     cand = None
                     if setup_filter in ("ALL", "VCP"):
-                        cand = setup_engine.evaluate_vcp_breakout(sym, sub_df, tick=self.mkt_cfg.tick)
+                        cand = self.setup_engine.evaluate_vcp_breakout(sym, sub_df, tick=self.mkt_cfg.tick)
                     if not cand and setup_filter in ("ALL", "PULLBACK"):
-                        cand = setup_engine.evaluate_pullback(sym, sub_df, tick=self.mkt_cfg.tick)
+                        cand = self.setup_engine.evaluate_pullback(sym, sub_df, tick=self.mkt_cfg.tick)
+
+                    # Under the opt-in signal-day-excluded pivot policy, a bar
+                    # that already closed beyond the prior pivot is extended.
+                    # It is excluded from next-day buy-stop entries (no chase).
+                    if cand and cand.classification == "BROKE_OUT_TODAY":
+                        continue
 
                     if cand:
                         gap95 = compute_gap95(sub_df)

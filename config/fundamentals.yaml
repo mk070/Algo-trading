@@ -1,0 +1,17 @@
+mode: warn # off | warn | block_on_red; informational mode by default
+sector_url_templates:
+  tijori: "https://www.tijorifinance.com/company/{symbol}/"
+  screener: "https://www.screener.in/company/{symbol}/"
+cyclical_sectors: [Cement, Metals, Mining, Steel, Commodities]
+financial_sectors: [Financial Services, Banks, Insurance]
+thresholds:
+  profit_growth_yoy: {green_min_pct: 15, yellow_min_pct: 0}
+  revenue_growth_yoy: {green_min_pct: 10, yellow_min_pct: 0}
+  operating_margin_change_pp: {green_min_pp: 1, yellow_min_pp: -1, red_below_pp: -2}
+  roce_pct: {green_min: 15, yellow_min: 10}
+  roe_financial_pct: {green_min: 12, yellow_min: 8}
+  debt_equity: {green_max: 0.5, yellow_max: 1.5}
+  interest_coverage: {green_min: 3, yellow_min: 1.5}
+  pe_vs_sector_median: {green_max_ratio: 0.8, yellow_max_ratio: 1.3, red_min_ratio: 1.5}
+  pledge_pct: {green_max: 5, yellow_max: 25}
+  promoter_holding_change_pp: {red_below_pp: -3}

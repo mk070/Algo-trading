@@ -34,7 +34,7 @@ export interface Signal {
   score: number;
   atr: number;
   gap95: number;
-  state: 'WATCHLIST' | 'APPROACHING' | 'TRIGGERED_PROVISIONAL' | 'TRIGGERED_CONFIRMED' | 'INVALIDATED' | 'EXTENDED' | 'EXPIRED' | 'SKIPPED' | 'BLOCKED' | 'NO_SETUP' | 'ALREADY_HELD' | 'VALID_SETUP' | string;
+  state: 'WATCHLIST' | 'APPROACHING' | 'TRIGGERED_PROVISIONAL' | 'TRIGGERED_CONFIRMED' | 'INVALIDATED' | 'EXTENDED' | 'EXPIRED' | 'SKIPPED' | 'BLOCKED' | 'NO_SETUP' | 'ALREADY_HELD' | 'VALID_SETUP' | 'PRE_BREAKOUT_WATCHLIST' | 'BROKE_OUT_TODAY' | string;
   sources?: string[];
   first_failing_check?: string;
   reasons: string[];
@@ -42,6 +42,32 @@ export interface Signal {
   news_coverage?: NewsCoverage;
   valid_until?: string;
   created_at?: string;
+  decision_stages?: DecisionStage[];
+  blocked_reason?: BlockedReason | null;
+  fundamentals?: any;
+}
+
+export interface DecisionCheck {
+  name: string;
+  value: string;
+  threshold: string;
+  passed: boolean;
+  note?: string;
+}
+
+export interface DecisionStage {
+  stage_name: string;
+  status: 'PASS' | 'BLOCK' | 'WAIT' | string;
+  checks: DecisionCheck[];
+  rejection_reasons: string[];
+}
+
+export interface BlockedReason {
+  stage: string;
+  check: string;
+  value: string;
+  threshold: string;
+  note: string;
 }
 
 export interface RegimeResult {
@@ -64,6 +90,7 @@ export interface TradePlan {
   signals: Signal[];
   shadow_signals: Signal[];
   candidate_opportunities?: Signal[];
+  pre_breakout_watchlist?: Signal[];
   universe_size: number;
   passed_filters: number;
   data_warnings: string[];

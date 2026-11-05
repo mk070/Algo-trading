@@ -9,6 +9,7 @@ export const JournalPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<string | null>(null);
+  const [fundamentalOutcomes, setFundamentalOutcomes] = useState<any>(null);
 
   const loadData = async () => {
     try {
@@ -19,6 +20,7 @@ export const JournalPage: React.FC = () => {
       ]);
       setEntries(jData || []);
       setStats(sData);
+      apiClient.getFundamentalOutcomes('IN').then(setFundamentalOutcomes).catch(() => setFundamentalOutcomes(null));
     } catch (e) {
       console.error('Error loading journal:', e);
     } finally {
@@ -123,6 +125,13 @@ export const JournalPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Trade Log Table */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="text-sm font-bold text-slate-100">Forward outcomes by fundamental snapshot</h2>
+        <p className="mt-1 text-[10px] text-slate-500">Observational journal results grouped by the light snapshot saved on the signal. This is not a causal estimate.</p>
+        <div className="mt-3 flex flex-wrap gap-3">{fundamentalOutcomes?.groups?.length ? fundamentalOutcomes.groups.map((group: any) => <div key={group.fundamental_state} className="min-w-[150px] rounded-lg border border-slate-800 bg-slate-950/50 p-3"><div className="text-[10px] text-slate-500">{group.fundamental_state} · {group.trades} trades</div><div className="mt-1 font-mono text-sm text-slate-200">{group.mean_r == null ? '—' : `${group.mean_r}R mean`}</div><div className="text-[10px] text-slate-500">{group.win_rate_pct == null ? '—' : `${group.win_rate_pct}% wins`}</div></div>) : <span className="text-xs text-slate-500">No linked journal outcomes with a stored signal snapshot yet.</span>}</div>
+      </section>
 
       {/* Trade Log Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">

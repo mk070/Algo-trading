@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, GitCommit, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, GitCommit, LockKeyhole, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { ResearchDesk } from './ResearchDesk';
+import { tradingViewChartUrl } from '../utils/tradingView';
 import { DecisionAudit, Signal } from '../types';
 
 interface SignalCardProps {
@@ -53,7 +55,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({
       case 'APPROACHING':
         return 'bg-amber-500/20 text-amber-300 border-amber-500/30 animate-pulse';
       case 'EXTENDED':
+      case 'BROKE_OUT_TODAY':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+      case 'PRE_BREAKOUT_WATCHLIST':
+        return 'bg-amber-950 text-amber-300 border-amber-800';
       case 'INVALIDATED':
         return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
       default:
@@ -90,6 +95,18 @@ export const SignalCard: React.FC<SignalCardProps> = ({
   const cleanReasons = (signal.reasons || []).filter(
     (r) => typeof r === 'string' && r.trim().length > 0 && !r.includes('price 0.00')
   );
+  const blockedReason = signal.blocked_reason || (() => {
+    const stage = signal.decision_stages?.find((candidate) => candidate.status === 'BLOCK');
+    const check = stage?.checks.find((candidate) => !candidate.passed);
+    if (!stage || !check) return null;
+    return {
+      stage: stage.stage_name,
+      check: check.name,
+      value: String(check.value),
+      threshold: String(check.threshold),
+      note: check.note || 'This check must pass before the setup can proceed.',
+    };
+  })();
 
   return (
     <div className={`bg-slate-900/90 border rounded-xl p-5 flex flex-col gap-4 shadow-lg transition-all ${
@@ -103,7 +120,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
             {getSetupLabel(signal.setup, signal.state)}
           </span>
           <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${getStateBadge(signal.state)}`}>
-            {signal.state.replace('_', ' ')}
+            {signal.state === 'BROKE_OUT_TODAY' ? 'BROKE OUT TODAY · DO NOT CHASE' : signal.state.replace(/_/g, ' ')}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -121,6 +138,18 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </span>
         </div>
       </div>
+
+      {signal.state === 'BLOCKED' && blockedReason && (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-rose-900/70 bg-rose-950/30 px-3 py-2 text-xs text-rose-200"
+          title={blockedReason.note}
+        >
+          <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+          <span><strong>BLOCKED: {blockedReason.stage}</strong> / {blockedReason.check}: <span className="font-mono">{blockedReason.value}</span> vs <span className="font-mono">{blockedReason.threshold}</span></span>
+        </div>
+      )}
+
+      <ResearchDesk signal={signal} />
 
       {/* Primary Key Metrics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/70 p-3 rounded-lg border border-slate-800/80">
@@ -282,6 +311,9 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           {copied ? 'Copied Order' : 'Copy Order Summary'}
         </button>
         <div className="flex items-center gap-2">
+          <a href={tradingViewChartUrl(signal.symbol, signal.market)} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300 hover:bg-slate-700" title="Open this symbol on TradingView">
+            <ExternalLink className="h-3.5 w-3.5" /> TradingView
+          </a>
           {onOpenChart && (
             <button
               onClick={() => onOpenChart(signal.symbol)}

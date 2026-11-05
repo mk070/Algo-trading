@@ -14,6 +14,54 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _audit_payload_for_signal(db: Session, signal: Signal, session_date: datetime.date) -> tuple[list, Optional[dict]]:
+    """Return the persisted audit for this scan and a compact, display-safe first failure.
+
+    This is presentation metadata only: it does not re-evaluate a trade or alter any
+    decision.  Keeping it alongside the list row makes BLOCKED actionable at a glance.
+    """
+    from app.models import DecisionAudit, DecisionStageResult
+
+    audit = (
+        db.query(DecisionAudit)
+        .filter(
+            DecisionAudit.symbol == signal.symbol,
+            DecisionAudit.market == signal.market,
+            DecisionAudit.asof_date == session_date,
+        )
+        .order_by(DecisionAudit.created_at.desc())
+        .first()
+    )
+    if not audit:
+        return [], None
+    rows = db.query(DecisionStageResult).filter(DecisionStageResult.audit_id == audit.id).all()
+    stages = [
+        {
+            "stage_name": row.stage_name,
+            "status": row.status,
+            "checks": json.loads(row.checks_json) if row.checks_json else [],
+            "rejection_reasons": json.loads(row.rejection_reasons_json) if row.rejection_reasons_json else [],
+        }
+        for row in rows
+    ]
+    for stage in stages:
+        if stage["status"] != "BLOCK":
+            continue
+        failed = next((check for check in stage["checks"] if not check.get("passed", False)), None)
+        if failed:
+            return stages, {
+                "stage": stage["stage_name"],
+                "check": failed.get("name", "Check"),
+                "value": str(failed.get("value", "Unknown")),
+                "threshold": str(failed.get("threshold", "Configured threshold")),
+                "note": str(failed.get("note", "This check must pass before a setup can proceed.")),
+            }
+        reason = next((reason for reason in stage["rejection_reasons"] if reason), None)
+        if reason:
+            return stages, {"stage": stage["stage_name"], "check": "Gate", "value": reason, "threshold": "Pass required", "note": "This gate blocked the setup."}
+    return stages, None
+
+
 @router.get("/plan")
 def get_trade_plan(
     market: str = Query("IN", pattern="^(IN|US)$"),
@@ -47,6 +95,7 @@ def get_trade_plan(
     for s in signals:
         reasons_raw = json.loads(s.reasons_json) if s.reasons_json else []
         clean_reasons = [r for r in reasons_raw if isinstance(r, str) and r.strip()]
+        decision_stages, blocked_reason = _audit_payload_for_signal(db, s, scan_row.session_date)
         item = {
             "id": s.id,
             "symbol": s.symbol,
@@ -68,6 +117,9 @@ def get_trade_plan(
             "reasons": clean_reasons,
             "news_coverage": json.loads(s.news_flags_json) if s.news_flags_json else {},
             "valid_until": s.valid_until.isoformat() if s.valid_until else None,
+            "decision_stages": decision_stages,
+            "blocked_reason": blocked_reason,
+            "fundamentals": json.loads(s.fundamentals_json) if s.fundamentals_json else None,
         }
 
         # ONLY actionable, verified setups belong in Trade Plan signals!
@@ -87,6 +139,7 @@ def get_trade_plan(
         "signals": sig_dicts,
         "shadow_signals": shadow_dicts,
         "candidate_opportunities": candidate_dicts,
+        "pre_breakout_watchlist": [item for item in candidate_dicts if item["state"] == "PRE_BREAKOUT_WATCHLIST"],
         "universe_size": scan_row.universe_size,
         "passed_filters": scan_row.passed_filters,
         "data_warnings": json.loads(scan_row.data_warnings_json) if scan_row.data_warnings_json else [],
@@ -239,4 +292,40 @@ def get_decision_audits(
         )
 
     return results
+
+
+@router.get("/value-radar")
+def get_value_radar(market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
+    """Return research ideas only; candidates still use the regular pipeline and risk validator."""
+    ideas = []
+    rows = db.query(Signal).filter(Signal.market == market, Signal.fundamentals_json.isnot(None)).order_by(Signal.created_at.desc()).limit(500).all()
+    seen = set()
+    for signal in rows:
+        if signal.symbol in seen:
+            continue
+        seen.add(signal.symbol)
+        try:
+            snapshot = json.loads(signal.fundamentals_json or "{}")
+            lights = {light.get("metric"): light for light in snapshot.get("lights", [])}
+        except (TypeError, ValueError):
+            continue
+        valuation = next((item for name, item in lights.items() if name.startswith("Valuation:")), {})
+        quality = next((item for name, item in lights.items() if name in {"ROCE", "ROE"}), {})
+        growth = [item for name, item in lights.items() if name in {"Latest-quarter profit growth YoY", "Revenue growth YoY"}]
+        stabilizing = signal.state == "PRE_BREAKOUT_WATCHLIST" or (signal.setup == "VCP" and signal.trigger > 0)
+        try:
+            stages = _audit_payload_for_signal(db, signal, signal.created_at.date())[0]
+            tt_checks = next((stage.get("checks", []) for stage in stages if stage.get("stage_name") == "Setup Validator"), [])
+            above_200 = any(check.get("name") == "Price > SMA150 & SMA200" and check.get("passed") for check in tt_checks)
+        except Exception:
+            above_200 = False
+        if valuation.get("status") not in {"GREEN", "YELLOW"} or quality.get("status") not in {"GREEN", "YELLOW"}:
+            continue
+        if any(item.get("status") == "RED" for item in growth) or not (above_200 or stabilizing):
+            continue
+        ideas.append({"symbol": signal.symbol, "market": market, "tag": "VALUE_RADAR", "source": "VALUE_RADAR",
+                      "valuation": valuation, "quality": quality, "growth": growth, "stabilizing": "ABOVE_200_SMA" if above_200 else "VALID_BASE",
+                      "detail_url": snapshot.get("detail_url"), "label": "Research idea, not a trade signal; cheap stocks can stay cheap.",
+                      "warning": "Check for value traps and cyclical peak earnings. A value idea still requires the normal DecisionPipeline and Risk Validator."})
+    return ideas
 

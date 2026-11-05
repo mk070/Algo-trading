@@ -5,12 +5,16 @@ services:
     region: oregon
     plan: free
     buildCommand: pip install uv && uv pip install --python .venv/bin/python -r backend/pyproject.toml
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.8
+      - key: ENV
+        value: production
+      - key: APP_TOKEN
+        generateValue: true
       - key: PORT
         value: 10000
 

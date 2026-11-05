@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -102,6 +102,9 @@ class VcpConfig(BaseModel):
     confirm_timeframe_min: int = 15
     require_contraction: bool = True
     chase_limit_atr: float = 1.0
+    # Experimental compatibility switch. Keep false until the owner reviews the
+    # before/after scan and backtest evidence.
+    pivot_excludes_signal_day: bool = False
 
 
 class ExitConfig(BaseModel):
@@ -166,7 +169,7 @@ class PortfolioConfig(BaseModel):
 
 class AppSettings(BaseSettings):
     # App Auth & Basic Config
-    app_token: str = Field(default="demo-token-change-in-prod", alias="APP_TOKEN")
+    app_token: str = Field(default="", alias="APP_TOKEN")
     env: str = Field(default="development", alias="ENV")
     database_url: str = Field(
         default="postgresql://neondb_owner:YOUR_PASSWORD@ep-sample-123456.us-east-2.aws.neon.tech/neondb?sslmode=require",
@@ -246,12 +249,22 @@ class AppSettings(BaseSettings):
     news_rules: Dict[str, Any] = Field(default_factory=dict)
     news_sources: Dict[str, Any] = Field(default_factory=dict)
     macro_calendar: Dict[str, Any] = Field(default_factory=dict)
+    fundamentals_config: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def require_real_production_token(self):
+        """A public deployment must never silently fall back to a demo credential."""
+        if self.env.strip().lower() == "production":
+            token = (self.app_token or "").strip()
+            if not token or token == "demo-token-change-in-prod":
+                raise ValueError("APP_TOKEN must be set to a non-placeholder value when ENV=production")
+        return self
 
     def load_yaml_configs(self):
         strategy_file = CONFIG_DIR / "strategy.yaml"
@@ -273,6 +286,11 @@ class AppSettings(BaseSettings):
         if macro_cal_file.exists():
             with open(macro_cal_file, "r", encoding="utf-8") as f:
                 self.macro_calendar = yaml.safe_load(f) or {}
+
+        fundamentals_file = CONFIG_DIR / "fundamentals.yaml"
+        if fundamentals_file.exists():
+            with open(fundamentals_file, "r", encoding="utf-8") as f:
+                self.fundamentals_config = yaml.safe_load(f) or {}
 
     def get_market_config(self, market: str) -> MarketConfig:
         mkts = self.strategy_config.get("markets", {})

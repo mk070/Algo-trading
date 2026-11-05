@@ -20,6 +20,16 @@ import { API_BASE, apiClient } from './api/client';
 import { RegimeResult } from './types';
 
 export const AppContent: React.FC = () => {
+  const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('algo_trading_api_token') || '');
+  const [tokenDraft, setTokenDraft] = useState('');
+  const saveApiToken = (event: React.FormEvent) => {
+    event.preventDefault();
+    const token = tokenDraft.trim();
+    if (!token) return;
+    sessionStorage.setItem('algo_trading_api_token', token);
+    setApiToken(token);
+    setTokenDraft('');
+  };
   const [currentMarket, setCurrentMarket] = useState<'IN' | 'US'>(() => {
     try {
       const saved = localStorage.getItem('algo_trading_market');
@@ -161,29 +171,43 @@ export const AppContent: React.FC = () => {
 
   // Connect to SSE stream
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource(`${API_BASE}/stream`);
-      eventSource.onopen = () => setIsStreaming(true);
-      eventSource.onmessage = (e) => {
-        try {
-          const payload = JSON.parse(e.data);
-          if (payload.type && payload.type !== 'CONNECTED') {
-            setLiveAlertToast(payload);
-            setTimeout(() => setLiveAlertToast(null), 8000);
+    let active = true;
+    const controller = new AbortController();
+    const consumeStream = async () => {
+      try {
+        const token = sessionStorage.getItem('algo_trading_api_token');
+        const headers = new Headers({ Accept: 'text/event-stream' });
+        if (token) headers.set('Authorization', `Bearer ${token}`);
+        const response = await fetch(`${API_BASE}/stream`, { headers, signal: controller.signal });
+        if (!response.ok || !response.body) throw new Error(`Stream unavailable (${response.status})`);
+        setIsStreaming(true);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (active) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const messages = buffer.split(/\r?\n\r?\n/);
+          buffer = messages.pop() || '';
+          for (const message of messages) {
+            const data = message.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
+            if (!data) continue;
+            try {
+              const payload = JSON.parse(data);
+              if (payload.type && payload.type !== 'CONNECTED') {
+                setLiveAlertToast(payload);
+                setTimeout(() => setLiveAlertToast(null), 8000);
+              }
+            } catch { /* ignore heartbeat or malformed event */ }
           }
-        } catch (err) {
-          // heartbeat
         }
-      };
-      eventSource.onerror = () => setIsStreaming(false);
-    } catch (e) {
-      setIsStreaming(false);
-    }
-
-    return () => {
-      if (eventSource) eventSource.close();
+      } catch {
+        if (active) setIsStreaming(false);
+      }
     };
+    void consumeStream();
+    return () => { active = false; controller.abort(); };
   }, []);
 
   const handleSelectSymbol = (symbol: string) => {
@@ -192,6 +216,18 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row font-sans overflow-x-hidden">
+      {import.meta.env.PROD && !apiToken && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950 p-5">
+          <form onSubmit={saveApiToken} className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <ShieldAlert className="mb-3 h-6 w-6 text-amber-400" />
+            <h1 className="text-base font-bold text-slate-100">Private workspace access</h1>
+            <p className="mt-2 text-xs leading-relaxed text-slate-400">Enter the owner API token. It is held only for this browser session and is never included in the frontend build.</p>
+            <label className="mt-4 block text-xs font-medium text-slate-300" htmlFor="api-token">API token</label>
+            <input id="api-token" type="password" autoComplete="current-password" value={tokenDraft} onChange={(event) => setTokenDraft(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-400" required />
+            <button type="submit" className="mt-4 w-full rounded-lg bg-indigo-500 px-3 py-2 text-xs font-bold text-slate-950">Unlock workspace</button>
+          </form>
+        </div>
+      )}
       {/* Left Sidebar (OpenStock Institutional Layout) */}
       <Sidebar
         currentMarket={currentMarket}

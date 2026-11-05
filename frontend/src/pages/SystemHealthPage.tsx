@@ -5,12 +5,14 @@ import { apiClient } from '../api/client';
 export const SystemHealthPage: React.FC = () => {
   const [healthData, setHealthData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [leadTime, setLeadTime] = useState<any>(null);
 
   const fetchHealth = async () => {
     try {
       setLoading(true);
       const data = await apiClient.getHealth();
       setHealthData(data);
+      apiClient.getLeadTime('IN').then(setLeadTime).catch(() => setLeadTime(null));
     } catch (e) {
       console.error('Error fetching health:', e);
     } finally {
@@ -57,6 +59,21 @@ export const SystemHealthPage: React.FC = () => {
           <RefreshCw className="w-3.5 h-3.5" /> Re-check Diagnostics
         </button>
       </div>
+
+      {/* Provider Health Cards */}
+      <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <h2 className="text-sm font-bold text-slate-100">Scanner lead time · last 60 sessions</h2>
+        <p className="mt-1 text-[10px] text-slate-500">Historical breakout sessions compared with the first stored audit where Scanner and Setup Validator passed.</p>
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ['Breakouts', leadTime?.breakout_count ?? '—'],
+            ['Median sessions earlier', leadTime?.median_sessions_earlier ?? '—'],
+            ['Flagged before', leadTime?.flagged_before_pct == null ? '—' : `${leadTime.flagged_before_pct}%`],
+            ['On/after · never', leadTime ? `${leadTime.flagged_on_or_after_pct}% · ${leadTime.never_flagged_pct}%` : '—'],
+          ].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><span className="block text-[10px] text-slate-500">{label}</span><span className="mt-1 block font-mono text-lg font-bold text-slate-100">{value}</span></div>)}
+        </div>
+        {leadTime?.coverage_note && <p className="mt-3 text-[10px] text-amber-300">{leadTime.coverage_note}</p>}
+      </section>
 
       {/* Provider Health Cards */}
       {healthData?.providers && (

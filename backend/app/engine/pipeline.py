@@ -299,6 +299,39 @@ class DecisionPipeline:
         )
         all_rejections.extend(s3_rejections)
 
+        # Fundamental lights are an informational layer by default. They come
+        # from an explicitly initiated refresh and are carried forward with the
+        # symbol's signals; UNKNOWN data never becomes a pass/green light.
+        fundamentals_cfg = settings.fundamentals_config
+        fundamental_snapshot = None
+        if db is not None:
+            from app.models import Signal
+            previous = (db.query(Signal).filter(Signal.symbol == symbol, Signal.market == market)
+                        .order_by(Signal.created_at.desc()).first())
+            if previous and previous.fundamentals_json:
+                try:
+                    fundamental_snapshot = json.loads(previous.fundamentals_json)
+                except (TypeError, ValueError):
+                    fundamental_snapshot = None
+        red_metrics = [light for light in (fundamental_snapshot or {}).get("lights", []) if light.get("status") == "RED"]
+        fundamental_mode = fundamentals_cfg.get("mode", "warn")
+        fundamental_blocks = bool(red_metrics) and fundamental_mode == "block_on_red"
+        fundamental_reason = ("Fundamental review: " + ", ".join(light.get("metric", "metric") for light in red_metrics)) if red_metrics else None
+        stages.append(StageResult(
+            stage_name="Fundamentalist",
+            status="BLOCK" if fundamental_blocks else "PASS",
+            checks=[StageCheck(
+                name="Fundamental traffic lights",
+                value=(f"{len(red_metrics)} RED / {(fundamental_snapshot or {}).get('unknown_count', 8)} UNKNOWN" if fundamental_snapshot else "UNKNOWN (not refreshed)"),
+                threshold=("No RED lights" if fundamental_mode == "block_on_red" else "Review RED lights; do not change the technical plan"),
+                passed=not red_metrics,
+                note="; ".join(light.get("metric", "") + ": " + str(light.get("value", "")) for light in red_metrics) or "Missing data remains UNKNOWN.",
+            )],
+            rejection_reasons=[fundamental_reason] if fundamental_reason and fundamental_mode in {"warn", "block_on_red"} else [],
+        ))
+        if fundamental_reason and fundamental_mode in {"warn", "block_on_red"}:
+            all_rejections.append(fundamental_reason)
+
         # ------------------------------------------------------------------
         # STAGES 4-7: ENTRY, EXIT, SIZING, AND RISK VALIDATION
         # Only evaluate execution mechanics if a valid setup candidate exists!
@@ -539,6 +572,20 @@ class DecisionPipeline:
                 )
             )
             all_rejections.extend(risk_res.rejection_reasons)
+
+        # Persist/display audit stages in the same order as the Research Desk flow.
+        # Sorting changes presentation only; final PASS/BLOCK/WAIT calculation is unchanged.
+        stage_order = {
+            "Scanner": 0,
+            "Setup Validator": 1,
+            "Fundamentalist": 2,
+            "News/Event Analyst": 3,
+            "Entry Planner": 4,
+            "Exit Planner": 5,
+            "Position Sizer": 6,
+            "Risk Validator": 7,
+        }
+        stages.sort(key=lambda stage: stage_order.get(stage.stage_name, 99))
 
         # ------------------------------------------------------------------
         # FINAL DECISION: PASS | BLOCK | WAIT

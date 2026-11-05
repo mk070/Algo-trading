@@ -92,7 +92,7 @@ interface DrawingPoint {
 
 interface ChartDrawing {
   id: string;
-  type: 'hline' | 'trendline' | 'rect';
+  type: 'hline' | 'trendline' | 'rect' | 'fib';
   price?: number;
   p1?: DrawingPoint;
   p2?: DrawingPoint;
@@ -155,7 +155,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const [showStrategyDrawer, setShowStrategyDrawer] = useState<boolean>(false);
 
   // Manual Drawing Tools State
-  const [activeTool, setActiveTool] = useState<'cursor' | 'hline' | 'trendline' | 'rect'>('cursor');
+  const [activeTool, setActiveTool] = useState<'cursor' | 'hline' | 'trendline' | 'rect' | 'fib'>('cursor');
   const [drawings, setDrawings] = useState<ChartDrawing[]>(() => {
     try {
       const saved = localStorage.getItem(`algo_trading_drawings_${symbol}`);
@@ -744,6 +744,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     setPendingPoint(null);
   };
 
+  const exportPineScript = () => {
+    const pine = `//@version=5\nindicator("Swing Intel Strategy Lines · Visual Only", overlay=true)\n// Visual reference only. Swing Intel is the source of truth. No orders are placed.\ntrigger = ${Number(effectiveTrigger || 0)}\nstopLine = ${Number(effectiveStop || 0)}\ntarget1 = ${Number(effectiveTarget || 0)}\ntarget2 = ${Number(effectiveTarget2 || 0)}\nplot(trigger > 0 ? trigger : na, "Trigger", color=color.green, linewidth=2, style=plot.style_linebr)\nplot(stopLine > 0 ? stopLine : na, "Stop", color=color.red, linewidth=2, style=plot.style_linebr)\nplot(target1 > 0 ? target1 : na, "Target 1", color=color.aqua, linewidth=1, style=plot.style_linebr)\nplot(target2 > 0 ? target2 : na, "Target 2", color=color.teal, linewidth=1, style=plot.style_linebr)\n`;
+    const blob = new Blob([pine], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${symbol}-visual-lines.pine`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Compute screen coordinates for SVG drawings
   const renderedDrawings: RenderedDrawing[] = useMemo(() => {
     if (!chartInstanceRef.current || !candleSeriesRef.current) return [];
@@ -1141,6 +1152,16 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             <Square className="w-3.5 h-3.5" />
           </button>
 
+          <button
+            onClick={() => { setActiveTool('fib'); setPendingPoint(null); }}
+            title="Fibonacci retracement and extension (click two swing points)"
+            className={`rounded border p-1.5 transition ${activeTool === 'fib' ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'}`}
+          >
+            <span className="px-0.5 text-[10px] font-bold">Fib</span>
+          </button>
+
+          <button onClick={exportPineScript} title="Export current strategy lines to Pine Script (visual only)" className="rounded border border-slate-800 bg-slate-900 px-2 py-1.5 text-[10px] text-slate-400 hover:text-white">Export Pine · Visual only</button>
+
           {drawings.length > 0 && (
             <button
               onClick={clearAllDrawings}
@@ -1441,6 +1462,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({
                   <circle cx={d.x2} cy={d.y2} r="3" fill={d.color} />
                 </g>
               );
+            }
+
+            if (d.type === 'fib' && d.p1 && d.p2 && d.x1 != null && d.x2 != null) {
+              const levels = [0, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618];
+              const delta = d.p2.price - d.p1.price;
+              return <g key={d.id} className="pointer-events-auto">{levels.map((level) => {
+                const price = d.p1!.price + delta * level;
+                const y = candleSeriesRef.current?.priceToCoordinate(price);
+                if (y == null) return null;
+                return <g key={level}><line x1={Math.min(d.x1!, d.x2!)} y1={y} x2={Math.max(d.x1!, d.x2!)} y2={y} stroke={d.color} strokeWidth="1" strokeDasharray={level > 1 ? '2 4' : '4 3'} opacity="0.8"/><text x={Math.max(d.x1!, d.x2!) + 4} y={y - 2} fill={d.color} fontSize="9" fontFamily="monospace">{(level * 100).toFixed(1)}% · {price.toFixed(2)}</text></g>;
+              })}</g>;
             }
 
             if (d.type === 'rect' && d.x1 != null && d.y1 != null && d.x2 != null && d.y2 != null) {

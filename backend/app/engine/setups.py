@@ -9,6 +9,11 @@ from app.settings import settings
 logger = logging.getLogger(__name__)
 
 
+def is_broke_out_today(signal_high: float, signal_close: float, prior_pivot: float, enabled: bool) -> bool:
+    """Classify a confirmed signal-day close above a prior, signal-excluded pivot."""
+    return bool(enabled and signal_high > prior_pivot and signal_close >= prior_pivot)
+
+
 class SetupCandidate(BaseModel):
     symbol: str
     setup: str  # VCP or PULLBACK
@@ -23,6 +28,7 @@ class SetupCandidate(BaseModel):
     reasons: List[str]
     is_experimental: bool = False
     shadow_mode: bool = False
+    classification: str = "PRE_BREAKOUT"  # PRE_BREAKOUT | BROKE_OUT_TODAY
 
 
 class SetupEngine:
@@ -59,7 +65,15 @@ class SetupEngine:
         best_candidate = None
 
         for n in range(self.vcp_cfg.base_min_bars, self.vcp_cfg.base_max_bars + 1):
-            base_slice = df.iloc[-n:]
+            # The compatibility flag deliberately changes only the experimental
+            # classification path.  It avoids treating today's new high as the
+            # base pivot, which otherwise makes a completed breakout appear new.
+            if self.vcp_cfg.pivot_excludes_signal_day:
+                if len(df) < n + 1:
+                    continue
+                base_slice = df.iloc[-n - 1:-1]
+            else:
+                base_slice = df.iloc[-n:]
             pivot = float(base_slice["high"].max())
             base_low = float(base_slice["low"].min())
 
@@ -79,9 +93,10 @@ class SetupEngine:
                 continue
 
             # 4. Proximity: close within pivot_proximity_pct (3%) below pivot
+            broke_out_today = is_broke_out_today(float(high.iloc[-1]), last_close, pivot, self.vcp_cfg.pivot_excludes_signal_day)
             if last_close > pivot:
                 dist_pct = (last_close - pivot) / pivot * 100.0
-                if dist_pct > 1.5:  # already broke out too far
+                if dist_pct > 1.5 and not broke_out_today:  # already broke out too far
                     continue
             else:
                 dist_below = (pivot - last_close) / pivot * 100.0
@@ -156,6 +171,7 @@ class SetupEngine:
                 reasons=reasons,
                 is_experimental=False,
                 shadow_mode=False,
+                classification="BROKE_OUT_TODAY" if broke_out_today else "PRE_BREAKOUT",
             )
             break  # found tightest valid base window
 

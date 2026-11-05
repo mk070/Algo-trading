@@ -43,6 +43,7 @@ class PlannedSignal(BaseModel):
     state: str
     sources: List[str] = ["AUTO"]
     first_failing_check: Optional[str] = None
+    blocked_reason: Optional[Dict[str, str]] = None
     reasons: List[str]
     checklist: List[ChecklistItem]
     decision_stages: List[StageResult] = []
@@ -59,6 +60,7 @@ class TradePlan(BaseModel):
     signals: List[PlannedSignal]
     shadow_signals: List[PlannedSignal] = []
     candidate_opportunities: List[PlannedSignal] = []
+    pre_breakout_watchlist: List[PlannedSignal] = []
     universe_size: int
     passed_filters: int
     data_warnings: List[str]
@@ -105,7 +107,7 @@ class Planner:
                     .all()
                 )
                 for it in w_items:
-                    tag = f"WATCHLIST:{wl.name}"
+                    tag = "VALUE_RADAR" if it.source == "VALUE_RADAR" else f"WATCHLIST:{wl.name}"
                     if it.symbol not in candidate_sources:
                         candidate_sources[it.symbol] = [tag]
                     elif tag not in candidate_sources[it.symbol]:
@@ -168,6 +170,7 @@ class Planner:
         primary_signals: List[PlannedSignal] = []
         shadow_signals: List[PlannedSignal] = []
         candidate_opportunities: List[PlannedSignal] = []
+        pre_breakout_watchlist: List[PlannedSignal] = []
         passed_filters_count = 0
 
         for sym, df in enriched_data.items():
@@ -205,7 +208,7 @@ class Planner:
                 trigger = decision.trigger or cand.pivot
                 stop = decision.stop or cand.stop_loss
                 target1 = decision.target1 or round(trigger + 2.0 * max(0.1, trigger - stop), 2)
-                qty = decision.qty if (decision.final_decision == "ALLOW" and decision.qty and decision.qty > 0) else 0
+                qty = decision.qty if ((decision.final_decision == "ALLOW" or state == "PRE_BREAKOUT_WATCHLIST") and decision.qty and decision.qty > 0) else 0
             else:
                 trigger = 0.0
                 stop = 0.0
@@ -214,10 +217,37 @@ class Planner:
 
             is_already_held = sym in held_symbols
             first_failing = decision.all_rejection_reasons[0] if decision.all_rejection_reasons else None
+            blocked_reason = None
+            for stage in decision.stages:
+                if stage.status != "BLOCK":
+                    continue
+                failed_check = next((check for check in stage.checks if not check.passed), None)
+                if failed_check:
+                    blocked_reason = {
+                        "stage": stage.stage_name,
+                        "check": failed_check.name,
+                        "value": failed_check.value,
+                        "threshold": failed_check.threshold,
+                        "note": failed_check.note or "This check must pass before the setup can proceed.",
+                    }
+                elif stage.rejection_reasons:
+                    blocked_reason = {"stage": stage.stage_name, "check": "Gate", "value": stage.rejection_reasons[0], "threshold": "Pass required", "note": "This gate blocked the setup."}
+                if blocked_reason:
+                    break
 
             # Categorize Opportunity State
             if is_already_held:
                 state = "ALREADY_HELD"
+            elif cand and cand.classification == "BROKE_OUT_TODAY":
+                # Experimental pivot policy: do not present a signal-day breakout
+                # as a new pre-breakout opportunity. Execution gates still apply.
+                state = "BROKE_OUT_TODAY"
+            elif (
+                cand and cand.setup == "VCP" and last_price < cand.pivot
+                and ((cand.pivot - last_price) / cand.pivot * 100.0) <= settings.get_vcp_config().pivot_proximity_pct
+                and all(stage.status == "PASS" for stage in decision.stages if stage.stage_name in {"Setup Validator", "Entry Planner", "Exit Planner", "Position Sizer"})
+            ):
+                state = "PRE_BREAKOUT_WATCHLIST"
             elif cand and decision.final_decision == "ALLOW":
                 dist = ((trigger - last_price) / trigger * 100.0) if trigger > 0 else 999.0
                 if 0 <= dist <= 1.5:
@@ -268,6 +298,7 @@ class Planner:
                 state=state,
                 sources=candidate_sources.get(sym, ["AUTO"]),
                 first_failing_check=first_failing,
+                blocked_reason=blocked_reason,
                 reasons=reasons,
                 checklist=tt_res.checklist,
                 decision_stages=decision.stages,
@@ -277,13 +308,15 @@ class Planner:
                 shadow_mode=cand.shadow_mode if cand else False,
             )
 
-            if decision.final_decision == "ALLOW" and cand and not is_already_held:
+            if decision.final_decision == "ALLOW" and cand and not is_already_held and state not in {"BROKE_OUT_TODAY", "PRE_BREAKOUT_WATCHLIST"}:
                 if cand.shadow_mode or cand.is_experimental:
                     shadow_signals.append(sig)
                 else:
                     primary_signals.append(sig)
             else:
                 candidate_opportunities.append(sig)
+                if state == "PRE_BREAKOUT_WATCHLIST":
+                    pre_breakout_watchlist.append(sig)
 
         # Sort by score descending and take top N for primary signals
         top_n = int(self.screen_cfg.get("top_n_per_market", 6))
@@ -295,6 +328,10 @@ class Planner:
 
         # 6. Persist Scan and Signals into Database
         if db is not None:
+            previous_fundamentals = {}
+            for old_signal in db.query(Signal).filter(Signal.market == market).order_by(Signal.created_at.desc()).all():
+                if old_signal.symbol not in previous_fundamentals and old_signal.fundamentals_json:
+                    previous_fundamentals[old_signal.symbol] = old_signal.fundamentals_json
             scan_row = Scan(
                 market=market,
                 session_date=session_date,
@@ -332,6 +369,11 @@ class Planner:
                     reasons_json=json.dumps(s.reasons),
                     sources_json=json.dumps(s.sources),
                     news_flags_json=json.dumps(s.news_coverage.model_dump(), default=str),
+                    fundamentals_json=previous_fundamentals.get(s.symbol, json.dumps({
+                        "symbol": s.symbol, "mode": settings.fundamentals_config.get("mode", "warn"),
+                        "unknown_count": 8, "red_count": 0,
+                        "lights": [{"metric": "Fundamental coverage", "status": "UNKNOWN", "value": "No snapshot stored", "period": "N/A", "source": "N/A", "why": "Refresh the Fundamentalist view for available data.", "threshold": "Missing data is never green"}],
+                    })),
                     state=s.state,
                     valid_until=s.valid_until,
                 )
@@ -348,6 +390,7 @@ class Planner:
             signals=primary_signals,
             shadow_signals=shadow_signals,
             candidate_opportunities=candidate_opportunities,
+            pre_breakout_watchlist=pre_breakout_watchlist,
             universe_size=len(symbols),
             passed_filters=passed_filters_count,
             data_warnings=data_warnings,

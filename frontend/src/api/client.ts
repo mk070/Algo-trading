@@ -6,7 +6,12 @@ export const API_BASE = (configuredApiBase && !configuredApiBase.includes('127.0
   : (import.meta.env.PROD ? 'https://algo-trading-g9j5.onrender.com/api' : (configuredApiBase ? `${configuredApiBase}/api` : 'http://127.0.0.1:8000/api'));
 
 export async function fetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  // Deliberately session-only: production API credentials must not be compiled
+  // into Vite output or persisted beyond an active browser session.
+  const token = sessionStorage.getItem('algo_trading_api_token');
+  const headers = new Headers(init?.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const res = await fetch(url, { ...init, headers });
   if (!res.ok) {
     const text = await res.text();
     let detail = '';
@@ -350,6 +355,32 @@ export const apiClient = {
   async getDecisionAudits(symbol?: string, market: string = 'IN') {
     const url = symbol ? `${API_BASE}/decision-audits?symbol=${symbol}&market=${market}` : `${API_BASE}/decision-audits?market=${market}`;
     return fetchJson(url);
+  },
+
+  async getFundamentalLights(symbol: string, market: string = 'IN') {
+    return fetchJson(`${API_BASE}/fundamental-lights/${encodeURIComponent(symbol)}?market=${market}`);
+  },
+
+  async getLeadTime(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/research/lead-time?market=${market}&sessions=60`);
+  },
+
+  async getFundamentalOutcomes(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/research/fundamental-outcomes?market=${market}`);
+  },
+
+  async getPivotImpact(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/research/pivot-impact?market=${market}&sessions=60`);
+  },
+
+  async getValueRadar(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/value-radar?market=${market}`);
+  },
+
+  async importFundamentalsCsv(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return fetchJson(`${API_BASE}/fundamentals/import-csv`, { method: 'POST', body: form });
   },
 
   async getNeonServices() {

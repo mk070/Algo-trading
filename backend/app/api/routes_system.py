@@ -2,8 +2,8 @@ import asyncio
 import datetime
 import json
 import logging
-from typing import Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 import pandas as pd
 from pydantic import BaseModel
@@ -1471,6 +1471,272 @@ def get_fundamentals(
     }
 
     return result
+
+
+@router.get("/fundamental-lights/{symbol}")
+def get_fundamental_lights(symbol: str, market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
+    """Informational, explicitly unofficial yfinance traffic lights."""
+    from app.engine.fundamentals import evaluate_fundamentals
+    try:
+        import yfinance as yf
+    except ImportError:
+        raise HTTPException(status_code=503, detail="yfinance is unavailable")
+
+    clean = symbol.strip().upper()
+    ticker_symbol = f"{clean}.NS" if market == "IN" else clean
+    source = "yfinance (unofficial; incomplete; not point-in-time)"
+    raw: Dict[str, Any] = {"symbol": clean, "source": source, "period": "Latest quarterly statement available"}
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        info = ticker.info or {}
+        raw["sector"] = info.get("sector")
+        sector = str(info.get("sector") or "Unknown")
+        is_financial = any(x in sector.lower() for x in ("financial", "bank", "insurance"))
+        income = getattr(ticker, "quarterly_income_stmt", None)
+        if income is not None and not income.empty:
+            cols = list(income.columns)
+            def statement_row(*names):
+                for name in names:
+                    if name in income.index:
+                        return income.loc[name]
+                return None
+            net = statement_row("Net Income", "Net Income Common Stockholders", "Net Income Continuous Operations")
+            revenue = statement_row("Total Revenue", "Operating Revenue")
+            op_income = statement_row("Operating Income", "EBIT")
+            if net is not None and len(cols) >= 2:
+                profits = [float(net.get(cols[0])), float(net.get(cols[1]))]
+                raw["last_two_net_profits"] = profits
+                changes = []
+                if len(cols) >= 5:
+                    for i in (0, 1):
+                        current = float(net.get(cols[i]))
+                        prior = float(net.get(cols[i + 4]))
+                        changes.append(((current - prior) / abs(prior) * 100.0) if prior else 0.0)
+                    raw["last_two_profit_yoy_changes_pct"] = changes
+                if len(cols) >= 5 and float(net.get(cols[4])) != 0:
+                    raw["profit_growth_yoy_pct"] = (float(net.get(cols[0])) - float(net.get(cols[4]))) / abs(float(net.get(cols[4]))) * 100.0
+            if revenue is not None and len(cols) >= 5:
+                latest_rev, prior_rev = float(revenue.get(cols[0])), float(revenue.get(cols[4]))
+                if prior_rev:
+                    raw["revenue_growth_yoy_pct"] = (latest_rev - prior_rev) / abs(prior_rev) * 100.0
+                if op_income is not None and latest_rev and float(revenue.get(cols[4])):
+                    raw["operating_margin_change_pp"] = (float(op_income.get(cols[0])) / latest_rev - float(op_income.get(cols[4])) / float(revenue.get(cols[4]))) * 100.0
+                raw["period"] = str(cols[0])
+        raw["roce_pct"] = (info.get("returnOnCapitalEmployed") or 0) * 100 if info.get("returnOnCapitalEmployed") is not None else None
+        raw["roe_pct"] = (info.get("returnOnEquity") or 0) * 100 if info.get("returnOnEquity") is not None else None
+        raw["debt_equity"] = ((info.get("debtToEquity") / 100.0) if info.get("debtToEquity") and info.get("debtToEquity") > 2 else info.get("debtToEquity"))
+        raw["interest_coverage"] = info.get("interestCoverage")
+        # yfinance does not consistently expose sector medians, pledge, or quarter-by-quarter promoter ownership.
+        raw["pe_vs_sector_median"] = None
+        raw["pb_vs_sector_median"] = None
+        raw["negative_earnings"] = (info.get("trailingEps") is not None and info.get("trailingEps") < 0)
+        raw["pledge_pct"] = None
+        raw["promoter_holding_change_4q_pp"] = None
+        result = evaluate_fundamentals(raw, sector, is_financial)
+        result["provider_disclosure"] = "Unofficial yfinance data; coverage and consolidation vary. Missing values are UNKNOWN."
+        try:
+            for signal in db.query(Signal).filter(Signal.symbol == clean, Signal.market == market).all():
+                signal.fundamentals_json = json.dumps(result, default=str)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Unable to persist fundamental snapshot for %s: %s", clean, exc)
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Fundamental lights unavailable for %s: %s", ticker_symbol, exc)
+        result = evaluate_fundamentals(raw, "Unknown", False)
+        result["provider_disclosure"] = "Data unavailable. Missing values are UNKNOWN."
+        return result
+
+
+@router.get("/research/lead-time")
+def get_lead_time_kpi(market: str = Query("IN", pattern="^(IN|US)$"), sessions: int = Query(60, ge=20, le=250), db: Session = Depends(get_db)):
+    """Reconstruct observed breakout lead time from stored bars and audit history."""
+    import pandas as pd
+    from app.engine.research_metrics import lead_time_summary
+    from app.models import DecisionAudit, DecisionStageResult
+
+    from app.engine.universe import universe_manager
+
+    market_symbols = [stock.symbol for stock in universe_manager.load_universe(market)]
+    dates_query = db.query(DailyBar.date).filter(DailyBar.symbol.in_(market_symbols)) if market_symbols else db.query(DailyBar.date).filter(DailyBar.symbol == "")
+    dates = [row[0] for row in dates_query.distinct().order_by(DailyBar.date.desc()).limit(sessions + 60).all()]
+    dates = sorted(dates)
+    if len(dates) < 56:
+        return {"market": market, "coverage": "INSUFFICIENT", "coverage_note": "Not enough stored sessions to identify 55-day breakouts.", "sessions_available": len(dates), **lead_time_summary([], [], [])}
+    start_index = max(0, len(dates) - sessions)
+    warmup_index = max(0, start_index - 55)
+    start = dates[start_index]
+    rows = db.query(DailyBar).filter(DailyBar.symbol.in_(market_symbols), DailyBar.date >= dates[warmup_index], DailyBar.date <= dates[-1]).all() if market_symbols else []
+    bars_by_symbol: Dict[str, list] = {}
+    for bar in rows:
+        bars_by_symbol.setdefault(bar.symbol, []).append(bar)
+    audit_rows = db.query(DecisionAudit.symbol, DecisionAudit.asof_date, DecisionAudit.id).filter(DecisionAudit.market == market, DecisionAudit.symbol.in_(market_symbols), DecisionAudit.asof_date >= start).all() if market_symbols else []
+    audit_ids = [row[2] for row in audit_rows]
+    stage_rows = db.query(DecisionStageResult).filter(DecisionStageResult.audit_id.in_(audit_ids)).all() if audit_ids else []
+    stages_by_audit: Dict[int, set] = {}
+    for row in stage_rows:
+        stages_by_audit.setdefault(row.audit_id, set()).add((row.stage_name, row.status))
+    flags_by_symbol: Dict[str, list] = {}
+    for symbol, date, audit_id in audit_rows:
+        stages = stages_by_audit.get(audit_id, set())
+        if ("Scanner", "PASS") in stages and ("Setup Validator", "PASS") in stages:
+            flags_by_symbol.setdefault(symbol, []).append(date)
+    breakout_dates: list[str] = []
+    first_flags: list[Optional[str]] = []
+    event_symbols: list[str] = []
+    for symbol, bars in bars_by_symbol.items():
+        frame = pd.DataFrame([{"date": b.date, "high": b.high, "close": b.close} for b in bars]).sort_values("date")
+        prior_high = frame["high"].shift(1).rolling(55, min_periods=55).max()
+        crossed = (frame["close"] >= prior_high) & prior_high.notna()
+        event_mask = crossed & ~crossed.shift(1, fill_value=False)
+        events = frame[(frame["date"] >= start) & event_mask]
+        for _, event in events.iterrows():
+            breakout_date = event["date"]
+            flag_dates = sorted(date for date in flags_by_symbol.get(symbol, []) if date <= breakout_date)
+            breakout_dates.append(breakout_date.isoformat())
+            first_flags.append(flag_dates[0].isoformat() if flag_dates else None)
+            event_symbols.append(symbol)
+    summary = lead_time_summary([date.isoformat() for date in dates], breakout_dates, first_flags)
+    return {"market": market, "lookback_sessions": sessions, "coverage": "OBSERVED_AUDIT_HISTORY",
+            "coverage_note": "Uses stored DecisionAudit stage passes and stored daily bars. Scan/audit retention may be incomplete; never-flagged includes events with no retained qualifying audit.",
+            "breakouts": [{"symbol": symbol, "date": date, "first_flag_date": flag,
+                           "lead_sessions": (dates.index(datetime.date.fromisoformat(date)) - dates.index(datetime.date.fromisoformat(flag))) if flag and datetime.date.fromisoformat(flag) in dates and datetime.date.fromisoformat(date) in dates else None}
+                          for symbol, date, flag in zip(event_symbols, breakout_dates, first_flags)], **summary}
+
+
+@router.get("/research/pivot-impact")
+def get_pivot_impact(market: str = Query("IN", pattern="^(IN|US)$"), sessions: int = Query(60, ge=20, le=120), db: Session = Depends(get_db)):
+    """Compare the current pivot policy with a signal-day-excluded variant on identical stored data."""
+    from app.backtest.simulator import BacktestSimulator
+    from app.engine.indicators import add_all_indicators
+    from app.engine.setups import SetupEngine
+    from app.engine.universe import universe_manager
+
+    symbols = [stock.symbol for stock in universe_manager.load_universe(market)][:30]
+    if not symbols:
+        symbols = [row[0] for row in db.query(DailyBar.symbol).distinct().limit(30).all()]
+    dates = sorted(row[0] for row in db.query(DailyBar.date).filter(DailyBar.symbol.in_(symbols)).distinct().all())
+    if len(dates) < sessions:
+        return {"status": "INSUFFICIENT_DATA", "sessions_requested": sessions, "sessions_available": len(dates), "reason": "Stored bars do not cover the requested comparison window."}
+    start_date = dates[-sessions]
+    end_date = dates[-1]
+    warmup_index = max(0, len(dates) - sessions - 220)
+    warmup_start = dates[warmup_index]
+    rows = db.query(DailyBar).filter(DailyBar.symbol.in_(symbols), DailyBar.date >= warmup_start, DailyBar.date <= end_date).all()
+    grouped: Dict[str, list] = {}
+    for row in rows:
+        grouped.setdefault(row.symbol, []).append({"date": row.date, "open": row.open, "high": row.high, "low": row.low, "close": row.close, "adj_close": row.adj_close, "volume": row.volume})
+    enriched = {symbol: add_all_indicators(pd.DataFrame(items).sort_values("date")) for symbol, items in grouped.items() if len(items) >= 55}
+    count_results = {}
+    backtest_results = {}
+    for exclude_signal_day in (False, True):
+        local_engine = SetupEngine()
+        local_engine.vcp_cfg = local_engine.vcp_cfg.model_copy(update={"pivot_excludes_signal_day": exclude_signal_day})
+        total_candidates = 0
+        broke_today = 0
+        for frame in enriched.values():
+            for index in range(len(frame)):
+                if frame.iloc[index]["date"] < start_date:
+                    continue
+                candidate = local_engine.evaluate_vcp_breakout("RESEARCH", frame.iloc[:index + 1])
+                if candidate:
+                    total_candidates += 1
+                    broke_today += candidate.classification == "BROKE_OUT_TODAY"
+        policy = "signal_day_excluded" if exclude_signal_day else "current_includes_signal_day"
+        count_results[policy] = {"candidate_sessions": total_candidates, "broke_out_today": int(broke_today)}
+        simulator = BacktestSimulator(market=market, setup_engine_override=local_engine)
+        sim = simulator.run(enriched, start_date=start_date, end_date=end_date, setup_filter="VCP")
+        backtest_results[policy] = {"trade_count": len(sim["trades"]), "metrics": sim["metrics"]}
+    baseline = backtest_results["current_includes_signal_day"]["metrics"]
+    variant = backtest_results["signal_day_excluded"]["metrics"]
+    metric_changes = {key: round(float(variant.get(key, 0) or 0) - float(baseline.get(key, 0) or 0), 6)
+                      for key in ("total_trades", "expectancy_r", "profit_factor", "max_drawdown_pct", "total_costs")}
+    return {"status": "COMPLETED", "market": market, "sessions": sessions, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(),
+            "symbols_with_bars": len(enriched), "counts": count_results, "backtests": backtest_results, "metric_changes_variant_minus_current": metric_changes,
+            "note": "Same stored daily bars, universe slice, costs and engine rules were used. Research comparison only; this does not enable the variant in live scans."}
+
+
+@router.get("/research/fundamental-outcomes")
+def get_fundamental_outcomes(market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
+    """Forward outcome tracking by stored light status; no historical backtest claim."""
+    from collections import defaultdict
+    from app.models import Journal
+    rows = (db.query(Journal, Signal.fundamentals_json)
+            .join(Position, Journal.position_id == Position.id)
+            .join(Signal, Position.signal_id == Signal.id)
+            .filter(Journal.market == market).all())
+    buckets: Dict[str, list] = defaultdict(list)
+    for entry, snapshot_json in rows:
+        try:
+            snapshot = json.loads(snapshot_json) if snapshot_json else {}
+            statuses = [light.get("status", "UNKNOWN") for light in snapshot.get("lights", [])]
+            key = "RED" if "RED" in statuses else "UNKNOWN" if not statuses or "UNKNOWN" in statuses else "NO_RED"
+        except (TypeError, ValueError):
+            key = "UNKNOWN"
+        buckets[key].append(float(entry.r_multiple))
+    return {"market": market, "method": "Forward realized journal outcomes grouped by signal snapshot; observational, not causal.",
+            "groups": [{"fundamental_state": state, "trades": len(values),
+                        "mean_r": round(sum(values) / len(values), 3) if values else None,
+                        "win_rate_pct": round(100 * sum(v > 0 for v in values) / len(values), 1) if values else None}
+                       for state, values in sorted(buckets.items())]}
+@router.post("/fundamentals/import-csv")
+async def import_fundamentals_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Owner-initiated import of normalized CSV observations; no third-party fetch."""
+    import csv
+    import io
+    from app.engine.fundamentals import evaluate_fundamentals
+    raw_bytes = await file.read(2_000_001)
+    if len(raw_bytes) > 2_000_000:
+        raise HTTPException(status_code=413, detail="CSV must be no larger than 2 MB")
+    try:
+        reader = csv.DictReader(io.StringIO(raw_bytes.decode("utf-8-sig")))
+        required = {"symbol", "period"}
+        if not reader.fieldnames or not required.issubset({field.strip().lower() for field in reader.fieldnames}):
+            raise HTTPException(status_code=400, detail="CSV needs symbol and period columns")
+        count = 0
+        unmatched = []
+        snapshots: Dict[str, Any] = {}
+        numeric_fields = {"profit_growth_yoy_pct", "revenue_growth_yoy_pct", "operating_margin_change_pp", "roce_pct", "roe_pct", "debt_equity", "interest_coverage", "pe_vs_sector_median", "pb_vs_sector_median", "pledge_pct", "promoter_holding_change_4q_pp"}
+        for row in reader:
+            normalized = {str(key).strip().lower(): value for key, value in row.items() if key}
+            symbol = str(normalized.get("symbol", "")).strip().upper()
+            if not symbol:
+                continue
+            metrics: Dict[str, Any] = {"symbol": symbol, "period": normalized.get("period") or "Imported period", "source": "Owner CSV import"}
+            for key in numeric_fields:
+                value = normalized.get(key)
+                if value not in (None, ""):
+                    try:
+                        metrics[key] = float(value.replace(",", ""))
+                    except (ValueError, AttributeError):
+                        continue
+            for key in ("last_two_net_profits", "last_two_profit_yoy_changes_pct"):
+                value = normalized.get(key)
+                if value:
+                    try:
+                        metrics[key] = [float(part.strip()) for part in value.split(";")]
+                    except ValueError:
+                        continue
+            metrics["negative_earnings"] = normalized.get("negative_earnings", "").strip().lower() in {"1", "true", "yes"}
+            financial = normalized.get("financial", "").strip().lower() in {"1", "true", "yes"}
+            result = evaluate_fundamentals(metrics, normalized.get("sector", "Unknown"), financial)
+            result["provider_disclosure"] = "Owner supplied CSV. Verify source terms, consolidation and restatement date."
+            snapshots[symbol] = result
+            matches = db.query(Signal).filter(Signal.symbol == symbol, Signal.market == "IN").all()
+            if not matches:
+                unmatched.append(symbol)
+            for signal in matches:
+                signal.fundamentals_json = json.dumps(result, default=str)
+            count += 1
+        db.commit()
+        return {"rows_imported": count, "unmatched_signals": sorted(set(unmatched)), "snapshots": snapshots, "source": "Owner CSV import"}
+    except HTTPException:
+        raise
+    except (UnicodeDecodeError, csv.Error) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read CSV: {exc}")
 
 
 @router.get("/heatmap")

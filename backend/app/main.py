@@ -1,6 +1,6 @@
 import contextlib
 import logging
-from fastapi import FastAPI, Header, HTTPException, Security
+from fastapi import Depends, FastAPI, Header, HTTPException, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -25,9 +25,11 @@ logger = logging.getLogger("swing_algo")
 security = HTTPBearer(auto_error=False)
 
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Verifies bearer token if configured, allowing easy local UI development."""
-    if settings.env == "production" and settings.app_token != "demo-token-change-in-prod":
+def verify_token(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+):
+    """Require the configured bearer token on every non-health API route in production."""
+    if settings.env.strip().lower() == "production":
         if not credentials or credentials.credentials != settings.app_token:
             raise HTTPException(status_code=401, detail="Invalid or missing API Bearer token")
     return True
@@ -89,13 +91,14 @@ app.add_middleware(
 )
 
 # Include all API Routers under /api
-app.include_router(system_router, prefix="/api", tags=["System & Settings"])
-app.include_router(plan_router, prefix="/api", tags=["Trade Plan & Signals"])
-app.include_router(watchlists_router, prefix="/api", tags=["Watchlists"])
-app.include_router(positions_router, prefix="/api", tags=["Positions & Journal"])
-app.include_router(portfolio_router, prefix="/api", tags=["Zerodha Portfolio & Valuation"])
-app.include_router(news_router, prefix="/api", tags=["News Intelligence"])
-app.include_router(backtest_router, prefix="/api", tags=["Backtesting & Research"])
+protected_api = [Depends(verify_token)]
+app.include_router(system_router, prefix="/api", tags=["System & Settings"], dependencies=protected_api)
+app.include_router(plan_router, prefix="/api", tags=["Trade Plan & Signals"], dependencies=protected_api)
+app.include_router(watchlists_router, prefix="/api", tags=["Watchlists"], dependencies=protected_api)
+app.include_router(positions_router, prefix="/api", tags=["Positions & Journal"], dependencies=protected_api)
+app.include_router(portfolio_router, prefix="/api", tags=["Zerodha Portfolio & Valuation"], dependencies=protected_api)
+app.include_router(news_router, prefix="/api", tags=["News Intelligence"], dependencies=protected_api)
+app.include_router(backtest_router, prefix="/api", tags=["Backtesting & Research"], dependencies=protected_api)
 
 
 from pathlib import Path
