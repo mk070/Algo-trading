@@ -439,4 +439,21 @@ export const apiClient = {
       method: 'DELETE',
     });
   },
+
+  async getDataCoverage(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/data/coverage?market=${market}`);
+  },
+
+  async triggerHistoricalIngestion(data: { market: string; target_sessions?: number }) {
+    return fetchJson(`${API_BASE}/data/ingest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getIngestionStatus(runId?: string) {
+    const qs = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
+    return fetchJson(`${API_BASE}/data/ingest/status${qs}`);
+  },
 };

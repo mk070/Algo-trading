@@ -561,6 +561,41 @@ Free intraday history is short (for example only a limited window of 15-minute b
    - Final holdout data (`holdout_months`) is set aside untouched and is excluded from parameter optimization.
    - Trials count is explicitly recorded (`trials_recorded`), and strategies are never approved solely by virtue of rank.
 
+### 12.8 Historical Market Data Expansion & Research Readiness (Phase 1 Implemented 2026-11-05)
+1. **Session Targets & Research Eligibility Gates:**
+   - **Target (5 Years):** 1,250 actual trading sessions per eligible universe symbol.
+   - **Interim Minimum (3 Years):** 750 actual trading sessions.
+   - **Strict Research Gate (1.2 Years):** 300 trading sessions. Any symbol under 300 bars returns `status="INSUFFICIENT_DATA"` and is strictly disqualified from backtest evaluation.
+2. **Split-Adjusted OHLC & Geometric Integrity:**
+   - Raw OHLCV is strictly preserved in `DailyBar` (`open`, `high`, `low`, `close`, `volume`).
+   - Split adjustments scale all 4 OHLC price points by the exact same multiplier (`split_adj_open`, `split_adj_high`, `split_adj_low`, `split_adj_close`), strictly preserving candlestick geometry and body/shadow proportions:
+     $$\frac{H - L}{H_{adj} - L_{adj}} = \text{const}$$
+   - Cash dividend adjustments are isolated in `dividend_factor = adj_close / split_adj_close` and never mutate historical price levels.
+3. **Exchange Calendar Reconciliation:**
+   - US and Indian trading calendars (`calendars.py`) map all official exchange holidays from 2020 through 2027+.
+   - Legitimate holidays (e.g. NSE Republic Day, Diwali, Eid; US Thanksgiving, Good Friday, Memorial Day) are never treated as missing sessions.
+4. **Resumable Ingestion & Quality Precedence:**
+   - Checkpoints tracked per symbol in `ingestion_checkpoints` and `ingestion_runs`.
+   - Multi-tier precedence guard in PostgreSQL upsert:
+     $$\text{Alpaca SIP (4)} > \text{Angel One / Alpaca IEX (3)} > \text{YFinance (2)} > \text{Synthetic (1)}$$
+   - Lower-quality fallback data is strictly prevented from overwriting primary broker data.
+5. **Data Provenance & Survivorship Bias Limitations:**
+   - All US Alpaca data is explicitly labeled `alpaca_iex` (documenting ~2.5% US tape coverage).
+   - Because the 105-symbol universe uses current constituents, survivorship bias is explicitly disclosed in API responses, logs, and frontend dashboards until point-in-time constituent reconstruction is available.
+
+### 12.9 Independent Historical Data Quality Audit (Phase 3 Verified 2026-11-05)
+1. **Reconciliation Invariant:**
+   - Database total: 141,038 bars (138,754 in 105-symbol universe, 2,284 in 9 index benchmarks/ad-hoc testing symbols).
+   - 67 orphaned synthetic holiday fixtures purged from `bars_daily`.
+   - Zero duplicate `(symbol, date)` records; zero price envelope violations.
+2. **Provider Split Alignment Invariant:**
+   - Angel One SmartAPI and Alpaca IEX retroactively adjust historical candles for splits and bonuses.
+   - `apply_verified_corporate_actions` inspects boundary ratio ($C_{pre}/C_{post}$) across ex-dates to prevent double adjustment when the feed is already split-adjusted.
+   - Zero artificial split discontinuities (>40% drop) across all 105 universe symbols over the full 5-year lookback.
+3. **Calendar Completeness:**
+   - Official holidays expanded for NSE and US (Ganesh Chaturthi, Guru Nanak Jayanti, 2026 holidays, US President Carter National Day of Mourning).
+   - 19 US symbols exhibit 2 missing sessions solely due to zero volume prints on the Alpaca IEX tape.
+
 ---
 
 ## 13. PAPER TRADING MODE

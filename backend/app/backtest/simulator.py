@@ -91,29 +91,40 @@ class BacktestSimulator:
         # Check for gaps and missing trading days in input data using official exchange calendars
         for sym, df in bars_data.items():
             if df is not None and len(df) > 1 and "date" in df.columns:
-                d_list = sorted(list(df["date"]))
-                for i in range(1, len(d_list)):
-                    d_prev, d_curr = d_list[i - 1], d_list[i]
-                    b_days = pd.bdate_range(d_prev, d_curr)
-                    skipped_trading_days = [
-                        d.date() for d in b_days[1:-1]
-                        if not is_exchange_holiday(self.market, d.date())
-                    ]
-                    if skipped_trading_days:
-                        data_warnings.append(
-                            f"Missing bar(s) detected for {sym} between {d_prev} and {d_curr}: "
-                            f"skipped open session(s) {skipped_trading_days} (missing provider data or suspended instrument)"
-                        )
+                if not getattr(df, "_gap_checked", False):
+                    d_list = sorted(list(df["date"]))
+                    for i in range(1, len(d_list)):
+                        d_prev, d_curr = d_list[i - 1], d_list[i]
+                        b_days = pd.bdate_range(d_prev, d_curr)
+                        skipped_trading_days = [
+                            d.date() for d in b_days[1:-1]
+                            if not is_exchange_holiday(self.market, d.date())
+                        ]
+                        if skipped_trading_days:
+                            data_warnings.append(
+                                f"Missing bar(s) detected for {sym} between {d_prev} and {d_curr}: "
+                                f"skipped open session(s) {skipped_trading_days} (missing provider data or suspended instrument)"
+                            )
+                    try:
+                        df._gap_checked = True
+                    except Exception:
+                        pass
 
         # Enrich all bars
         enriched: Dict[str, pd.DataFrame] = {}
         all_dates = set()
         for sym, df in bars_data.items():
             if df is not None and len(df) >= 30:
-                e = add_all_indicators(df)
+                e = df if ("atr14" in df.columns and "sma50" in df.columns) else add_all_indicators(df)
                 enriched[sym] = e
                 for d in e["date"]:
                     all_dates.add(d)
+
+        # Build fast date-to-row lookup for each enriched symbol
+        date_to_idx: Dict[str, Dict[datetime.date, int]] = {
+            sym: {d: i for i, d in enumerate(df["date"])}
+            for sym, df in enriched.items()
+        }
 
         sorted_dates = sorted(list(all_dates))
         if start_date:
@@ -143,13 +154,13 @@ class BacktestSimulator:
                 if df is None:
                     data_warnings.append(f"Missing data frame for pending order {sym} on {current_date}")
                     continue
-                day_bar = df[df["date"] == current_date]
-                if day_bar.empty:
+                row_idx = date_to_idx.get(sym, {}).get(current_date)
+                if row_idx is None:
                     data_warnings.append(f"Missing bar for pending order {sym} on trading session {current_date} (missing provider data or suspended instrument)")
                     remaining_orders.append(order)
                     continue
 
-                b = day_bar.iloc[0]
+                b = df.iloc[row_idx]
                 open_p = float(b["open"])
                 high_p = float(b["high"])
                 trigger = order["trigger"]
@@ -200,13 +211,13 @@ class BacktestSimulator:
                     data_warnings.append(f"Missing data frame for open position {sym} on {current_date}")
                     active_positions.append(pos)
                     continue
-                day_bar = df[df["date"] == current_date]
-                if day_bar.empty:
+                row_idx = date_to_idx.get(sym, {}).get(current_date)
+                if row_idx is None:
                     data_warnings.append(f"Missing bar for open position {sym} on trading session {current_date} (missing provider data or suspended instrument)")
                     active_positions.append(pos)
                     continue
 
-                b = day_bar.iloc[0]
+                b = df.iloc[row_idx]
                 open_p = float(b["open"])
                 high_p = float(b["high"])
                 low_p = float(b["low"])
@@ -301,9 +312,11 @@ class BacktestSimulator:
                     if any(p["symbol"] == sym for p in open_positions) or any(o["symbol"] == sym for o in pending_orders):
                         continue
 
-                    sub_df = df[df["date"] <= current_date]
-                    if len(sub_df) < 55:
+                    cur_idx = date_to_idx.get(sym, {}).get(current_date)
+                    if cur_idx is None or cur_idx < 54:
                         continue
+
+                    sub_df = df.iloc[:cur_idx + 1]
 
                     # Check Setups
                     cand = None

@@ -49,11 +49,62 @@ class DailyBar(Base):
     close = Column(Float, nullable=False)
     adj_close = Column(Float, nullable=False)
     volume = Column(Float, nullable=False)
-    source = Column(String(50), nullable=False)  # angelone, yfinance, alpaca
+    source = Column(String(50), nullable=False)  # angelone, yfinance, alpaca_iex
+    split_adj_open = Column(Float, nullable=True)
+    split_adj_high = Column(Float, nullable=True)
+    split_adj_low = Column(Float, nullable=True)
+    split_adj_close = Column(Float, nullable=True)
+    dividend_factor = Column(Float, default=1.0, nullable=True)
+    is_split_adjusted = Column(Boolean, default=False, nullable=False)
+    ingested_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("symbol", "date"),
         Index("idx_bars_symbol_date", "symbol", "date"),
+    )
+
+
+class IngestionRun(Base):
+    __tablename__ = "ingestion_runs"
+
+    id = Column(String(64), primary_key=True)
+    market = Column(String(10), nullable=False)  # IN, US, ALL
+    target_sessions = Column(Integer, default=1250, nullable=False)
+    status = Column(String(20), default="RUNNING", nullable=False)  # RUNNING, COMPLETED, FAILED, CANCELLED
+    total_symbols = Column(Integer, default=0, nullable=False)
+    completed_symbols = Column(Integer, default=0, nullable=False)
+    failed_symbols = Column(Integer, default=0, nullable=False)
+    started_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+
+
+class IngestionCheckpoint(Base):
+    __tablename__ = "ingestion_checkpoints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(64), nullable=False, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    market = Column(String(10), nullable=False)
+    provider = Column(String(50), nullable=False)
+    status = Column(String(20), default="PENDING", nullable=False)  # PENDING, IN_PROGRESS, COMPLETED, PARTIAL, FAILED
+    expected_sessions = Column(Integer, default=1250, nullable=False)
+    available_sessions = Column(Integer, default=0, nullable=False)
+    missing_sessions_count = Column(Integer, default=0, nullable=False)
+    earliest_date = Column(Date, nullable=True)
+    latest_date = Column(Date, nullable=True)
+    meets_300 = Column(Boolean, default=False, nullable=False)
+    meets_750 = Column(Boolean, default=False, nullable=False)
+    meets_1250 = Column(Boolean, default=False, nullable=False)
+    split_adjusted = Column(Boolean, default=False, nullable=False)
+    error_message = Column(Text, nullable=True)
+    provenance_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        Index("idx_ingest_sym_mkt", "symbol", "market"),
+        Index("idx_ingest_run_id", "run_id"),
     )
 
 

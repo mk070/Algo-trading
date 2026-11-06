@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 class AlpacaProvider:
     """US Market Data Provider adapter (Alpaca candidate).
     Provides real-time US quotes and historical bars if configured.
+    Explicitly uses Alpaca IEX data feed (representing ~2.5% of US consolidated volume).
     """
 
-    name = "alpaca"
+    name = "alpaca_iex"
     is_realtime = True
 
     def __init__(
@@ -39,45 +40,88 @@ class AlpacaProvider:
         }
 
     def daily_bars(
-        self, symbols: List[str], start: datetime.date, end: datetime.date
+        self,
+        symbols: List[str],
+        start: datetime.date,
+        end: datetime.date,
+        adjustment: str = "split",
     ) -> Dict[str, pd.DataFrame]:
         results: Dict[str, pd.DataFrame] = {}
-        if not self.is_configured():
-            logger.info("Alpaca credentials not configured. US live bars unavailable from Alpaca.")
+        if not self.is_configured() or not symbols:
+            if not self.is_configured():
+                logger.info("Alpaca credentials not configured. US live bars unavailable from Alpaca.")
             return results
 
-        symbols_str = ",".join(symbols)
+        # Clean symbol list (handle BRK.B -> BRK/B for Alpaca API)
+        alpaca_symbols = [s.replace(".B", "/B").replace(".A", "/A") for s in symbols]
+        sym_reverse_map = {alpaca_sym: orig_sym for alpaca_sym, orig_sym in zip(alpaca_symbols, symbols)}
+
         url = f"{self.data_url}/stocks/bars"
-        params = {
-            "symbols": symbols_str,
-            "timeframe": "1Day",
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "feed": "iex",
-        }
+        collected_bars: Dict[str, List[Dict]] = {s: [] for s in alpaca_symbols}
+        page_token = None
 
         try:
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.get(url, headers=self._headers(), params=params)
-                if resp.status_code == 200:
-                    bars_data = resp.json().get("bars", {})
+            with httpx.Client(timeout=25.0) as client:
+                while True:
+                    params = {
+                        "symbols": ",".join(alpaca_symbols),
+                        "timeframe": "1Day",
+                        "start": start.isoformat(),
+                        "end": end.isoformat(),
+                        "feed": "iex",
+                        "adjustment": adjustment,
+                        "limit": 10000,
+                    }
+                    if page_token:
+                        params["page_token"] = page_token
+
+                    resp = client.get(url, headers=self._headers(), params=params)
+                    if resp.status_code != 200:
+                        logger.error(f"Alpaca API error {resp.status_code}: {resp.text}")
+                        break
+
+                    payload = resp.json()
+                    bars_data = payload.get("bars", {})
                     for sym, bars in bars_data.items():
-                        df = pd.DataFrame(bars)
-                        if not df.empty:
-                            df = df.rename(
-                                columns={
-                                    "t": "date",
-                                    "o": "open",
-                                    "h": "high",
-                                    "l": "low",
-                                    "c": "close",
-                                    "v": "volume",
-                                }
-                            )
-                            df["date"] = pd.to_datetime(df["date"]).dt.date
-                            df["adj_close"] = df["close"]
-                            df["source"] = self.name
-                            results[sym] = df
+                        if sym in collected_bars:
+                            collected_bars[sym].extend(bars)
+
+                    page_token = payload.get("next_page_token")
+                    if not page_token:
+                        break
+
+            for alpaca_sym, bars in collected_bars.items():
+                orig_sym = sym_reverse_map.get(alpaca_sym, alpaca_sym)
+                if bars:
+                    df = pd.DataFrame(bars)
+                    df = df.rename(
+                        columns={
+                            "t": "date",
+                            "o": "open",
+                            "h": "high",
+                            "l": "low",
+                            "c": "close",
+                            "v": "volume",
+                        }
+                    )
+                    df["date"] = pd.to_datetime(df["date"]).dt.date
+                    df = df.sort_values("date").drop_duplicates(subset=["date"]).reset_index(drop=True)
+                    if adjustment in ("split", "all"):
+                        df["split_adj_open"] = df["open"]
+                        df["split_adj_high"] = df["high"]
+                        df["split_adj_low"] = df["low"]
+                        df["split_adj_close"] = df["close"]
+                        df["is_split_adjusted"] = True
+                    else:
+                        df["split_adj_open"] = df["open"]
+                        df["split_adj_high"] = df["high"]
+                        df["split_adj_low"] = df["low"]
+                        df["split_adj_close"] = df["close"]
+                        df["is_split_adjusted"] = False
+                    df["adj_close"] = df["close"]
+                    df["dividend_factor"] = 1.0
+                    df["source"] = self.name
+                    results[orig_sym] = df
         except Exception as e:
             logger.error(f"Alpaca daily bars error: {e}")
 
@@ -218,4 +262,3 @@ class AlpacaProvider:
             is_realtime=True,
             message="Alpaca US market data provider configured.",
         )
-

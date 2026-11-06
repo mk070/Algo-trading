@@ -136,6 +136,35 @@ A complete validity audit of the backtesting engine was performed to verify acco
    - Optional holdout period (`holdout_months`) reserves final out-of-sample data untouched.
    - Trials count is explicitly recorded (`trials_recorded`), and no strategy is auto-approved solely based on rank.
 
+### 4.1 Historical Market Data Expansion & Research Readiness (Spec 12.8)
+
+Phase 1 data expansion introduces a multi-tier, resumable historical OHLCV pipeline targeting **1,250 trading sessions (~5 years)** per symbol with a **750-session interim minimum**:
+
+1. **Database Schema & Split Adjustment (`004_historical_ingestion`):**
+   - Preserves raw OHLCV and calculates consistent split-adjusted OHLC (`split_adj_open`, `split_adj_high`, `split_adj_low`, `split_adj_close`) preserving candlestick body/shadow proportions.
+   - Isolates cash dividend adjustments in `dividend_factor = adj_close / split_adj_close`.
+   - Introduces `ingestion_runs` and `ingestion_checkpoints` for stateful tracking and resumption.
+2. **Official Exchange Holiday Calendars (`calendars.py`):**
+   - Incorporates official holiday rules for Indian (NSE) and US (NYSE/NASDAQ) markets from 2020 to 2027+.
+   - Differentiates legitimate market closures from provider data gaps.
+3. **Quality Precedence Invariant:**
+   - Multi-tier precedence in PostgreSQL upsert ensures fallback sources cannot overwrite primary broker records:
+     `Alpaca SIP (4) > Angel One / Alpaca IEX (3) > YFinance (2) > Synthetic (1)`.
+4. **Research Readiness Gates:**
+   - `AVAILABLE` (≥ 1,250 sessions)
+   - `PARTIAL_INTERIM` (≥ 750 sessions)
+   - `PARTIAL_MINIMUM` (≥ 300 sessions)
+   - `INSUFFICIENT_DATA` (< 300 sessions — strictly disqualified from backtest evaluation).
+5. **Provenance & Limitations Disclaimers:**
+   - Alpaca US historical feed explicitly labeled `alpaca_iex` (~2.5% of US tape volume).
+   - Survivorship bias limitations explicitly disclosed across API and frontend dashboards.
+
+### 4.2 Historical Market Data Independent Quality Audit (Phase 3 Verified 2026-11-05)
+
+- **Database Reconciliation:** 141,038 total records in Neon PostgreSQL (138,754 in 105-symbol universe, 2,284 in 9 index benchmarks/ad-hoc testing symbols). Purged 67 orphaned synthetic holiday fixtures. Zero duplicates or envelope defects.
+- **Provider Split Alignment Invariant:** Angel One SmartAPI and Alpaca IEX retroactively adjust historical candles for splits and bonuses. `apply_verified_corporate_actions` prevents double adjustment when the feed is already split-adjusted, maintaining smooth geometry with zero artificial gaps.
+- **Calendar Reconciliation:** Reconciled official holidays for NSE and US (Ganesh Chaturthi, Guru Nanak Jayanti, 2026 holidays, US President Carter Mourning Day). Alpaca IEX missing sessions (2 days on 19 US symbols) confirmed due to zero volume prints on the IEX tape.
+
 ## Deploy Frontend on Vercel and Backend on Render
 
 The frontend uses `/api` locally by default. For a separate Vercel frontend and Render backend:

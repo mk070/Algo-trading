@@ -43,6 +43,8 @@ class YFinanceProvider:
         if market == "IN":
             if not s.endswith(".NS") and not s.endswith(".BO") and not s.startswith("^"):
                 return f"{clean}.NS"
+        elif market == "US":
+            clean = clean.replace(".", "-")
         return clean
 
     def daily_bars(

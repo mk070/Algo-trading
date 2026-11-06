@@ -42,8 +42,11 @@ def run_walk_forward_analysis(
     test_months: int = 4,
     holdout_months: int = 0,
     trials_count: int = 1,
+    setup_filter: str = "ALL",
+    setup_engine_override: Optional[object] = None,
+    capital: Optional[float] = None,
 ) -> WalkForwardResult:
-    simulator = BacktestSimulator(market=market)
+    simulator = BacktestSimulator(market=market, setup_engine_override=setup_engine_override)
 
     # Collect all available dates
     all_dates = set()
@@ -87,13 +90,13 @@ def run_walk_forward_analysis(
             break
 
         # Run on train
-        train_res = simulator.run(bars_data, start_date=curr_start, end_date=train_end)
+        train_res = simulator.run(bars_data, start_date=curr_start, end_date=train_end, setup_filter=setup_filter, capital=capital)
         train_trades = len(train_res["trades"])
         train_exp = train_res["metrics"]["expectancy_r"]
         train_pf = train_res["metrics"]["profit_factor"]
 
         # Run on out-of-sample test
-        test_res = simulator.run(bars_data, start_date=test_start, end_date=test_end)
+        test_res = simulator.run(bars_data, start_date=test_start, end_date=test_end, setup_filter=setup_filter, capital=capital)
         test_trades = len(test_res["trades"])
         test_exp = test_res["metrics"]["expectancy_r"]
         test_pf = test_res["metrics"]["profit_factor"]

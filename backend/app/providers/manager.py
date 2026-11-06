@@ -72,13 +72,23 @@ class ProviderManager:
                             [
                                 {
                                     "date": r.date,
-                                    "open": r.open,
-                                    "high": r.high,
-                                    "low": r.low,
-                                    "close": r.close,
+                                    "open": r.split_adj_open if r.split_adj_open is not None else r.open,
+                                    "high": r.split_adj_high if r.split_adj_high is not None else r.high,
+                                    "low": r.split_adj_low if r.split_adj_low is not None else r.low,
+                                    "close": r.split_adj_close if r.split_adj_close is not None else r.close,
+                                    "raw_open": r.open,
+                                    "raw_high": r.high,
+                                    "raw_low": r.low,
+                                    "raw_close": r.close,
                                     "adj_close": r.adj_close,
                                     "volume": r.volume,
                                     "source": r.source,
+                                    "split_adj_open": r.split_adj_open,
+                                    "split_adj_high": r.split_adj_high,
+                                    "split_adj_low": r.split_adj_low,
+                                    "split_adj_close": r.split_adj_close,
+                                    "dividend_factor": r.dividend_factor or 1.0,
+                                    "is_split_adjusted": r.is_split_adjusted,
                                 }
                                 for r in rows
                             ]
@@ -172,6 +182,13 @@ class ProviderManager:
                     .filter(DailyBar.symbol == symbol, DailyBar.date == row_date)
                     .first()
                 )
+                split_adj_open = float(row.get("split_adj_open", row["open"]))
+                split_adj_high = float(row.get("split_adj_high", row["high"]))
+                split_adj_low = float(row.get("split_adj_low", row["low"]))
+                split_adj_close = float(row.get("split_adj_close", row["close"]))
+                dividend_factor = float(row.get("dividend_factor", 1.0))
+                is_split_adjusted = bool(row.get("is_split_adjusted", True))
+
                 if existing:
                     existing.open = float(row['open'])
                     existing.high = float(row['high'])
@@ -180,6 +197,12 @@ class ProviderManager:
                     existing.adj_close = float(row.get('adj_close', row['close']))
                     existing.volume = float(row['volume'])
                     existing.source = str(row.get('source', 'unknown'))
+                    existing.split_adj_open = split_adj_open
+                    existing.split_adj_high = split_adj_high
+                    existing.split_adj_low = split_adj_low
+                    existing.split_adj_close = split_adj_close
+                    existing.dividend_factor = dividend_factor
+                    existing.is_split_adjusted = is_split_adjusted
                 else:
                     bar = DailyBar(
                         symbol=symbol,
@@ -191,6 +214,12 @@ class ProviderManager:
                         adj_close=float(row.get("adj_close", row["close"])),
                         volume=float(row["volume"]),
                         source=str(row.get("source", "unknown")),
+                        split_adj_open=split_adj_open,
+                        split_adj_high=split_adj_high,
+                        split_adj_low=split_adj_low,
+                        split_adj_close=split_adj_close,
+                        dividend_factor=dividend_factor,
+                        is_split_adjusted=is_split_adjusted,
                     )
                     db.add(bar)
             db.commit()
