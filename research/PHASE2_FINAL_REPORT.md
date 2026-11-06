@@ -3,7 +3,7 @@
 **Execution Timestamp:** `2026-11-06T12:05:04Z` (UTC)  
 **Research Mode:** Strictly Offline Research — No Live Trading, No Automatic Order Placement  
 **Source Execution Artifact:** [`research/phase2_results.json`](file:///d:/web%20development/saas-projects/Algo-trading/research/phase2_results.json)  
-**Pre-Registration Specification:** [`research/PREREG.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PREREG.md) (SHA256: `7fb0d96d9d1391ab4d0991d7db391b8ff04663fc7799e1074b36de88be3aa91f`)  
+**Pre-Registration Specification:** [`research/PREREG.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PREREG.md) (SHA256: `b526b03b8542b46f7f1fbc7b79fc73aea41458618a461c1f4d0f93d4963e39dc` [Git HEAD 18fe7b6 blob]; initial creation SHA256: `7fb0d96d9d1391ab4d0991d7db391b8ff04663fc7799e1074b36de88be3aa91f` prior to EOF newline normalization in commit `7558f93`)  
 **Frozen Research Universe:** [`data/universe/research_universe_v1.csv`](file:///d:/web%20development/saas-projects/Algo-trading/data/universe/research_universe_v1.csv) (SHA256: `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`)  
 **Frozen Parquet Snapshot:** [`data/research/research_snapshot_20261106.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/research_snapshot_20261106.parquet) (SHA256: `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`)  
 **Dedicated Benchmark Series:** [`data/research/benchmark_series.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/benchmark_series.parquet) (SHA256: `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`)  
@@ -108,7 +108,7 @@ Candidate C1 rebalances monthly on the final trading day, ranking the top 20 equ
 | **Gate 1** | Ann. Net Excess Return $\ge +2.0\%$ vs Pre-Reg Benchmark | **PASS** *(+5.24%)* | **PASS** *(+8.81%)* | **PASS** *(+10.00%)* | **FAIL** *(-2.23%)* |
 | **Gate 2** | Bootstrap 95% CI Lower Bound $> 0.0\%$ (Pre-Reg Bench) | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** |
 | **Gate 3** | Maximum Drawdown $\le 1.2 \times$ Pre-Reg Benchmark DD | **FAIL** *(1.40x)* | **PASS** *(0.59x)* | **PASS** *(0.62x)* | **PASS** *(0.64x)* |
-| **Gate 4** | Positive Annual Excess in $\ge 60\%$ Full Years (Min 4 Yrs) | **NOT DEMONSTRATED** *(3 yrs avail)* | **NOT DEMONSTRATED** *(3 yrs avail)* | **NOT DEMONSTRATED** *(3 yrs avail)* | **FAIL** *(<60% & <4 yrs)* |
+| **Gate 4** | Positive Annual Excess in $\ge 60\%$ Full Years (Min 4 Yrs) | **NOT DEMONSTRATED** *(3 yrs avail)* | **NOT DEMONSTRATED** *(3 yrs avail)* | **NOT DEMONSTRATED** *(3 yrs avail)* | **NOT DEMONSTRATED** *(3 yrs avail)* |
 | **Gate 5** | Genuinely Untouched Independent Holdout | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** |
 | **Gate 6** | Cost (+25%) & Slippage ($\times 2$) Robustness | **PASS** *(+12.06% net)* | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** |
 | **Gate 7** | Matched Random Control ($> 95\text{th}$ percentile) | **PASS** *(96.0th)* | **NOT DEMONSTRATED** | **PASS** *(97.6th)* | **NOT DEMONSTRATED** |
@@ -119,7 +119,7 @@ Candidate C1 rebalances monthly on the final trading day, ranking the top 20 equ
 1. **C1a India:** Fails Gate 3 directly because observed maximum drawdown (22.62%) is **$1.40\times$** the pre-registered benchmark's drawdown (16.11%), violating the $1.20\times$ ceiling. Satisfies Gate 1 (+5.24%), Gate 6 (+12.06% net under $2\times$ slippage), Gate 7 (96.0th percentile in 1,000 random portfolios), and Gate 8 (6 of 6 variations profitable). Overall Verdict: **`FAIL`**.
 2. **C1b India:** Demonstrates strong in-sample alpha (+8.81% excess return, 0.59x drawdown ratio), but lacks pre-registered benchmark bootstrap calculations, random controls, sensitivity testing, an untouched holdout, and a 4th complete calendar year. Overall Verdict: **`NOT DEMONSTRATED`** (disqualified from PASS).
 3. **C1a US:** Meets Gate 1 (+10.00% excess return), Gate 3 (0.62x drawdown ratio), and Gate 7 (97.6th percentile in 1,000 random portfolios). Has no observed failure against pre-registered criteria. However, because required independent evidence (pre-registered bootstrap, sensitivity runs, untouched holdout, 4th complete year) remains missing, its overall status is **`NOT DEMONSTRATED`** (disqualified from PASS).
-4. **C1b US:** Directly fails Gate 1 ($-2.23\%$ excess return) and Gate 4. Overall Verdict: **`FAIL`**.
+4. **C1b US:** Directly fails Gate 1 (observed annualized net excess return of $-2.23\%$ vs. the pre-registered benchmark). Gate 4 is NOT DEMONSTRATED due to fewer than four complete calendar years. Overall Verdict: **`FAIL`**.
 
 ---
 
@@ -196,3 +196,4 @@ Under the complete pre-registered validation protocol:
 2. **The strategy-search kill rule remains strictly in force.**
 3. **No new strategy research, parameter tuning, indicator additions, paper trading, or live execution is authorized.**
 4. **Final Recommendation:** Capital allocation should be directed toward passive index investing, and platform usage should remain strictly confined to research and visualization.
+
