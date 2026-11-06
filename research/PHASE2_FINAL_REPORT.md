@@ -7,7 +7,7 @@
 **Frozen Research Universe:** [`data/universe/research_universe_v1.csv`](file:///d:/web%20development/saas-projects/Algo-trading/data/universe/research_universe_v1.csv) (SHA256: `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`)  
 **Frozen Parquet Snapshot:** [`data/research/research_snapshot_20261106.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/research_snapshot_20261106.parquet) (SHA256: `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`)  
 **Dedicated Benchmark Series:** [`data/research/benchmark_series.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/benchmark_series.parquet) (SHA256: `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`)  
-**Git HEAD Commit:** [`ac146a7fcb0daa7b152475e8f61576ec595b8f3f`](file:///d:/web%20development/saas-projects/Algo-trading)
+**Git Tree / Execution Baseline:** [`18fe7b66f93a353d73bca1813245cd17e0d1f451`](file:///d:/web%20development/saas-projects/Algo-trading) (Report finalized and frozen at commit `0ac141c786f5fc196ed9e71def95adb8a7554ba6`)
 
 ---
 
