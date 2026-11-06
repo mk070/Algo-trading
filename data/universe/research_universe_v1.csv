@@ -1,0 +1,106 @@
+symbol,name,market,sub_universe,series,instrument_type,sector,industry
+ADANIENT,Adani Enterprises Ltd,IN,NIFTY100,EQ,EQUITY,Metals & Mining,Trading - Minerals
+APOLLOHOSP,Apollo Hospitals Enterprise Ltd,IN,NIFTY100,EQ,EQUITY,Healthcare,Hospital
+ASIANPAINT,Asian Paints Ltd,IN,NIFTY100,EQ,EQUITY,Consumer Durables,Paints
+AXISBANK,Axis Bank Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Private Commercial Bank
+BAJAJ-AUTO,Bajaj Auto Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,2/3 Wheelers
+BAJAJFINSV,Bajaj Finserv Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Holding Company
+BAJFINANCE,Bajaj Finance Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Non Banking Financial Company (NBFC)
+BEL,Bharat Electronics Ltd,IN,NIFTY100,EQ,EQUITY,Capital Goods,Aerospace & Defense
+BHARTIARTL,Bharti Airtel Ltd,IN,NIFTY100,EQ,EQUITY,Telecommunication,Telecom - Cellular & Fixed
+BPCL,Bharat Petroleum Corporation Ltd,IN,NIFTY100,EQ,EQUITY,Oil Gas & Consumable Fuels,Refining & Marketing
+BRITANNIA,Britannia Industries Ltd,IN,NIFTY100,EQ,EQUITY,Fast Moving Consumer Goods,Packaged Foods
+CIPLA,Cipla Ltd,IN,NIFTY100,EQ,EQUITY,Healthcare,Pharmaceuticals
+COALINDIA,Coal India Ltd,IN,NIFTY100,EQ,EQUITY,Oil Gas & Consumable Fuels,Coal
+DIVISLAB,Divi's Laboratories Ltd,IN,NIFTY100,EQ,EQUITY,Healthcare,Pharmaceuticals
+DRREDDY,Dr. Reddy's Laboratories Ltd,IN,NIFTY100,EQ,EQUITY,Healthcare,Pharmaceuticals
+EICHERMOT,Eicher Motors Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,2/3 Wheelers
+GRASIM,Grasim Industries Ltd,IN,NIFTY100,EQ,EQUITY,Construction Materials,Cement & Cement Products
+HCLTECH,HCL Technologies Ltd,IN,NIFTY100,EQ,EQUITY,Information Technology,IT Services & Consulting
+HDFCBANK,HDFC Bank Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Private Commercial Bank
+HDFCLIFE,HDFC Life Insurance Co Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Life Insurance
+HEROMOTOCO,Hero MotoCorp Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,2/3 Wheelers
+HINDUNILVR,Hindustan Unilever Ltd,IN,NIFTY100,EQ,EQUITY,Fast Moving Consumer Goods,Diversified FMCG
+ICICIBANK,ICICI Bank Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Private Commercial Bank
+INDUSINDBK,IndusInd Bank Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Private Commercial Bank
+INFY,Infosys Ltd,IN,NIFTY100,EQ,EQUITY,Information Technology,IT Services & Consulting
+ITC,ITC Ltd,IN,NIFTY100,EQ,EQUITY,Fast Moving Consumer Goods,Cigarettes & Tobacco Products
+JSWSTEEL,JSW Steel Ltd,IN,NIFTY100,EQ,EQUITY,Metals & Mining,Iron & Steel
+KOTAKBANK,Kotak Mahindra Bank Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Private Commercial Bank
+LT,Larsen & Toubro Ltd,IN,NIFTY100,EQ,EQUITY,Construction,Civil Construction
+M&M,Mahindra & Mahindra Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+MARUTI,Maruti Suzuki India Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+NESTLEIND,Nestle India Ltd,IN,NIFTY100,EQ,EQUITY,Fast Moving Consumer Goods,Packaged Foods
+NTPC,NTPC Ltd,IN,NIFTY100,EQ,EQUITY,Power,Power Generation
+ONGC,Oil & Natural Gas Corporation Ltd,IN,NIFTY100,EQ,EQUITY,Oil Gas & Consumable Fuels,Oil & Gas Exploration & Production
+POWERGRID,Power Grid Corporation of India Ltd,IN,NIFTY100,EQ,EQUITY,Power,Power Transmission
+RELIANCE,Reliance Industries Ltd,IN,NIFTY100,EQ,EQUITY,Energy,Oil & Gas Refining & Marketing
+SBILIFE,SBI Life Insurance Co Ltd,IN,NIFTY100,EQ,EQUITY,Financial Services,Life Insurance
+SBIN,State Bank of India,IN,NIFTY100,EQ,EQUITY,Financial Services,Public Commercial Bank
+SHREECEM,Shree Cement Ltd,IN,NIFTY100,EQ,EQUITY,Construction Materials,Cement
+SUNPHARMA,Sun Pharmaceutical Industries Ltd,IN,NIFTY100,EQ,EQUITY,Healthcare,Pharmaceuticals
+TATACONSUM,Tata Consumer Products Ltd,IN,NIFTY100,EQ,EQUITY,Fast Moving Consumer Goods,Tea & Coffee
+TATAMOTORS,Tata Motors Ltd,IN,NIFTY100,EQ,EQUITY,Automobile and Auto Components,Passenger Cars & Utility Vehicles
+TATASTEEL,Tata Steel Ltd,IN,NIFTY100,EQ,EQUITY,Metals & Mining,Iron & Steel
+TCS,Tata Consultancy Services Ltd,IN,NIFTY100,EQ,EQUITY,Information Technology,IT Services & Consulting
+TECHM,Tech Mahindra Ltd,IN,NIFTY100,EQ,EQUITY,Information Technology,IT Services & Consulting
+TITAN,Titan Company Ltd,IN,NIFTY100,EQ,EQUITY,Consumer Durables,Gems Jewellery & Watches
+TRENT,Trent Ltd,IN,NIFTY100,EQ,EQUITY,Consumer Services,Retailing
+ULTRACEMCO,UltraTech Cement Ltd,IN,NIFTY100,EQ,EQUITY,Construction Materials,Cement & Cement Products
+VEDL,Vedanta Ltd,IN,NIFTY100,EQ,EQUITY,Metals & Mining,Diversified Metals
+WIPRO,Wipro Ltd,IN,NIFTY100,EQ,EQUITY,Information Technology,IT Services & Consulting
+ASHOKLEY,Ashok Leyland Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Automobile and Auto Components,Commercial Vehicles
+ASTRAL,Astral Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Capital Goods,Pipes & Fittings
+AUROPHARMA,Aurobindo Pharma Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Healthcare,Pharmaceuticals
+BALKRISIND,Balkrishna Industries Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Automobile and Auto Components,Tyres & Rubber Products
+COFORGE,Coforge Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Information Technology,IT Services & Consulting
+CUMMINSIND,Cummins India Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Capital Goods,Engines
+DEEPAKNTR,Deepak Nitrite Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Chemicals,Specialty Chemicals
+DIXON,Dixon Technologies (India) Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Consumer Durables,Electronic Consumer Electronics
+ESCORTS,Escorts Kubota Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Capital Goods,Agricultural Equipment
+FEDERALBNK,The Federal Bank Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Financial Services,Banks
+IDFCFIRSTB,IDFC First Bank Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Financial Services,Banks
+KPITTECH,KPIT Technologies Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Information Technology,IT Services & Consulting
+MAXHEALTH,Max Healthcare Institute Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Healthcare,Hospitals
+MPHASIS,MphasiS Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Information Technology,IT Services & Consulting
+OBEROIRLTY,Oberoi Realty Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Realty,Residential Commercial Projects
+PERSISTENT,Persistent Systems Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Information Technology,IT Services & Consulting
+PIIND,PI Industries Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Chemicals,Agrochemicals
+POLYCAB,Polycab India Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Capital Goods,Cables & Wires
+TATACOMM,Tata Communications Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Telecommunication,Telecom - Data & Infrastructure
+VOLTAS,Voltas Ltd,IN,NIFTYMIDCAP150,EQ,EQUITY,Consumer Durables,Airconditioners
+BLDR,Builders FirstSource Inc,US,SP400,US_COMMON,EQUITY,Industrials,Building Products
+DECK,Deckers Outdoor Corp,US,SP400,US_COMMON,EQUITY,Consumer Discretionary,Footwear
+ELF,e.l.f. Beauty Inc,US,SP400,US_COMMON,EQUITY,Consumer Staples,Personal Care Products
+FIX,Comfort Systems USA Inc,US,SP400,US_COMMON,EQUITY,Industrials,Building Products
+FND,Floor & Decor Holdings Inc,US,SP400,US_COMMON,EQUITY,Consumer Discretionary,Home Improvement Retail
+HUBB,Hubbell Inc,US,SP400,US_COMMON,EQUITY,Industrials,Electrical Equipment
+MANH,Manhattan Associates Inc,US,SP400,US_COMMON,EQUITY,Information Technology,Application Software
+MEDP,Medpace Holdings Inc,US,SP400,US_COMMON,EQUITY,Health Care,Life Sciences Tools & Services
+SAIA,Saia Inc,US,SP400,US_COMMON,EQUITY,Industrials,Ground Transportation
+WSM,Williams-Sonoma Inc,US,SP400,US_COMMON,EQUITY,Consumer Discretionary,Home Furnishings Retail
+AAPL,Apple Inc.,US,SP500,US_COMMON,EQUITY,Information Technology,Consumer Electronics
+ABBV,AbbVie Inc.,US,SP500,US_COMMON,EQUITY,Health Care,Biotechnology
+AMD,Advanced Micro Devices Inc.,US,SP500,US_COMMON,EQUITY,Information Technology,Semiconductors
+AMZN,Amazon.com Inc.,US,SP500,US_COMMON,EQUITY,Consumer Discretionary,Broadline Retail
+BRK.B,Berkshire Hathaway Inc.,US,SP500,US_COMMON,EQUITY,Financials,Multi-Sector Holdings
+COST,Costco Wholesale Corp.,US,SP500,US_COMMON,EQUITY,Consumer Staples,Consumer Staples Merchandise
+CRM,Salesforce Inc.,US,SP500,US_COMMON,EQUITY,Information Technology,Application Software
+CVX,Chevron Corp.,US,SP500,US_COMMON,EQUITY,Energy,Integrated Oil & Gas
+GOOGL,Alphabet Inc. Cl A,US,SP500,US_COMMON,EQUITY,Communication Services,Interactive Media & Services
+HD,Home Depot Inc.,US,SP500,US_COMMON,EQUITY,Consumer Discretionary,Home Improvement Retail
+JNJ,Johnson & Johnson,US,SP500,US_COMMON,EQUITY,Health Care,Pharmaceuticals
+JPM,JPMorgan Chase & Co.,US,SP500,US_COMMON,EQUITY,Financials,Diversified Banks
+LLY,Eli Lilly and Co.,US,SP500,US_COMMON,EQUITY,Health Care,Pharmaceuticals
+MA,Mastercard Inc.,US,SP500,US_COMMON,EQUITY,Financials,Transaction & Payment Processing Services
+META,Meta Platforms Inc.,US,SP500,US_COMMON,EQUITY,Communication Services,Interactive Media & Services
+MSFT,Microsoft Corp.,US,SP500,US_COMMON,EQUITY,Information Technology,Systems Software
+NFLX,Netflix Inc.,US,SP500,US_COMMON,EQUITY,Communication Services,Movies & Entertainment
+NVDA,NVIDIA Corp.,US,SP500,US_COMMON,EQUITY,Information Technology,Semiconductors
+ORCL,Oracle Corp.,US,SP500,US_COMMON,EQUITY,Information Technology,Application Software
+PG,Procter & Gamble Co.,US,SP500,US_COMMON,EQUITY,Consumer Staples,Household Products
+TSLA,Tesla Inc.,US,SP500,US_COMMON,EQUITY,Consumer Discretionary,Automobile Manufacturers
+UNH,UnitedHealth Group Inc.,US,SP500,US_COMMON,EQUITY,Health Care,Managed Healthcare
+V,Visa Inc.,US,SP500,US_COMMON,EQUITY,Financials,Transaction & Payment Processing Services
+WMT,Walmart Inc.,US,SP500,US_COMMON,EQUITY,Consumer Staples,Hypermarkets & Supercenters
+XOM,Exxon Mobil Corp.,US,SP500,US_COMMON,EQUITY,Energy,Integrated Oil & Gas

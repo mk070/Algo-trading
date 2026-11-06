@@ -1,0 +1,22 @@
+{
+  "filename": "benchmark_series.parquet",
+  "created_at_utc": "2026-11-06T10:19:30.141455+00:00",
+  "sha256": "c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be",
+  "file_size_bytes": 274839,
+  "row_count": 6619,
+  "symbol_count": 5,
+  "symbols": [
+    "^NSEI",
+    "NIFTYBEES.NS",
+    "^GSPC",
+    "SPY",
+    "MDY"
+  ],
+  "date_range": {
+    "min_date": "2021-07-19",
+    "max_date": "2026-11-05"
+  },
+  "provider": "yfinance",
+  "adjustment_status": "dividend_and_split_adjusted_total_return",
+  "purpose": "Passive benchmark returns (Benchmark A) and 200-day MA regime filter (Candidate C1b) for Phase 2 pre-registered validation"
+}
