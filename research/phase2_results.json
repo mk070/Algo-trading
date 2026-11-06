@@ -1,0 +1,3218 @@
+{
+  "metadata": {
+    "execution_timestamp_utc": "2026-11-06T12:05:04.869265+00:00",
+    "git_commit_sha": "7558f9385ddbbb46ec3309c9b4fa4e1bd635dd0a",
+    "prereg_sha256": "b526b03b8542b46f7f1fbc7b79fc73aea41458618a461c1f4d0f93d4963e39dc",
+    "universe_file": "data/universe/research_universe_v1.csv",
+    "universe_sha256": "fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e",
+    "snapshot_file": "data/research/research_snapshot_20261106.parquet",
+    "snapshot_sha256": "f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f",
+    "benchmark_file": "data/research/benchmark_series.parquet",
+    "random_seed": 42,
+    "total_universe_symbols": 105,
+    "date_range": "2021-07-19 to 2026-11-05"
+  },
+  "candidates": {
+    "C1a_always_invested": {
+      "India": {
+        "status": "COMPLETED",
+        "market": "IN",
+        "capital": 500000.0,
+        "regime_filtered": false,
+        "total_months": 51,
+        "rebalances_count": 51,
+        "final_equity": 829926.99,
+        "cum_net_return_pct": 65.99,
+        "annualized_net_return_pct": 12.66,
+        "annualized_benchmark_return_pct": 7.2,
+        "annualized_excess_return_pct": 5.47,
+        "max_drawdown_pct": 22.62,
+        "benchmark_max_drawdown_pct": 14.78,
+        "drawdown_ratio": 1.53,
+        "volatility_pct": 16.37,
+        "sharpe_ratio": 0.47,
+        "total_costs_paid": 20922.76,
+        "cost_drag_pct_of_capital": 4.18,
+        "avg_monthly_turnover": 311998.89,
+        "yearly_performance": {
+          "2022": {
+            "months": 5,
+            "portfolio_return": 5.14,
+            "benchmark_return": 5.52,
+            "excess_return": -0.38
+          },
+          "2023": {
+            "months": 12,
+            "portfolio_return": 40.84,
+            "benchmark_return": 20.03,
+            "excess_return": 20.81
+          },
+          "2024": {
+            "months": 12,
+            "portfolio_return": 23.86,
+            "benchmark_return": 8.8,
+            "excess_return": 15.06
+          },
+          "2025": {
+            "months": 12,
+            "portfolio_return": 0.3,
+            "benchmark_return": 10.51,
+            "excess_return": -10.21
+          },
+          "2026": {
+            "months": 10,
+            "portfolio_return": -9.77,
+            "benchmark_return": -11.77,
+            "excess_return": 2.01
+          }
+        },
+        "positive_calendar_years": "3/4",
+        "calendar_year_consistency_passed": true,
+        "monthly_returns": [
+          {
+            "year_month": "2022-08",
+            "date": "2022-08-30",
+            "portfolio_equity": 503914.7,
+            "monthly_net_return": 0.007829408165460183,
+            "benchmark_return": 0.035029841694228736,
+            "excess_return": -0.027200433528768553,
+            "holdings_count": 20,
+            "cash_pct": 3.39
+          },
+          {
+            "year_month": "2022-09",
+            "date": "2022-09-30",
+            "portfolio_equity": 506600.16,
+            "monthly_net_return": 0.005329182736554028,
+            "benchmark_return": -0.03744241848626417,
+            "excess_return": 0.0427716012228182,
+            "holdings_count": 20,
+            "cash_pct": 3.88
+          },
+          {
+            "year_month": "2022-10",
+            "date": "2022-10-31",
+            "portfolio_equity": 536669.82,
+            "monthly_net_return": 0.05935580483565883,
+            "benchmark_return": 0.053693157701163896,
+            "excess_return": 0.005662647134494936,
+            "holdings_count": 20,
+            "cash_pct": 3.89
+          },
+          {
+            "year_month": "2022-11",
+            "date": "2022-11-30",
+            "portfolio_equity": 538758.25,
+            "monthly_net_return": 0.003891462724392669,
+            "benchmark_return": 0.04142472451938506,
+            "excess_return": -0.03753326179499239,
+            "holdings_count": 20,
+            "cash_pct": 1.77
+          },
+          {
+            "year_month": "2022-12",
+            "date": "2022-12-30",
+            "portfolio_equity": 525687.84,
+            "monthly_net_return": -0.024260242042541735,
+            "benchmark_return": -0.034813767827347686,
+            "excess_return": 0.01055352578480595,
+            "holdings_count": 20,
+            "cash_pct": 0.98
+          },
+          {
+            "year_month": "2023-01",
+            "date": "2023-01-31",
+            "portfolio_equity": 512235.18,
+            "monthly_net_return": -0.025590596179144942,
+            "benchmark_return": -0.024476278852209377,
+            "excess_return": -0.0011143173269355655,
+            "holdings_count": 20,
+            "cash_pct": 3.46
+          },
+          {
+            "year_month": "2023-02",
+            "date": "2023-02-28",
+            "portfolio_equity": 490483.41,
+            "monthly_net_return": -0.04246441432650583,
+            "benchmark_return": -0.02028072255941904,
+            "excess_return": -0.02218369176708679,
+            "holdings_count": 20,
+            "cash_pct": 3.78
+          },
+          {
+            "year_month": "2023-03",
+            "date": "2023-03-31",
+            "portfolio_equity": 495431.57,
+            "monthly_net_return": 0.010088341195204187,
+            "benchmark_return": 0.003224742545449466,
+            "excess_return": 0.006863598649754721,
+            "holdings_count": 20,
+            "cash_pct": 4.13
+          },
+          {
+            "year_month": "2023-04",
+            "date": "2023-04-28",
+            "portfolio_equity": 518080.85,
+            "monthly_net_return": 0.04571625295786541,
+            "benchmark_return": 0.04062558504586766,
+            "excess_return": 0.005090667911997748,
+            "holdings_count": 20,
+            "cash_pct": 3.78
+          },
+          {
+            "year_month": "2023-05",
+            "date": "2023-05-31",
+            "portfolio_equity": 551764.35,
+            "monthly_net_return": 0.06501590942529689,
+            "benchmark_return": 0.02598396848187101,
+            "excess_return": 0.03903194094342588,
+            "holdings_count": 20,
+            "cash_pct": 3.59
+          },
+          {
+            "year_month": "2023-06",
+            "date": "2023-06-30",
+            "portfolio_equity": 589531.79,
+            "monthly_net_return": 0.06844849691708088,
+            "benchmark_return": 0.035320829205574666,
+            "excess_return": 0.033127667711506215,
+            "holdings_count": 20,
+            "cash_pct": 4.4
+          },
+          {
+            "year_month": "2023-07",
+            "date": "2023-07-31",
+            "portfolio_equity": 610622.78,
+            "monthly_net_return": 0.035775831661058355,
+            "benchmark_return": 0.029430846081861972,
+            "excess_return": 0.006344985579196383,
+            "holdings_count": 20,
+            "cash_pct": 2.17
+          },
+          {
+            "year_month": "2023-08",
+            "date": "2023-08-31",
+            "portfolio_equity": 625111.78,
+            "monthly_net_return": 0.023728244686654243,
+            "benchmark_return": -0.02531158461791272,
+            "excess_return": 0.04903982930456696,
+            "holdings_count": 20,
+            "cash_pct": 2.26
+          },
+          {
+            "year_month": "2023-09",
+            "date": "2023-09-29",
+            "portfolio_equity": 647141.06,
+            "monthly_net_return": 0.035240532087400744,
+            "benchmark_return": 0.01997008301729397,
+            "excess_return": 0.015270449070106773,
+            "holdings_count": 20,
+            "cash_pct": 2.55
+          },
+          {
+            "year_month": "2023-10",
+            "date": "2023-10-31",
+            "portfolio_equity": 630980.89,
+            "monthly_net_return": -0.02497162278952403,
+            "benchmark_return": -0.02844956791824016,
+            "excess_return": 0.003477945128716131,
+            "holdings_count": 20,
+            "cash_pct": 3.15
+          },
+          {
+            "year_month": "2023-11",
+            "date": "2023-11-30",
+            "portfolio_equity": 696606.65,
+            "monthly_net_return": 0.10400592694499666,
+            "benchmark_return": 0.05521870494244152,
+            "excess_return": 0.04878722200255514,
+            "holdings_count": 20,
+            "cash_pct": 3.25
+          },
+          {
+            "year_month": "2023-12",
+            "date": "2023-12-29",
+            "portfolio_equity": 740358.2,
+            "monthly_net_return": 0.06280668074025608,
+            "benchmark_return": 0.07938399947303942,
+            "excess_return": -0.01657731873278334,
+            "holdings_count": 20,
+            "cash_pct": 3.62
+          },
+          {
+            "year_month": "2024-01",
+            "date": "2024-01-31",
+            "portfolio_equity": 753767.29,
+            "monthly_net_return": 0.01811162584604009,
+            "benchmark_return": -0.0002623471921975318,
+            "excess_return": 0.018373973038237623,
+            "holdings_count": 20,
+            "cash_pct": 4.31
+          },
+          {
+            "year_month": "2024-02",
+            "date": "2024-02-29",
+            "portfolio_equity": 776041.18,
+            "monthly_net_return": 0.029550095046934066,
+            "benchmark_return": 0.011833983335188147,
+            "excess_return": 0.01771611171174592,
+            "holdings_count": 20,
+            "cash_pct": 3.07
+          },
+          {
+            "year_month": "2024-03",
+            "date": "2024-03-28",
+            "portfolio_equity": 785843.42,
+            "monthly_net_return": 0.012631082651191283,
+            "benchmark_return": 0.01565312867996771,
+            "excess_return": -0.003022046028776426,
+            "holdings_count": 20,
+            "cash_pct": 2.55
+          },
+          {
+            "year_month": "2024-04",
+            "date": "2024-04-30",
+            "portfolio_equity": 808769.74,
+            "monthly_net_return": 0.02917415360444653,
+            "benchmark_return": 0.012449073265302424,
+            "excess_return": 0.016725080339144105,
+            "holdings_count": 20,
+            "cash_pct": 3.81
+          },
+          {
+            "year_month": "2024-05",
+            "date": "2024-05-31",
+            "portfolio_equity": 842620.55,
+            "monthly_net_return": 0.041854691167073854,
+            "benchmark_return": -0.0032802868369559146,
+            "excess_return": 0.04513497800402977,
+            "holdings_count": 20,
+            "cash_pct": 3.07
+          },
+          {
+            "year_month": "2024-06",
+            "date": "2024-06-28",
+            "portfolio_equity": 892166.69,
+            "monthly_net_return": 0.05880006337912769,
+            "benchmark_return": 0.06568373117304005,
+            "excess_return": -0.0068836677939123625,
+            "holdings_count": 20,
+            "cash_pct": 4.35
+          },
+          {
+            "year_month": "2024-07",
+            "date": "2024-07-31",
+            "portfolio_equity": 944754.48,
+            "monthly_net_return": 0.05894390510086045,
+            "benchmark_return": 0.03917231541701116,
+            "excess_return": 0.01977158968384929,
+            "holdings_count": 20,
+            "cash_pct": 3.79
+          },
+          {
+            "year_month": "2024-08",
+            "date": "2024-08-30",
+            "portfolio_equity": 961875.92,
+            "monthly_net_return": 0.018122633606592276,
+            "benchmark_return": 0.011412299454817587,
+            "excess_return": 0.006710334151774688,
+            "holdings_count": 20,
+            "cash_pct": 3.16
+          },
+          {
+            "year_month": "2024-09",
+            "date": "2024-09-30",
+            "portfolio_equity": 992330.3,
+            "monthly_net_return": 0.0316614467665286,
+            "benchmark_return": 0.022782988118133174,
+            "excess_return": 0.008878458648395426,
+            "holdings_count": 20,
+            "cash_pct": 4.19
+          },
+          {
+            "year_month": "2024-10",
+            "date": "2024-10-31",
+            "portfolio_equity": 909445.19,
+            "monthly_net_return": -0.08352572505427114,
+            "benchmark_return": -0.062202524298806905,
+            "excess_return": -0.021323200755464233,
+            "holdings_count": 20,
+            "cash_pct": 3.27
+          },
+          {
+            "year_month": "2024-11",
+            "date": "2024-11-29",
+            "portfolio_equity": 903422.39,
+            "monthly_net_return": -0.006622504158613873,
+            "benchmark_return": -0.003067503721212228,
+            "excess_return": -0.0035550004374016453,
+            "holdings_count": 20,
+            "cash_pct": 4.29
+          },
+          {
+            "year_month": "2024-12",
+            "date": "2024-12-31",
+            "portfolio_equity": 917021.36,
+            "monthly_net_return": 0.015052732776158706,
+            "benchmark_return": -0.020152369183212504,
+            "excess_return": 0.03520510195937121,
+            "holdings_count": 20,
+            "cash_pct": 3.38
+          },
+          {
+            "year_month": "2025-01",
+            "date": "2025-01-31",
+            "portfolio_equity": 843190.82,
+            "monthly_net_return": -0.08051125664498349,
+            "benchmark_return": -0.005768726574899463,
+            "excess_return": -0.07474253007008402,
+            "holdings_count": 20,
+            "cash_pct": 4.5
+          },
+          {
+            "year_month": "2025-02",
+            "date": "2025-02-28",
+            "portfolio_equity": 767877.19,
+            "monthly_net_return": -0.08931979935984713,
+            "benchmark_return": -0.058859860683111886,
+            "excess_return": -0.030459938676735243,
+            "holdings_count": 20,
+            "cash_pct": 4.53
+          },
+          {
+            "year_month": "2025-03",
+            "date": "2025-03-28",
+            "portfolio_equity": 823883.3,
+            "monthly_net_return": 0.07293628323289836,
+            "benchmark_return": 0.06303590285390537,
+            "excess_return": 0.00990038037899299,
+            "holdings_count": 20,
+            "cash_pct": 2.43
+          },
+          {
+            "year_month": "2025-04",
+            "date": "2025-04-30",
+            "portfolio_equity": 835163.73,
+            "monthly_net_return": 0.013691781980787132,
+            "benchmark_return": 0.03464592443705139,
+            "excess_return": -0.020954142456264258,
+            "holdings_count": 20,
+            "cash_pct": 4.77
+          },
+          {
+            "year_month": "2025-05",
+            "date": "2025-05-30",
+            "portfolio_equity": 866184.34,
+            "monthly_net_return": 0.037143150666007374,
+            "benchmark_return": 0.017115829300808905,
+            "excess_return": 0.02002732136519847,
+            "holdings_count": 20,
+            "cash_pct": 6.49
+          },
+          {
+            "year_month": "2025-06",
+            "date": "2025-06-30",
+            "portfolio_equity": 906082.88,
+            "monthly_net_return": 0.04606241139523948,
+            "benchmark_return": 0.030962824756055607,
+            "excess_return": 0.01509958663918387,
+            "holdings_count": 20,
+            "cash_pct": 2.04
+          },
+          {
+            "year_month": "2025-07",
+            "date": "2025-07-31",
+            "portfolio_equity": 866817.03,
+            "monthly_net_return": -0.0433358218263481,
+            "benchmark_return": -0.029341211031532977,
+            "excess_return": -0.013994610794815121,
+            "holdings_count": 20,
+            "cash_pct": 6.06
+          },
+          {
+            "year_month": "2025-08",
+            "date": "2025-08-29",
+            "portfolio_equity": 862342.5,
+            "monthly_net_return": -0.005162027251452761,
+            "benchmark_return": -0.013787757577143567,
+            "excess_return": 0.008625730325690806,
+            "holdings_count": 20,
+            "cash_pct": 5.25
+          },
+          {
+            "year_month": "2025-09",
+            "date": "2025-09-30",
+            "portfolio_equity": 874734.27,
+            "monthly_net_return": 0.014369891586977435,
+            "benchmark_return": 0.007542929315341729,
+            "excess_return": 0.006826962271635706,
+            "holdings_count": 20,
+            "cash_pct": 8.27
+          },
+          {
+            "year_month": "2025-10",
+            "date": "2025-10-31",
+            "portfolio_equity": 899718.78,
+            "monthly_net_return": 0.028562407838234494,
+            "benchmark_return": 0.04514223328634981,
+            "excess_return": -0.016579825448115315,
+            "holdings_count": 20,
+            "cash_pct": 8.11
+          },
+          {
+            "year_month": "2025-11",
+            "date": "2025-11-28",
+            "portfolio_equity": 899844.87,
+            "monthly_net_return": 0.00014014400184758635,
+            "benchmark_return": 0.01869402640831641,
+            "excess_return": -0.018553882406468825,
+            "holdings_count": 20,
+            "cash_pct": 3.69
+          },
+          {
+            "year_month": "2025-12",
+            "date": "2025-12-31",
+            "portfolio_equity": 919756.58,
+            "monthly_net_return": 0.0221279381998698,
+            "benchmark_return": -0.0027992883076883857,
+            "excess_return": 0.024927226507558187,
+            "holdings_count": 20,
+            "cash_pct": 3.93
+          },
+          {
+            "year_month": "2026-01",
+            "date": "2026-01-30",
+            "portfolio_equity": 897109.04,
+            "monthly_net_return": -0.024623408387260737,
+            "benchmark_return": -0.030959112686126167,
+            "excess_return": 0.00633570429886543,
+            "holdings_count": 20,
+            "cash_pct": 1.92
+          },
+          {
+            "year_month": "2026-02",
+            "date": "2026-02-27",
+            "portfolio_equity": 938485.95,
+            "monthly_net_return": 0.04612249800875445,
+            "benchmark_return": -0.00560807079634007,
+            "excess_return": 0.05173056880509452,
+            "holdings_count": 20,
+            "cash_pct": 3.38
+          },
+          {
+            "year_month": "2026-03",
+            "date": "2026-03-30",
+            "portfolio_equity": 809753.88,
+            "monthly_net_return": -0.13716994995709664,
+            "benchmark_return": -0.11308191486943808,
+            "excess_return": -0.024088035087658555,
+            "holdings_count": 20,
+            "cash_pct": 3.64
+          },
+          {
+            "year_month": "2026-04",
+            "date": "2026-04-30",
+            "portfolio_equity": 878092.13,
+            "monthly_net_return": 0.08439384693229512,
+            "benchmark_return": 0.07461020632295279,
+            "excess_return": 0.009783640609342337,
+            "holdings_count": 20,
+            "cash_pct": 3.07
+          },
+          {
+            "year_month": "2026-05",
+            "date": "2026-05-29",
+            "portfolio_equity": 889157.5,
+            "monthly_net_return": 0.012601603635439274,
+            "benchmark_return": -0.01874361201899999,
+            "excess_return": 0.03134521565443926,
+            "holdings_count": 20,
+            "cash_pct": 2.66
+          },
+          {
+            "year_month": "2026-06",
+            "date": "2026-06-30",
+            "portfolio_equity": 881511.04,
+            "monthly_net_return": -0.008599669095531115,
+            "benchmark_return": 0.013504474949835865,
+            "excess_return": -0.02210414404536698,
+            "holdings_count": 20,
+            "cash_pct": 3.43
+          },
+          {
+            "year_month": "2026-07",
+            "date": "2026-07-31",
+            "portfolio_equity": 900596.06,
+            "monthly_net_return": 0.021650350729008894,
+            "benchmark_return": 0.021698442721263644,
+            "excess_return": -4.809199225475069e-05,
+            "holdings_count": 20,
+            "cash_pct": 4.56
+          },
+          {
+            "year_month": "2026-08",
+            "date": "2026-08-31",
+            "portfolio_equity": 914164.43,
+            "monthly_net_return": 0.015065989244167355,
+            "benchmark_return": -0.01243455534077198,
+            "excess_return": 0.027500544584939335,
+            "holdings_count": 20,
+            "cash_pct": 5.35
+          },
+          {
+            "year_month": "2026-09",
+            "date": "2026-09-30",
+            "portfolio_equity": 847991.15,
+            "monthly_net_return": -0.0723866238943709,
+            "benchmark_return": -0.06062819339346992,
+            "excess_return": -0.011758430500900974,
+            "holdings_count": 20,
+            "cash_pct": 4.8
+          },
+          {
+            "year_month": "2026-10",
+            "date": "2026-10-30",
+            "portfolio_equity": 829926.99,
+            "monthly_net_return": -0.021302299793499513,
+            "benchmark_return": 0.019126516296872564,
+            "excess_return": -0.04042881609037208,
+            "holdings_count": 20,
+            "cash_pct": 4.79
+          }
+        ],
+        "bootstrap_95ci": {
+          "ci_lower_pct": -0.261,
+          "ci_upper_pct": 1.183,
+          "mean_pct": 0.458,
+          "n_resamples": 2000,
+          "block_length": 6
+        },
+        "walk_forward_folds": [
+          {
+            "fold_index": 1,
+            "start_period": "2022-08",
+            "end_period": "2023-01",
+            "months": 6,
+            "portfolio_net_return_pct": 2.45,
+            "benchmark_return_pct": 2.94,
+            "net_excess_return_pct": -0.49
+          },
+          {
+            "fold_index": 2,
+            "start_period": "2023-02",
+            "end_period": "2023-07",
+            "months": 6,
+            "portfolio_net_return_pct": 19.21,
+            "benchmark_return_pct": 11.84,
+            "net_excess_return_pct": 7.36
+          },
+          {
+            "fold_index": 3,
+            "start_period": "2023-08",
+            "end_period": "2024-01",
+            "months": 6,
+            "portfolio_net_return_pct": 23.44,
+            "benchmark_return_pct": 9.98,
+            "net_excess_return_pct": 13.46
+          },
+          {
+            "fold_index": 4,
+            "start_period": "2024-02",
+            "end_period": "2024-07",
+            "months": 6,
+            "portfolio_net_return_pct": 25.34,
+            "benchmark_return_pct": 14.85,
+            "net_excess_return_pct": 10.49
+          },
+          {
+            "fold_index": 5,
+            "start_period": "2024-08",
+            "end_period": "2025-01",
+            "months": 6,
+            "portfolio_net_return_pct": -10.75,
+            "benchmark_return_pct": -5.78,
+            "net_excess_return_pct": -4.97
+          },
+          {
+            "fold_index": 6,
+            "start_period": "2025-02",
+            "end_period": "2025-07",
+            "months": 6,
+            "portfolio_net_return_pct": 2.8,
+            "benchmark_return_pct": 5.36,
+            "net_excess_return_pct": -2.56
+          },
+          {
+            "fold_index": 7,
+            "start_period": "2025-08",
+            "end_period": "2026-01",
+            "months": 6,
+            "portfolio_net_return_pct": 3.49,
+            "benchmark_return_pct": 2.23,
+            "net_excess_return_pct": 1.26
+          },
+          {
+            "fold_index": 8,
+            "start_period": "2026-02",
+            "end_period": "2026-07",
+            "months": 6,
+            "portfolio_net_return_pct": 0.39,
+            "benchmark_return_pct": -3.7,
+            "net_excess_return_pct": 4.09
+          }
+        ]
+      },
+      "US": {
+        "status": "COMPLETED",
+        "market": "US",
+        "capital": 50000.0,
+        "regime_filtered": false,
+        "total_months": 51,
+        "rebalances_count": 51,
+        "final_equity": 128333.67,
+        "cum_net_return_pct": 156.67,
+        "annualized_net_return_pct": 24.83,
+        "annualized_benchmark_return_pct": 15.36,
+        "annualized_excess_return_pct": 9.47,
+        "max_drawdown_pct": 15.0,
+        "benchmark_max_drawdown_pct": 13.19,
+        "drawdown_ratio": 1.14,
+        "volatility_pct": 18.1,
+        "sharpe_ratio": 1.1,
+        "total_costs_paid": 5931.07,
+        "cost_drag_pct_of_capital": 11.86,
+        "avg_monthly_turnover": 23200.28,
+        "yearly_performance": {
+          "2022": {
+            "months": 5,
+            "portfolio_return": 6.98,
+            "benchmark_return": -7.04,
+            "excess_return": 14.02
+          },
+          "2023": {
+            "months": 12,
+            "portfolio_return": 49.65,
+            "benchmark_return": 24.23,
+            "excess_return": 25.42
+          },
+          "2024": {
+            "months": 12,
+            "portfolio_return": 29.16,
+            "benchmark_return": 23.31,
+            "excess_return": 5.85
+          },
+          "2025": {
+            "months": 12,
+            "portfolio_return": 5.11,
+            "benchmark_return": 16.39,
+            "excess_return": -11.27
+          },
+          "2026": {
+            "months": 10,
+            "portfolio_return": 18.09,
+            "benchmark_return": 10.73,
+            "excess_return": 7.36
+          }
+        },
+        "positive_calendar_years": "3/4",
+        "calendar_year_consistency_passed": true,
+        "monthly_returns": [
+          {
+            "year_month": "2022-08",
+            "date": "2022-08-31",
+            "portfolio_equity": 49975.61,
+            "monthly_net_return": -0.00048770551674692797,
+            "benchmark_return": -0.04244012827299837,
+            "excess_return": 0.04195242275625144,
+            "holdings_count": 20,
+            "cash_pct": 4.59
+          },
+          {
+            "year_month": "2022-09",
+            "date": "2022-09-30",
+            "portfolio_equity": 47806.07,
+            "monthly_net_return": -0.04341198115180622,
+            "benchmark_return": -0.09339567201327437,
+            "excess_return": 0.049983690861468144,
+            "holdings_count": 20,
+            "cash_pct": 3.84
+          },
+          {
+            "year_month": "2022-10",
+            "date": "2022-10-31",
+            "portfolio_equity": 52124.21,
+            "monthly_net_return": 0.09032606581014346,
+            "benchmark_return": 0.0798634138370089,
+            "excess_return": 0.010462651973134562,
+            "holdings_count": 20,
+            "cash_pct": 4.66
+          },
+          {
+            "year_month": "2022-11",
+            "date": "2022-11-30",
+            "portfolio_equity": 55204.12,
+            "monthly_net_return": 0.05908788147892596,
+            "benchmark_return": 0.053752893352493114,
+            "excess_return": 0.005334988126432849,
+            "holdings_count": 20,
+            "cash_pct": 3.59
+          },
+          {
+            "year_month": "2022-12",
+            "date": "2022-12-30",
+            "portfolio_equity": 53488.76,
+            "monthly_net_return": -0.031073095360774405,
+            "benchmark_return": -0.05897147407473047,
+            "excess_return": 0.027898378713956062,
+            "holdings_count": 20,
+            "cash_pct": 3.85
+          },
+          {
+            "year_month": "2023-01",
+            "date": "2023-01-31",
+            "portfolio_equity": 54390.42,
+            "monthly_net_return": 0.016857052126008965,
+            "benchmark_return": 0.0617528578346791,
+            "excess_return": -0.04489580570867013,
+            "holdings_count": 20,
+            "cash_pct": 3.96
+          },
+          {
+            "year_month": "2023-02",
+            "date": "2023-02-28",
+            "portfolio_equity": 54720.1,
+            "monthly_net_return": 0.006061431287940566,
+            "benchmark_return": -0.02611249393181858,
+            "excess_return": 0.03217392521975915,
+            "holdings_count": 20,
+            "cash_pct": 5.8
+          },
+          {
+            "year_month": "2023-03",
+            "date": "2023-03-31",
+            "portfolio_equity": 55993.65,
+            "monthly_net_return": 0.023273888385097363,
+            "benchmark_return": 0.03505161257710898,
+            "excess_return": -0.011777724192011618,
+            "holdings_count": 20,
+            "cash_pct": 3.46
+          },
+          {
+            "year_month": "2023-04",
+            "date": "2023-04-28",
+            "portfolio_equity": 58752.59,
+            "monthly_net_return": 0.0492723553756671,
+            "benchmark_return": 0.014642341662481018,
+            "excess_return": 0.03463001371318608,
+            "holdings_count": 20,
+            "cash_pct": 3.24
+          },
+          {
+            "year_month": "2023-05",
+            "date": "2023-05-31",
+            "portfolio_equity": 62710.62,
+            "monthly_net_return": 0.06736778656755793,
+            "benchmark_return": 0.002482347368192972,
+            "excess_return": 0.06488543919936496,
+            "holdings_count": 20,
+            "cash_pct": 2.76
+          },
+          {
+            "year_month": "2023-06",
+            "date": "2023-06-30",
+            "portfolio_equity": 68846.21,
+            "monthly_net_return": 0.09783974074811708,
+            "benchmark_return": 0.06472746490423464,
+            "excess_return": 0.03311227584388243,
+            "holdings_count": 20,
+            "cash_pct": 1.92
+          },
+          {
+            "year_month": "2023-07",
+            "date": "2023-07-31",
+            "portfolio_equity": 71545.81,
+            "monthly_net_return": 0.039211941826444496,
+            "benchmark_return": 0.031138932355010862,
+            "excess_return": 0.008073009471433634,
+            "holdings_count": 20,
+            "cash_pct": 2.92
+          },
+          {
+            "year_month": "2023-08",
+            "date": "2023-08-31",
+            "portfolio_equity": 72378.77,
+            "monthly_net_return": 0.011642428396991589,
+            "benchmark_return": -0.017716390070854016,
+            "excess_return": 0.029358818467845604,
+            "holdings_count": 20,
+            "cash_pct": 2.07
+          },
+          {
+            "year_month": "2023-09",
+            "date": "2023-09-29",
+            "portfolio_equity": 67168.42,
+            "monthly_net_return": -0.07198737395363186,
+            "benchmark_return": -0.048719367465624885,
+            "excess_return": -0.023268006488006976,
+            "holdings_count": 20,
+            "cash_pct": 3.36
+          },
+          {
+            "year_month": "2023-10",
+            "date": "2023-10-31",
+            "portfolio_equity": 65792.12,
+            "monthly_net_return": -0.020490223520991502,
+            "benchmark_return": -0.02197968873798295,
+            "excess_return": 0.001489465216991448,
+            "holdings_count": 20,
+            "cash_pct": 3.88
+          },
+          {
+            "year_month": "2023-11",
+            "date": "2023-11-30",
+            "portfolio_equity": 74778.06,
+            "monthly_net_return": 0.13658074437532508,
+            "benchmark_return": 0.08917926878197013,
+            "excess_return": 0.04740147559335495,
+            "holdings_count": 20,
+            "cash_pct": 2.98
+          },
+          {
+            "year_month": "2023-12",
+            "date": "2023-12-29",
+            "portfolio_equity": 80043.64,
+            "monthly_net_return": 0.07041618773414449,
+            "benchmark_return": 0.04422923115636013,
+            "excess_return": 0.02618695657778436,
+            "holdings_count": 20,
+            "cash_pct": 2.95
+          },
+          {
+            "year_month": "2024-01",
+            "date": "2024-01-31",
+            "portfolio_equity": 83898.93,
+            "monthly_net_return": 0.04816483093538371,
+            "benchmark_return": 0.015895707598991615,
+            "excess_return": 0.03226912333639209,
+            "holdings_count": 20,
+            "cash_pct": 2.48
+          },
+          {
+            "year_month": "2024-02",
+            "date": "2024-02-29",
+            "portfolio_equity": 97289.96,
+            "monthly_net_return": 0.15960901634482272,
+            "benchmark_return": 0.05172064062372317,
+            "excess_return": 0.10788837572109955,
+            "holdings_count": 20,
+            "cash_pct": 3.67
+          },
+          {
+            "year_month": "2024-03",
+            "date": "2024-03-28",
+            "portfolio_equity": 101394.33,
+            "monthly_net_return": 0.04218700278225018,
+            "benchmark_return": 0.031018779915342964,
+            "excess_return": 0.011168222866907218,
+            "holdings_count": 20,
+            "cash_pct": 3.25
+          },
+          {
+            "year_month": "2024-04",
+            "date": "2024-04-30",
+            "portfolio_equity": 92081.45,
+            "monthly_net_return": -0.09184816206108126,
+            "benchmark_return": -0.04161507173789869,
+            "excess_return": -0.05023309032318257,
+            "holdings_count": 20,
+            "cash_pct": 3.37
+          },
+          {
+            "year_month": "2024-05",
+            "date": "2024-05-31",
+            "portfolio_equity": 98217.27,
+            "monthly_net_return": 0.06663472983246077,
+            "benchmark_return": 0.0480211901511991,
+            "excess_return": 0.01861353968126167,
+            "holdings_count": 20,
+            "cash_pct": 2.84
+          },
+          {
+            "year_month": "2024-06",
+            "date": "2024-06-28",
+            "portfolio_equity": 99753.1,
+            "monthly_net_return": 0.015637114643856753,
+            "benchmark_return": 0.03466980128308328,
+            "excess_return": -0.019032686639226526,
+            "holdings_count": 20,
+            "cash_pct": 3.14
+          },
+          {
+            "year_month": "2024-07",
+            "date": "2024-07-31",
+            "portfolio_equity": 97512.72,
+            "monthly_net_return": -0.022459302667435566,
+            "benchmark_return": 0.011321316887868749,
+            "excess_return": -0.033780619555304314,
+            "holdings_count": 20,
+            "cash_pct": 3.7
+          },
+          {
+            "year_month": "2024-08",
+            "date": "2024-08-30",
+            "portfolio_equity": 99652.04,
+            "monthly_net_return": 0.021938888552607727,
+            "benchmark_return": 0.022834706936630367,
+            "excess_return": -0.0008958183840226397,
+            "holdings_count": 20,
+            "cash_pct": 3.01
+          },
+          {
+            "year_month": "2024-09",
+            "date": "2024-09-30",
+            "portfolio_equity": 100925.46,
+            "monthly_net_return": 0.012778730490100143,
+            "benchmark_return": 0.020196884090601275,
+            "excess_return": -0.007418153600501132,
+            "holdings_count": 20,
+            "cash_pct": 3.33
+          },
+          {
+            "year_month": "2024-10",
+            "date": "2024-10-31",
+            "portfolio_equity": 98297.79,
+            "monthly_net_return": -0.026035791855954615,
+            "benchmark_return": -0.009896743303151712,
+            "excess_return": -0.016139048552802904,
+            "holdings_count": 20,
+            "cash_pct": 3.56
+          },
+          {
+            "year_month": "2024-11",
+            "date": "2024-11-29",
+            "portfolio_equity": 107487.95,
+            "monthly_net_return": 0.09349302897402612,
+            "benchmark_return": 0.057301295482098835,
+            "excess_return": 0.03619173349192728,
+            "holdings_count": 20,
+            "cash_pct": 3.33
+          },
+          {
+            "year_month": "2024-12",
+            "date": "2024-12-31",
+            "portfolio_equity": 103385.29,
+            "monthly_net_return": -0.03816852804819326,
+            "benchmark_return": -0.02499013704848363,
+            "excess_return": -0.013178390999709633,
+            "holdings_count": 20,
+            "cash_pct": 3.53
+          },
+          {
+            "year_month": "2025-01",
+            "date": "2025-01-31",
+            "portfolio_equity": 106980.96,
+            "monthly_net_return": 0.034779279069929725,
+            "benchmark_return": 0.0270163042404441,
+            "excess_return": 0.007762974829485625,
+            "holdings_count": 20,
+            "cash_pct": 3.19
+          },
+          {
+            "year_month": "2025-02",
+            "date": "2025-02-28",
+            "portfolio_equity": 101070.11,
+            "monthly_net_return": -0.0552514155485504,
+            "benchmark_return": -0.014242092699825126,
+            "excess_return": -0.04100932284872527,
+            "holdings_count": 20,
+            "cash_pct": 4.57
+          },
+          {
+            "year_month": "2025-03",
+            "date": "2025-03-31",
+            "portfolio_equity": 91360.18,
+            "monthly_net_return": -0.09607126137886957,
+            "benchmark_return": -0.05754469768137538,
+            "excess_return": -0.03852656369749419,
+            "holdings_count": 20,
+            "cash_pct": 4.24
+          },
+          {
+            "year_month": "2025-04",
+            "date": "2025-04-30",
+            "portfolio_equity": 93430.93,
+            "monthly_net_return": 0.02266583025882052,
+            "benchmark_return": -0.007624943346289825,
+            "excess_return": 0.030290773605110344,
+            "holdings_count": 20,
+            "cash_pct": 4.36
+          },
+          {
+            "year_month": "2025-05",
+            "date": "2025-05-30",
+            "portfolio_equity": 97451.81,
+            "monthly_net_return": 0.04303586444755436,
+            "benchmark_return": 0.06152382614078289,
+            "excess_return": -0.018487961693228527,
+            "holdings_count": 20,
+            "cash_pct": 3.29
+          },
+          {
+            "year_month": "2025-06",
+            "date": "2025-06-30",
+            "portfolio_equity": 100583.17,
+            "monthly_net_return": 0.03213239686155367,
+            "benchmark_return": 0.049606839467715824,
+            "excess_return": -0.017474442606162155,
+            "holdings_count": 20,
+            "cash_pct": 3.04
+          },
+          {
+            "year_month": "2025-07",
+            "date": "2025-07-31",
+            "portfolio_equity": 104491.82,
+            "monthly_net_return": 0.038859909303144535,
+            "benchmark_return": 0.0216665625306407,
+            "excess_return": 0.017193346772503837,
+            "holdings_count": 20,
+            "cash_pct": 3.7
+          },
+          {
+            "year_month": "2025-08",
+            "date": "2025-08-29",
+            "portfolio_equity": 106115.0,
+            "monthly_net_return": 0.01553400443851305,
+            "benchmark_return": 0.019066444295036122,
+            "excess_return": -0.003532439856523073,
+            "holdings_count": 20,
+            "cash_pct": 3.63
+          },
+          {
+            "year_month": "2025-09",
+            "date": "2025-09-30",
+            "portfolio_equity": 111069.3,
+            "monthly_net_return": 0.0466880190846477,
+            "benchmark_return": 0.035323687218701494,
+            "excess_return": 0.011364331865946209,
+            "holdings_count": 20,
+            "cash_pct": 3.7
+          },
+          {
+            "year_month": "2025-10",
+            "date": "2025-10-31",
+            "portfolio_equity": 112086.63,
+            "monthly_net_return": 0.009159434296815094,
+            "benchmark_return": 0.0226868719049238,
+            "excess_return": -0.013527437608108706,
+            "holdings_count": 20,
+            "cash_pct": 3.67
+          },
+          {
+            "year_month": "2025-11",
+            "date": "2025-11-28",
+            "portfolio_equity": 109183.59,
+            "monthly_net_return": -0.025899975576106682,
+            "benchmark_return": 0.0012996181666717899,
+            "excess_return": -0.027199593742778472,
+            "holdings_count": 20,
+            "cash_pct": 2.67
+          },
+          {
+            "year_month": "2025-12",
+            "date": "2025-12-31",
+            "portfolio_equity": 108671.87,
+            "monthly_net_return": -0.004686762239004438,
+            "benchmark_return": -0.0005241344225139777,
+            "excess_return": -0.004162627816490461,
+            "holdings_count": 20,
+            "cash_pct": 3.46
+          },
+          {
+            "year_month": "2026-01",
+            "date": "2026-01-30",
+            "portfolio_equity": 110582.28,
+            "monthly_net_return": 0.017579634645491504,
+            "benchmark_return": 0.013662958900920286,
+            "excess_return": 0.003916675744571219,
+            "holdings_count": 20,
+            "cash_pct": 3.5
+          },
+          {
+            "year_month": "2026-02",
+            "date": "2026-02-27",
+            "portfolio_equity": 108947.1,
+            "monthly_net_return": -0.01478701560565543,
+            "benchmark_return": -0.008668344740704326,
+            "excess_return": -0.0061186708649511035,
+            "holdings_count": 20,
+            "cash_pct": 3.64
+          },
+          {
+            "year_month": "2026-03",
+            "date": "2026-03-31",
+            "portfolio_equity": 104661.77,
+            "monthly_net_return": -0.03933409386694442,
+            "benchmark_return": -0.050932690968577,
+            "excess_return": 0.01159859710163258,
+            "holdings_count": 20,
+            "cash_pct": 4.15
+          },
+          {
+            "year_month": "2026-04",
+            "date": "2026-04-30",
+            "portfolio_equity": 114867.45,
+            "monthly_net_return": 0.09751105067605814,
+            "benchmark_return": 0.10423338582985764,
+            "excess_return": -0.006722335153799497,
+            "holdings_count": 20,
+            "cash_pct": 2.31
+          },
+          {
+            "year_month": "2026-05",
+            "date": "2026-05-29",
+            "portfolio_equity": 122315.44,
+            "monthly_net_return": 0.0648398855587462,
+            "benchmark_return": 0.05147035515724263,
+            "excess_return": 0.013369530401503571,
+            "holdings_count": 20,
+            "cash_pct": 2.58
+          },
+          {
+            "year_month": "2026-06",
+            "date": "2026-06-30",
+            "portfolio_equity": 125365.92,
+            "monthly_net_return": 0.02493948964785675,
+            "benchmark_return": -0.010646379407113993,
+            "excess_return": 0.03558586905497074,
+            "holdings_count": 20,
+            "cash_pct": 2.64
+          },
+          {
+            "year_month": "2026-07",
+            "date": "2026-07-31",
+            "portfolio_equity": 122854.2,
+            "monthly_net_return": -0.02003509586365637,
+            "benchmark_return": -0.0012853961689047733,
+            "excess_return": -0.018749699694751598,
+            "holdings_count": 20,
+            "cash_pct": 3.76
+          },
+          {
+            "year_month": "2026-08",
+            "date": "2026-08-31",
+            "portfolio_equity": 123652.76,
+            "monthly_net_return": 0.006500058179510049,
+            "benchmark_return": 0.026225268266459212,
+            "excess_return": -0.019725210086949163,
+            "holdings_count": 20,
+            "cash_pct": 2.59
+          },
+          {
+            "year_month": "2026-09",
+            "date": "2026-09-30",
+            "portfolio_equity": 124724.88,
+            "monthly_net_return": 0.008670388914977512,
+            "benchmark_return": -0.0045016220158354825,
+            "excess_return": 0.013172010930812994,
+            "holdings_count": 20,
+            "cash_pct": 4.19
+          },
+          {
+            "year_month": "2026-10",
+            "date": "2026-10-30",
+            "portfolio_equity": 128333.67,
+            "monthly_net_return": 0.028933953497457088,
+            "benchmark_return": -0.009340631360338136,
+            "excess_return": 0.038274584857795224,
+            "holdings_count": 20,
+            "cash_pct": 3.78
+          }
+        ],
+        "bootstrap_95ci": {
+          "ci_lower_pct": -0.214,
+          "ci_upper_pct": 1.727,
+          "mean_pct": 0.717,
+          "n_resamples": 2000,
+          "block_length": 6
+        },
+        "walk_forward_folds": [
+          {
+            "fold_index": 1,
+            "start_period": "2022-08",
+            "end_period": "2023-01",
+            "months": 6,
+            "portfolio_net_return_pct": 8.78,
+            "benchmark_return_pct": -1.3,
+            "net_excess_return_pct": 10.08
+          },
+          {
+            "fold_index": 2,
+            "start_period": "2023-02",
+            "end_period": "2023-07",
+            "months": 6,
+            "portfolio_net_return_pct": 31.54,
+            "benchmark_return_pct": 12.57,
+            "net_excess_return_pct": 18.97
+          },
+          {
+            "fold_index": 3,
+            "start_period": "2023-08",
+            "end_period": "2024-01",
+            "months": 6,
+            "portfolio_net_return_pct": 17.27,
+            "benchmark_return_pct": 5.59,
+            "net_excess_return_pct": 11.67
+          },
+          {
+            "fold_index": 4,
+            "start_period": "2024-02",
+            "end_period": "2024-07",
+            "months": 6,
+            "portfolio_net_return_pct": 16.23,
+            "benchmark_return_pct": 13.96,
+            "net_excess_return_pct": 2.26
+          },
+          {
+            "fold_index": 5,
+            "start_period": "2024-08",
+            "end_period": "2025-01",
+            "months": 6,
+            "portfolio_net_return_pct": 9.71,
+            "benchmark_return_pct": 9.38,
+            "net_excess_return_pct": 0.33
+          },
+          {
+            "fold_index": 6,
+            "start_period": "2025-02",
+            "end_period": "2025-07",
+            "months": 6,
+            "portfolio_net_return_pct": -2.33,
+            "benchmark_return_pct": 4.95,
+            "net_excess_return_pct": -7.27
+          },
+          {
+            "fold_index": 7,
+            "start_period": "2025-08",
+            "end_period": "2026-01",
+            "months": 6,
+            "portfolio_net_return_pct": 5.83,
+            "benchmark_return_pct": 9.46,
+            "net_excess_return_pct": -3.63
+          },
+          {
+            "fold_index": 8,
+            "start_period": "2026-02",
+            "end_period": "2026-07",
+            "months": 6,
+            "portfolio_net_return_pct": 11.1,
+            "benchmark_return_pct": 7.94,
+            "net_excess_return_pct": 3.16
+          }
+        ]
+      }
+    },
+    "C1b_regime_filtered": {
+      "India": {
+        "status": "COMPLETED",
+        "market": "IN",
+        "capital": 500000.0,
+        "regime_filtered": true,
+        "total_months": 51,
+        "rebalances_count": 51,
+        "final_equity": 947619.98,
+        "cum_net_return_pct": 89.52,
+        "annualized_net_return_pct": 16.23,
+        "annualized_benchmark_return_pct": 7.2,
+        "annualized_excess_return_pct": 9.04,
+        "max_drawdown_pct": 9.46,
+        "benchmark_max_drawdown_pct": 14.78,
+        "drawdown_ratio": 0.64,
+        "volatility_pct": 11.3,
+        "sharpe_ratio": 0.99,
+        "total_costs_paid": 18157.08,
+        "cost_drag_pct_of_capital": 3.63,
+        "avg_monthly_turnover": 267613.96,
+        "yearly_performance": {
+          "2022": {
+            "months": 5,
+            "portfolio_return": 5.14,
+            "benchmark_return": 5.52,
+            "excess_return": -0.38
+          },
+          "2023": {
+            "months": 12,
+            "portfolio_return": 32.64,
+            "benchmark_return": 20.03,
+            "excess_return": 12.61
+          },
+          "2024": {
+            "months": 12,
+            "portfolio_return": 23.94,
+            "benchmark_return": 8.8,
+            "excess_return": 15.13
+          },
+          "2025": {
+            "months": 12,
+            "portfolio_return": 10.25,
+            "benchmark_return": 10.51,
+            "excess_return": -0.26
+          },
+          "2026": {
+            "months": 10,
+            "portfolio_return": -0.54,
+            "benchmark_return": -11.77,
+            "excess_return": 11.24
+          }
+        },
+        "positive_calendar_years": "3/4",
+        "calendar_year_consistency_passed": true,
+        "monthly_returns": [
+          {
+            "year_month": "2022-08",
+            "date": "2022-08-30",
+            "portfolio_equity": 503914.7,
+            "monthly_net_return": 0.007829408165460183,
+            "benchmark_return": 0.035029841694228736,
+            "excess_return": -0.027200433528768553,
+            "holdings_count": 20,
+            "cash_pct": 3.39
+          },
+          {
+            "year_month": "2022-09",
+            "date": "2022-09-30",
+            "portfolio_equity": 506600.16,
+            "monthly_net_return": 0.005329182736554028,
+            "benchmark_return": -0.03744241848626417,
+            "excess_return": 0.0427716012228182,
+            "holdings_count": 20,
+            "cash_pct": 3.88
+          },
+          {
+            "year_month": "2022-10",
+            "date": "2022-10-31",
+            "portfolio_equity": 536669.82,
+            "monthly_net_return": 0.05935580483565883,
+            "benchmark_return": 0.053693157701163896,
+            "excess_return": 0.005662647134494936,
+            "holdings_count": 20,
+            "cash_pct": 3.89
+          },
+          {
+            "year_month": "2022-11",
+            "date": "2022-11-30",
+            "portfolio_equity": 538758.25,
+            "monthly_net_return": 0.003891462724392669,
+            "benchmark_return": 0.04142472451938506,
+            "excess_return": -0.03753326179499239,
+            "holdings_count": 20,
+            "cash_pct": 1.77
+          },
+          {
+            "year_month": "2022-12",
+            "date": "2022-12-30",
+            "portfolio_equity": 525687.84,
+            "monthly_net_return": -0.024260242042541735,
+            "benchmark_return": -0.034813767827347686,
+            "excess_return": 0.01055352578480595,
+            "holdings_count": 20,
+            "cash_pct": 0.98
+          },
+          {
+            "year_month": "2023-01",
+            "date": "2023-01-31",
+            "portfolio_equity": 512235.18,
+            "monthly_net_return": -0.025590596179144942,
+            "benchmark_return": -0.024476278852209377,
+            "excess_return": -0.0011143173269355655,
+            "holdings_count": 20,
+            "cash_pct": 3.46
+          },
+          {
+            "year_month": "2023-02",
+            "date": "2023-02-28",
+            "portfolio_equity": 491128.34,
+            "monthly_net_return": -0.04120536007160158,
+            "benchmark_return": -0.02028072255941904,
+            "excess_return": -0.020924637512182542,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2023-03",
+            "date": "2023-03-31",
+            "portfolio_equity": 491128.34,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.003224742545449466,
+            "excess_return": -0.003224742545449466,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2023-04",
+            "date": "2023-04-28",
+            "portfolio_equity": 487801.04,
+            "monthly_net_return": -0.0067748027549945355,
+            "benchmark_return": 0.04062558504586766,
+            "excess_return": -0.0474003878008622,
+            "holdings_count": 20,
+            "cash_pct": 3.09
+          },
+          {
+            "year_month": "2023-05",
+            "date": "2023-05-31",
+            "portfolio_equity": 519399.88,
+            "monthly_net_return": 0.06477811958350177,
+            "benchmark_return": 0.02598396848187101,
+            "excess_return": 0.03879415110163076,
+            "holdings_count": 20,
+            "cash_pct": 2.47
+          },
+          {
+            "year_month": "2023-06",
+            "date": "2023-06-30",
+            "portfolio_equity": 554900.38,
+            "monthly_net_return": 0.06834907894481224,
+            "benchmark_return": 0.035320829205574666,
+            "excess_return": 0.03302824973923757,
+            "holdings_count": 20,
+            "cash_pct": 2.87
+          },
+          {
+            "year_month": "2023-07",
+            "date": "2023-07-31",
+            "portfolio_equity": 573908.64,
+            "monthly_net_return": 0.03425525473456248,
+            "benchmark_return": 0.029430846081861972,
+            "excess_return": 0.004824408652700507,
+            "holdings_count": 20,
+            "cash_pct": 3.56
+          },
+          {
+            "year_month": "2023-08",
+            "date": "2023-08-31",
+            "portfolio_equity": 587777.72,
+            "monthly_net_return": 0.0241660076499286,
+            "benchmark_return": -0.02531158461791272,
+            "excess_return": 0.04947759226784132,
+            "holdings_count": 20,
+            "cash_pct": 2.46
+          },
+          {
+            "year_month": "2023-09",
+            "date": "2023-09-29",
+            "portfolio_equity": 608451.38,
+            "monthly_net_return": 0.03517259407176687,
+            "benchmark_return": 0.01997008301729397,
+            "excess_return": 0.0152025110544729,
+            "holdings_count": 20,
+            "cash_pct": 3.88
+          },
+          {
+            "year_month": "2023-10",
+            "date": "2023-10-31",
+            "portfolio_equity": 593453.28,
+            "monthly_net_return": -0.02464963145190524,
+            "benchmark_return": -0.02844956791824016,
+            "excess_return": 0.003799936466334919,
+            "holdings_count": 20,
+            "cash_pct": 2.66
+          },
+          {
+            "year_month": "2023-11",
+            "date": "2023-11-30",
+            "portfolio_equity": 655812.35,
+            "monthly_net_return": 0.10507830706210308,
+            "benchmark_return": 0.05521870494244152,
+            "excess_return": 0.04985960211966156,
+            "holdings_count": 20,
+            "cash_pct": 2.73
+          },
+          {
+            "year_month": "2023-12",
+            "date": "2023-12-29",
+            "portfolio_equity": 697254.99,
+            "monthly_net_return": 0.06319283996072644,
+            "benchmark_return": 0.07938399947303942,
+            "excess_return": -0.01619115951231298,
+            "holdings_count": 20,
+            "cash_pct": 2.71
+          },
+          {
+            "year_month": "2024-01",
+            "date": "2024-01-31",
+            "portfolio_equity": 710127.21,
+            "monthly_net_return": 0.018461280450425388,
+            "benchmark_return": -0.0002623471921975318,
+            "excess_return": 0.01872362764262292,
+            "holdings_count": 20,
+            "cash_pct": 4.37
+          },
+          {
+            "year_month": "2024-02",
+            "date": "2024-02-29",
+            "portfolio_equity": 731017.1,
+            "monthly_net_return": 0.029417112336109996,
+            "benchmark_return": 0.011833983335188147,
+            "excess_return": 0.01758312900092185,
+            "holdings_count": 20,
+            "cash_pct": 2.54
+          },
+          {
+            "year_month": "2024-03",
+            "date": "2024-03-28",
+            "portfolio_equity": 740965.83,
+            "monthly_net_return": 0.013609423800006626,
+            "benchmark_return": 0.01565312867996771,
+            "excess_return": -0.0020437048799610835,
+            "holdings_count": 20,
+            "cash_pct": 3.21
+          },
+          {
+            "year_month": "2024-04",
+            "date": "2024-04-30",
+            "portfolio_equity": 761888.58,
+            "monthly_net_return": 0.028237134334813785,
+            "benchmark_return": 0.012449073265302424,
+            "excess_return": 0.01578806106951136,
+            "holdings_count": 20,
+            "cash_pct": 3.23
+          },
+          {
+            "year_month": "2024-05",
+            "date": "2024-05-31",
+            "portfolio_equity": 794218.06,
+            "monthly_net_return": 0.04243335203277199,
+            "benchmark_return": -0.0032802868369559146,
+            "excess_return": 0.0457136388697279,
+            "holdings_count": 20,
+            "cash_pct": 3.74
+          },
+          {
+            "year_month": "2024-06",
+            "date": "2024-06-28",
+            "portfolio_equity": 841513.44,
+            "monthly_net_return": 0.059549615256929256,
+            "benchmark_return": 0.06568373117304005,
+            "excess_return": -0.006134115916110794,
+            "holdings_count": 20,
+            "cash_pct": 3.27
+          },
+          {
+            "year_month": "2024-07",
+            "date": "2024-07-31",
+            "portfolio_equity": 891240.25,
+            "monthly_net_return": 0.059092111977200545,
+            "benchmark_return": 0.03917231541701116,
+            "excess_return": 0.019919796560189384,
+            "holdings_count": 20,
+            "cash_pct": 3.25
+          },
+          {
+            "year_month": "2024-08",
+            "date": "2024-08-30",
+            "portfolio_equity": 907962.74,
+            "monthly_net_return": 0.018763167135133374,
+            "benchmark_return": 0.011412299454817587,
+            "excess_return": 0.007350867680315787,
+            "holdings_count": 20,
+            "cash_pct": 2.39
+          },
+          {
+            "year_month": "2024-09",
+            "date": "2024-09-30",
+            "portfolio_equity": 937308.65,
+            "monthly_net_return": 0.03232061260070185,
+            "benchmark_return": 0.022782988118133174,
+            "excess_return": 0.009537624482568674,
+            "holdings_count": 20,
+            "cash_pct": 2.9
+          },
+          {
+            "year_month": "2024-10",
+            "date": "2024-10-31",
+            "portfolio_equity": 857782.99,
+            "monthly_net_return": -0.08484468896842101,
+            "benchmark_return": -0.062202524298806905,
+            "excess_return": -0.022642164669614107,
+            "holdings_count": 20,
+            "cash_pct": 2.8
+          },
+          {
+            "year_month": "2024-11",
+            "date": "2024-11-29",
+            "portfolio_equity": 852037.14,
+            "monthly_net_return": -0.006698495132316684,
+            "benchmark_return": -0.003067503721212228,
+            "excess_return": -0.003630991411104456,
+            "holdings_count": 20,
+            "cash_pct": 4.02
+          },
+          {
+            "year_month": "2024-12",
+            "date": "2024-12-31",
+            "portfolio_equity": 864171.57,
+            "monthly_net_return": 0.014241676530647895,
+            "benchmark_return": -0.020152369183212504,
+            "excess_return": 0.0343940457138604,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-01",
+            "date": "2025-01-31",
+            "portfolio_equity": 864171.57,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.005768726574899463,
+            "excess_return": 0.005768726574899463,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-02",
+            "date": "2025-02-28",
+            "portfolio_equity": 864171.57,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.058859860683111886,
+            "excess_return": 0.058859860683111886,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-03",
+            "date": "2025-03-28",
+            "portfolio_equity": 864171.57,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.06303590285390537,
+            "excess_return": -0.06303590285390537,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-04",
+            "date": "2025-04-30",
+            "portfolio_equity": 863737.77,
+            "monthly_net_return": -0.0005019852498533428,
+            "benchmark_return": 0.03464592443705139,
+            "excess_return": -0.03514790968690473,
+            "holdings_count": 20,
+            "cash_pct": 4.29
+          },
+          {
+            "year_month": "2025-05",
+            "date": "2025-05-30",
+            "portfolio_equity": 896474.56,
+            "monthly_net_return": 0.037901299665616506,
+            "benchmark_return": 0.017115829300808905,
+            "excess_return": 0.0207854703648076,
+            "holdings_count": 20,
+            "cash_pct": 4.24
+          },
+          {
+            "year_month": "2025-06",
+            "date": "2025-06-30",
+            "portfolio_equity": 938136.08,
+            "monthly_net_return": 0.04647262712076139,
+            "benchmark_return": 0.030962824756055607,
+            "excess_return": 0.015509802364705783,
+            "holdings_count": 20,
+            "cash_pct": 2.94
+          },
+          {
+            "year_month": "2025-07",
+            "date": "2025-07-31",
+            "portfolio_equity": 897423.85,
+            "monthly_net_return": -0.0433969406829281,
+            "benchmark_return": -0.029341211031532977,
+            "excess_return": -0.014055729651395121,
+            "holdings_count": 20,
+            "cash_pct": 5.74
+          },
+          {
+            "year_month": "2025-08",
+            "date": "2025-08-29",
+            "portfolio_equity": 893574.7,
+            "monthly_net_return": -0.0042891104170023064,
+            "benchmark_return": -0.013787757577143567,
+            "excess_return": 0.00949864716014126,
+            "holdings_count": 20,
+            "cash_pct": 6.43
+          },
+          {
+            "year_month": "2025-09",
+            "date": "2025-09-30",
+            "portfolio_equity": 906350.31,
+            "monthly_net_return": 0.014297189560574353,
+            "benchmark_return": 0.007542929315341729,
+            "excess_return": 0.006754260245232624,
+            "holdings_count": 20,
+            "cash_pct": 7.55
+          },
+          {
+            "year_month": "2025-10",
+            "date": "2025-10-31",
+            "portfolio_equity": 932701.63,
+            "monthly_net_return": 0.029074104069378714,
+            "benchmark_return": 0.04514223328634981,
+            "excess_return": -0.016068129216971094,
+            "holdings_count": 20,
+            "cash_pct": 6.27
+          },
+          {
+            "year_month": "2025-11",
+            "date": "2025-11-28",
+            "portfolio_equity": 932151.53,
+            "monthly_net_return": -0.0005897942690036295,
+            "benchmark_return": 0.01869402640831641,
+            "excess_return": -0.01928382067732004,
+            "holdings_count": 20,
+            "cash_pct": 3.21
+          },
+          {
+            "year_month": "2025-12",
+            "date": "2025-12-31",
+            "portfolio_equity": 952749.47,
+            "monthly_net_return": 0.022097205275873222,
+            "benchmark_return": -0.0027992883076883857,
+            "excess_return": 0.024896493583561607,
+            "holdings_count": 20,
+            "cash_pct": 4.08
+          },
+          {
+            "year_month": "2026-01",
+            "date": "2026-01-30",
+            "portfolio_equity": 929450.49,
+            "monthly_net_return": -0.024454464237541274,
+            "benchmark_return": -0.030959112686126167,
+            "excess_return": 0.006504648448584893,
+            "holdings_count": 20,
+            "cash_pct": 2.12
+          },
+          {
+            "year_month": "2026-02",
+            "date": "2026-02-27",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.01954862961932946,
+            "benchmark_return": -0.00560807079634007,
+            "excess_return": 0.02515670041566953,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-03",
+            "date": "2026-03-30",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.11308191486943808,
+            "excess_return": 0.11308191486943808,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-04",
+            "date": "2026-04-30",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.07461020632295279,
+            "excess_return": -0.07461020632295279,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-05",
+            "date": "2026-05-29",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.01874361201899999,
+            "excess_return": 0.01874361201899999,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-06",
+            "date": "2026-06-30",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.013504474949835865,
+            "excess_return": -0.013504474949835865,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-07",
+            "date": "2026-07-31",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.021698442721263644,
+            "excess_return": -0.021698442721263644,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-08",
+            "date": "2026-08-31",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.01243455534077198,
+            "excess_return": 0.01243455534077198,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-09",
+            "date": "2026-09-30",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.06062819339346992,
+            "excess_return": 0.06062819339346992,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-10",
+            "date": "2026-10-30",
+            "portfolio_equity": 947619.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.019126516296872564,
+            "excess_return": -0.019126516296872564,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          }
+        ],
+        "bootstrap_95ci": {
+          "ci_lower_pct": 0.055,
+          "ci_upper_pct": 1.257,
+          "mean_pct": 0.661,
+          "n_resamples": 2000,
+          "block_length": 6
+        }
+      },
+      "US": {
+        "status": "COMPLETED",
+        "market": "US",
+        "capital": 50000.0,
+        "regime_filtered": true,
+        "total_months": 51,
+        "rebalances_count": 51,
+        "final_equity": 82803.85,
+        "cum_net_return_pct": 65.61,
+        "annualized_net_return_pct": 12.6,
+        "annualized_benchmark_return_pct": 15.36,
+        "annualized_excess_return_pct": -2.75,
+        "max_drawdown_pct": 15.58,
+        "benchmark_max_drawdown_pct": 13.19,
+        "drawdown_ratio": 1.18,
+        "volatility_pct": 15.96,
+        "sharpe_ratio": 0.48,
+        "total_costs_paid": 6073.86,
+        "cost_drag_pct_of_capital": 12.15,
+        "avg_monthly_turnover": 23755.29,
+        "yearly_performance": {
+          "2022": {
+            "months": 5,
+            "portfolio_return": -3.89,
+            "benchmark_return": -7.04,
+            "excess_return": 3.15
+          },
+          "2023": {
+            "months": 12,
+            "portfolio_return": 28.31,
+            "benchmark_return": 24.23,
+            "excess_return": 4.08
+          },
+          "2024": {
+            "months": 12,
+            "portfolio_return": 29.21,
+            "benchmark_return": 23.31,
+            "excess_return": 5.9
+          },
+          "2025": {
+            "months": 12,
+            "portfolio_return": -2.16,
+            "benchmark_return": 16.39,
+            "excess_return": -18.55
+          },
+          "2026": {
+            "months": 10,
+            "portfolio_return": 6.24,
+            "benchmark_return": 10.73,
+            "excess_return": -4.5
+          }
+        },
+        "positive_calendar_years": "2/4",
+        "calendar_year_consistency_passed": false,
+        "monthly_returns": [
+          {
+            "year_month": "2022-08",
+            "date": "2022-08-31",
+            "portfolio_equity": 50000.0,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.04244012827299837,
+            "excess_return": 0.04244012827299837,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2022-09",
+            "date": "2022-09-30",
+            "portfolio_equity": 50000.0,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.09339567201327437,
+            "excess_return": 0.09339567201327437,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2022-10",
+            "date": "2022-10-31",
+            "portfolio_equity": 50000.0,
+            "monthly_net_return": 0.0,
+            "benchmark_return": 0.0798634138370089,
+            "excess_return": -0.0798634138370089,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2022-11",
+            "date": "2022-11-30",
+            "portfolio_equity": 49694.48,
+            "monthly_net_return": -0.006110387676257489,
+            "benchmark_return": 0.053752893352493114,
+            "excess_return": -0.0598632810287506,
+            "holdings_count": 20,
+            "cash_pct": 5.48
+          },
+          {
+            "year_month": "2022-12",
+            "date": "2022-12-30",
+            "portfolio_equity": 48054.21,
+            "monthly_net_return": -0.03300701720618604,
+            "benchmark_return": -0.05897147407473047,
+            "excess_return": 0.025964456868544428,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2023-01",
+            "date": "2023-01-31",
+            "portfolio_equity": 47872.23,
+            "monthly_net_return": -0.003787152483083034,
+            "benchmark_return": 0.0617528578346791,
+            "excess_return": -0.06554001031776213,
+            "holdings_count": 20,
+            "cash_pct": 4.54
+          },
+          {
+            "year_month": "2023-02",
+            "date": "2023-02-28",
+            "portfolio_equity": 48174.16,
+            "monthly_net_return": 0.006307136417007531,
+            "benchmark_return": -0.02611249393181858,
+            "excess_return": 0.03241963034882611,
+            "holdings_count": 20,
+            "cash_pct": 5.88
+          },
+          {
+            "year_month": "2023-03",
+            "date": "2023-03-31",
+            "portfolio_equity": 49268.42,
+            "monthly_net_return": 0.02271466919576448,
+            "benchmark_return": 0.03505161257710898,
+            "excess_return": -0.0123369433813445,
+            "holdings_count": 20,
+            "cash_pct": 3.27
+          },
+          {
+            "year_month": "2023-04",
+            "date": "2023-04-28",
+            "portfolio_equity": 51704.21,
+            "monthly_net_return": 0.049439109362483524,
+            "benchmark_return": 0.014642341662481018,
+            "excess_return": 0.03479676770000251,
+            "holdings_count": 20,
+            "cash_pct": 2.96
+          },
+          {
+            "year_month": "2023-05",
+            "date": "2023-05-31",
+            "portfolio_equity": 55164.31,
+            "monthly_net_return": 0.06692116235997969,
+            "benchmark_return": 0.002482347368192972,
+            "excess_return": 0.06443881499178672,
+            "holdings_count": 20,
+            "cash_pct": 2.77
+          },
+          {
+            "year_month": "2023-06",
+            "date": "2023-06-30",
+            "portfolio_equity": 60528.87,
+            "monthly_net_return": 0.09724692377950528,
+            "benchmark_return": 0.06472746490423464,
+            "excess_return": 0.032519458875270635,
+            "holdings_count": 20,
+            "cash_pct": 3.12
+          },
+          {
+            "year_month": "2023-07",
+            "date": "2023-07-31",
+            "portfolio_equity": 62825.61,
+            "monthly_net_return": 0.0379443923930991,
+            "benchmark_return": 0.031138932355010862,
+            "excess_return": 0.00680546003808824,
+            "holdings_count": 20,
+            "cash_pct": 3.95
+          },
+          {
+            "year_month": "2023-08",
+            "date": "2023-08-31",
+            "portfolio_equity": 63568.39,
+            "monthly_net_return": 0.011822980723526166,
+            "benchmark_return": -0.017716390070854016,
+            "excess_return": 0.029539370794380182,
+            "holdings_count": 20,
+            "cash_pct": 4.51
+          },
+          {
+            "year_month": "2023-09",
+            "date": "2023-09-29",
+            "portfolio_equity": 59079.61,
+            "monthly_net_return": -0.07061346103156352,
+            "benchmark_return": -0.048719367465624885,
+            "excess_return": -0.021894093565938633,
+            "holdings_count": 20,
+            "cash_pct": 3.87
+          },
+          {
+            "year_month": "2023-10",
+            "date": "2023-10-31",
+            "portfolio_equity": 57903.34,
+            "monthly_net_return": -0.019909822674324507,
+            "benchmark_return": -0.02197968873798295,
+            "excess_return": 0.002069866063658443,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2023-11",
+            "date": "2023-11-30",
+            "portfolio_equity": 57604.31,
+            "monthly_net_return": -0.00516438055415569,
+            "benchmark_return": 0.08917926878197013,
+            "excess_return": -0.09434364933612582,
+            "holdings_count": 20,
+            "cash_pct": 4.18
+          },
+          {
+            "year_month": "2023-12",
+            "date": "2023-12-29",
+            "portfolio_equity": 61658.97,
+            "monthly_net_return": 0.070388234788066,
+            "benchmark_return": 0.04422923115636013,
+            "excess_return": 0.02615900363170587,
+            "holdings_count": 20,
+            "cash_pct": 3.09
+          },
+          {
+            "year_month": "2024-01",
+            "date": "2024-01-31",
+            "portfolio_equity": 64594.77,
+            "monthly_net_return": 0.04761339494619454,
+            "benchmark_return": 0.015895707598991615,
+            "excess_return": 0.03171768734720293,
+            "holdings_count": 20,
+            "cash_pct": 2.55
+          },
+          {
+            "year_month": "2024-02",
+            "date": "2024-02-29",
+            "portfolio_equity": 74936.18,
+            "monthly_net_return": 0.16009672736417557,
+            "benchmark_return": 0.05172064062372317,
+            "excess_return": 0.1083760867404524,
+            "holdings_count": 20,
+            "cash_pct": 3.76
+          },
+          {
+            "year_month": "2024-03",
+            "date": "2024-03-28",
+            "portfolio_equity": 78063.47,
+            "monthly_net_return": 0.04173267226592059,
+            "benchmark_return": 0.031018779915342964,
+            "excess_return": 0.010713892350577625,
+            "holdings_count": 20,
+            "cash_pct": 3.32
+          },
+          {
+            "year_month": "2024-04",
+            "date": "2024-04-30",
+            "portfolio_equity": 70978.04,
+            "monthly_net_return": -0.09076497416528395,
+            "benchmark_return": -0.04161507173789869,
+            "excess_return": -0.04914990242738526,
+            "holdings_count": 20,
+            "cash_pct": 3.73
+          },
+          {
+            "year_month": "2024-05",
+            "date": "2024-05-31",
+            "portfolio_equity": 75712.87,
+            "monthly_net_return": 0.0667084072815134,
+            "benchmark_return": 0.0480211901511991,
+            "excess_return": 0.018687217130314293,
+            "holdings_count": 20,
+            "cash_pct": 4.5
+          },
+          {
+            "year_month": "2024-06",
+            "date": "2024-06-28",
+            "portfolio_equity": 76891.17,
+            "monthly_net_return": 0.015562812415673477,
+            "benchmark_return": 0.03466980128308328,
+            "excess_return": -0.019106988867409802,
+            "holdings_count": 20,
+            "cash_pct": 3.98
+          },
+          {
+            "year_month": "2024-07",
+            "date": "2024-07-31",
+            "portfolio_equity": 75164.83,
+            "monthly_net_return": -0.022451758482970763,
+            "benchmark_return": 0.011321316887868749,
+            "excess_return": -0.03377307537083951,
+            "holdings_count": 20,
+            "cash_pct": 3.89
+          },
+          {
+            "year_month": "2024-08",
+            "date": "2024-08-30",
+            "portfolio_equity": 76843.84,
+            "monthly_net_return": 0.02233772864280814,
+            "benchmark_return": 0.022834706936630367,
+            "excess_return": -0.0004969782938222256,
+            "holdings_count": 20,
+            "cash_pct": 3.64
+          },
+          {
+            "year_month": "2024-09",
+            "date": "2024-09-30",
+            "portfolio_equity": 77840.39,
+            "monthly_net_return": 0.012968519719515292,
+            "benchmark_return": 0.020196884090601275,
+            "excess_return": -0.007228364371085982,
+            "holdings_count": 20,
+            "cash_pct": 3.72
+          },
+          {
+            "year_month": "2024-10",
+            "date": "2024-10-31",
+            "portfolio_equity": 75787.44,
+            "monthly_net_return": -0.026373841976464085,
+            "benchmark_return": -0.009896743303151712,
+            "excess_return": -0.016477098673312374,
+            "holdings_count": 20,
+            "cash_pct": 4.15
+          },
+          {
+            "year_month": "2024-11",
+            "date": "2024-11-29",
+            "portfolio_equity": 82833.56,
+            "monthly_net_return": 0.09297201526009924,
+            "benchmark_return": 0.057301295482098835,
+            "excess_return": 0.035670719778000404,
+            "holdings_count": 20,
+            "cash_pct": 3.24
+          },
+          {
+            "year_month": "2024-12",
+            "date": "2024-12-31",
+            "portfolio_equity": 79668.13,
+            "monthly_net_return": -0.03821429750977712,
+            "benchmark_return": -0.02499013704848363,
+            "excess_return": -0.013224160461293488,
+            "holdings_count": 20,
+            "cash_pct": 4.41
+          },
+          {
+            "year_month": "2025-01",
+            "date": "2025-01-31",
+            "portfolio_equity": 82467.77,
+            "monthly_net_return": 0.0351412884489406,
+            "benchmark_return": 0.0270163042404441,
+            "excess_return": 0.0081249842084965,
+            "holdings_count": 20,
+            "cash_pct": 4.11
+          },
+          {
+            "year_month": "2025-02",
+            "date": "2025-02-28",
+            "portfolio_equity": 77869.43,
+            "monthly_net_return": -0.05575920435712223,
+            "benchmark_return": -0.014242092699825126,
+            "excess_return": -0.0415171116572971,
+            "holdings_count": 20,
+            "cash_pct": 5.47
+          },
+          {
+            "year_month": "2025-03",
+            "date": "2025-03-31",
+            "portfolio_equity": 69957.98,
+            "monthly_net_return": -0.10159896692850656,
+            "benchmark_return": -0.05754469768137538,
+            "excess_return": -0.044054269247131184,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-04",
+            "date": "2025-04-30",
+            "portfolio_equity": 69957.98,
+            "monthly_net_return": 0.0,
+            "benchmark_return": -0.007624943346289825,
+            "excess_return": 0.007624943346289825,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2025-05",
+            "date": "2025-05-30",
+            "portfolio_equity": 69928.41,
+            "monthly_net_return": -0.00042268317161398006,
+            "benchmark_return": 0.06152382614078289,
+            "excess_return": -0.06194650931239687,
+            "holdings_count": 20,
+            "cash_pct": 4.2
+          },
+          {
+            "year_month": "2025-06",
+            "date": "2025-06-30",
+            "portfolio_equity": 72188.31,
+            "monthly_net_return": 0.032317373775653246,
+            "benchmark_return": 0.049606839467715824,
+            "excess_return": -0.017289465692062578,
+            "holdings_count": 20,
+            "cash_pct": 5.19
+          },
+          {
+            "year_month": "2025-07",
+            "date": "2025-07-31",
+            "portfolio_equity": 74903.11,
+            "monthly_net_return": 0.03760724951283789,
+            "benchmark_return": 0.0216665625306407,
+            "excess_return": 0.015940686982197194,
+            "holdings_count": 20,
+            "cash_pct": 5.77
+          },
+          {
+            "year_month": "2025-08",
+            "date": "2025-08-29",
+            "portfolio_equity": 76040.33,
+            "monthly_net_return": 0.015182435565687324,
+            "benchmark_return": 0.019066444295036122,
+            "excess_return": -0.003884008729348798,
+            "holdings_count": 20,
+            "cash_pct": 5.52
+          },
+          {
+            "year_month": "2025-09",
+            "date": "2025-09-30",
+            "portfolio_equity": 79572.99,
+            "monthly_net_return": 0.046457811746098754,
+            "benchmark_return": 0.035323687218701494,
+            "excess_return": 0.01113412452739726,
+            "holdings_count": 20,
+            "cash_pct": 4.83
+          },
+          {
+            "year_month": "2025-10",
+            "date": "2025-10-31",
+            "portfolio_equity": 80273.89,
+            "monthly_net_return": 0.008808162625981275,
+            "benchmark_return": 0.0226868719049238,
+            "excess_return": -0.013878709278942525,
+            "holdings_count": 20,
+            "cash_pct": 4.67
+          },
+          {
+            "year_month": "2025-11",
+            "date": "2025-11-28",
+            "portfolio_equity": 78289.1,
+            "monthly_net_return": -0.024725147762794664,
+            "benchmark_return": 0.0012996181666717899,
+            "excess_return": -0.026024765929466454,
+            "holdings_count": 20,
+            "cash_pct": 4.03
+          },
+          {
+            "year_month": "2025-12",
+            "date": "2025-12-31",
+            "portfolio_equity": 77943.78,
+            "monthly_net_return": -0.0044108301319512044,
+            "benchmark_return": -0.0005241344225139777,
+            "excess_return": -0.0038866957094372268,
+            "holdings_count": 20,
+            "cash_pct": 4.23
+          },
+          {
+            "year_month": "2026-01",
+            "date": "2026-01-30",
+            "portfolio_equity": 79353.34,
+            "monthly_net_return": 0.018084232195153982,
+            "benchmark_return": 0.013662958900920286,
+            "excess_return": 0.004421273294233696,
+            "holdings_count": 20,
+            "cash_pct": 4.9
+          },
+          {
+            "year_month": "2026-02",
+            "date": "2026-02-27",
+            "portfolio_equity": 78289.49,
+            "monthly_net_return": -0.013406446045843734,
+            "benchmark_return": -0.008668344740704326,
+            "excess_return": -0.004738101305139408,
+            "holdings_count": 20,
+            "cash_pct": 5.69
+          },
+          {
+            "year_month": "2026-03",
+            "date": "2026-03-31",
+            "portfolio_equity": 75368.89,
+            "monthly_net_return": -0.03730507734388966,
+            "benchmark_return": -0.050932690968577,
+            "excess_return": 0.01362761362468734,
+            "holdings_count": 0,
+            "cash_pct": 100.0
+          },
+          {
+            "year_month": "2026-04",
+            "date": "2026-04-30",
+            "portfolio_equity": 74688.89,
+            "monthly_net_return": -0.009022406179491016,
+            "benchmark_return": 0.10423338582985764,
+            "excess_return": -0.11325579200934865,
+            "holdings_count": 20,
+            "cash_pct": 4.64
+          },
+          {
+            "year_month": "2026-05",
+            "date": "2026-05-29",
+            "portfolio_equity": 79258.93,
+            "monthly_net_return": 0.06118773215071327,
+            "benchmark_return": 0.05147035515724263,
+            "excess_return": 0.009717376993470639,
+            "holdings_count": 20,
+            "cash_pct": 4.82
+          },
+          {
+            "year_month": "2026-06",
+            "date": "2026-06-30",
+            "portfolio_equity": 81121.74,
+            "monthly_net_return": 0.023502850796905506,
+            "benchmark_return": -0.010646379407113993,
+            "excess_return": 0.0341492302040195,
+            "holdings_count": 20,
+            "cash_pct": 4.41
+          },
+          {
+            "year_month": "2026-07",
+            "date": "2026-07-31",
+            "portfolio_equity": 79519.42,
+            "monthly_net_return": -0.01975198262407174,
+            "benchmark_return": -0.0012853961689047733,
+            "excess_return": -0.018466586455166967,
+            "holdings_count": 20,
+            "cash_pct": 5.99
+          },
+          {
+            "year_month": "2026-08",
+            "date": "2026-08-31",
+            "portfolio_equity": 79986.02,
+            "monthly_net_return": 0.0058677503341508785,
+            "benchmark_return": 0.026225268266459212,
+            "excess_return": -0.020357517932308333,
+            "holdings_count": 20,
+            "cash_pct": 6.13
+          },
+          {
+            "year_month": "2026-09",
+            "date": "2026-09-30",
+            "portfolio_equity": 80549.64,
+            "monthly_net_return": 0.007046467268910783,
+            "benchmark_return": -0.0045016220158354825,
+            "excess_return": 0.011548089284746266,
+            "holdings_count": 20,
+            "cash_pct": 5.22
+          },
+          {
+            "year_month": "2026-10",
+            "date": "2026-10-30",
+            "portfolio_equity": 82803.85,
+            "monthly_net_return": 0.02798528655422139,
+            "benchmark_return": -0.009340631360338136,
+            "excess_return": 0.037325917914559525,
+            "holdings_count": 20,
+            "cash_pct": 5.09
+          }
+        ],
+        "bootstrap_95ci": {
+          "ci_lower_pct": -1.144,
+          "ci_upper_pct": 0.843,
+          "mean_pct": -0.183,
+          "n_resamples": 2000,
+          "block_length": 6
+        }
+      }
+    },
+    "C1a_practical_scale_india": {
+      "status": "COMPLETED",
+      "market": "IN",
+      "capital": 17500.0,
+      "regime_filtered": false,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 29481.39,
+      "cum_net_return_pct": 68.47,
+      "annualized_net_return_pct": 13.06,
+      "annualized_benchmark_return_pct": 7.2,
+      "annualized_excess_return_pct": 5.86,
+      "max_drawdown_pct": 16.65,
+      "benchmark_max_drawdown_pct": 14.78,
+      "drawdown_ratio": 1.13,
+      "volatility_pct": 15.59,
+      "sharpe_ratio": 0.52,
+      "total_costs_paid": 1786.28,
+      "cost_drag_pct_of_capital": 10.21,
+      "avg_monthly_turnover": 12914.89,
+      "yearly_performance": {
+        "2022": {
+          "months": 5,
+          "portfolio_return": 8.05,
+          "benchmark_return": 5.52,
+          "excess_return": 2.53
+        },
+        "2023": {
+          "months": 12,
+          "portfolio_return": 29.29,
+          "benchmark_return": 20.03,
+          "excess_return": 9.26
+        },
+        "2024": {
+          "months": 12,
+          "portfolio_return": 29.83,
+          "benchmark_return": 8.8,
+          "excess_return": 21.03
+        },
+        "2025": {
+          "months": 12,
+          "portfolio_return": -1.84,
+          "benchmark_return": 10.51,
+          "excess_return": -12.35
+        },
+        "2026": {
+          "months": 10,
+          "portfolio_return": -5.38,
+          "benchmark_return": -11.77,
+          "excess_return": 6.4
+        }
+      },
+      "positive_calendar_years": "3/4",
+      "calendar_year_consistency_passed": true,
+      "monthly_returns": [
+        {
+          "year_month": "2022-08",
+          "date": "2022-08-30",
+          "portfolio_equity": 17533.34,
+          "monthly_net_return": 0.0019053796671304468,
+          "benchmark_return": 0.035029841694228736,
+          "excess_return": -0.03312446202709829,
+          "holdings_count": 5,
+          "cash_pct": 9.16
+        },
+        {
+          "year_month": "2022-09",
+          "date": "2022-09-30",
+          "portfolio_equity": 18333.72,
+          "monthly_net_return": 0.04564893119920921,
+          "benchmark_return": -0.03744241848626417,
+          "excess_return": 0.08309134968547338,
+          "holdings_count": 5,
+          "cash_pct": 10.64
+        },
+        {
+          "year_month": "2022-10",
+          "date": "2022-10-31",
+          "portfolio_equity": 19218.05,
+          "monthly_net_return": 0.048234912664587126,
+          "benchmark_return": 0.053693157701163896,
+          "excess_return": -0.00545824503657677,
+          "holdings_count": 4,
+          "cash_pct": 26.12
+        },
+        {
+          "year_month": "2022-11",
+          "date": "2022-11-30",
+          "portfolio_equity": 19619.64,
+          "monthly_net_return": 0.020896745662553062,
+          "benchmark_return": 0.04142472451938506,
+          "excess_return": -0.020527978856831997,
+          "holdings_count": 5,
+          "cash_pct": 3.63
+        },
+        {
+          "year_month": "2022-12",
+          "date": "2022-12-30",
+          "portfolio_equity": 18909.2,
+          "monthly_net_return": -0.03621076598383821,
+          "benchmark_return": -0.034813767827347686,
+          "excess_return": -0.0013969981564905254,
+          "holdings_count": 5,
+          "cash_pct": 5.97
+        },
+        {
+          "year_month": "2023-01",
+          "date": "2023-01-31",
+          "portfolio_equity": 18588.32,
+          "monthly_net_return": -0.0169697410638896,
+          "benchmark_return": -0.024476278852209377,
+          "excess_return": 0.007506537788319778,
+          "holdings_count": 5,
+          "cash_pct": 14.87
+        },
+        {
+          "year_month": "2023-02",
+          "date": "2023-02-28",
+          "portfolio_equity": 17310.76,
+          "monthly_net_return": -0.068729224720119,
+          "benchmark_return": -0.02028072255941904,
+          "excess_return": -0.04844850216069996,
+          "holdings_count": 5,
+          "cash_pct": 12.63
+        },
+        {
+          "year_month": "2023-03",
+          "date": "2023-03-31",
+          "portfolio_equity": 17886.53,
+          "monthly_net_return": 0.03326131659184828,
+          "benchmark_return": 0.003224742545449466,
+          "excess_return": 0.030036574046398812,
+          "holdings_count": 4,
+          "cash_pct": 26.34
+        },
+        {
+          "year_month": "2023-04",
+          "date": "2023-04-28",
+          "portfolio_equity": 18821.36,
+          "monthly_net_return": 0.0522642290619324,
+          "benchmark_return": 0.04062558504586766,
+          "excess_return": 0.011638644016064736,
+          "holdings_count": 5,
+          "cash_pct": 4.3
+        },
+        {
+          "year_month": "2023-05",
+          "date": "2023-05-31",
+          "portfolio_equity": 20363.99,
+          "monthly_net_return": 0.08196163410651147,
+          "benchmark_return": 0.02598396848187101,
+          "excess_return": 0.05597766562464046,
+          "holdings_count": 5,
+          "cash_pct": 7.76
+        },
+        {
+          "year_month": "2023-06",
+          "date": "2023-06-30",
+          "portfolio_equity": 21344.68,
+          "monthly_net_return": 0.04815793328497997,
+          "benchmark_return": 0.035320829205574666,
+          "excess_return": 0.012837104079405304,
+          "holdings_count": 5,
+          "cash_pct": 8.05
+        },
+        {
+          "year_month": "2023-07",
+          "date": "2023-07-31",
+          "portfolio_equity": 21940.4,
+          "monthly_net_return": 0.02790985465956708,
+          "benchmark_return": 0.029430846081861972,
+          "excess_return": -0.0015209914222948928,
+          "holdings_count": 4,
+          "cash_pct": 23.56
+        },
+        {
+          "year_month": "2023-08",
+          "date": "2023-08-31",
+          "portfolio_equity": 22124.41,
+          "monthly_net_return": 0.008386433718057695,
+          "benchmark_return": -0.02531158461791272,
+          "excess_return": 0.033698018335970414,
+          "holdings_count": 4,
+          "cash_pct": 30.35
+        },
+        {
+          "year_month": "2023-09",
+          "date": "2023-09-29",
+          "portfolio_equity": 22005.6,
+          "monthly_net_return": -0.005369754857940112,
+          "benchmark_return": 0.01997008301729397,
+          "excess_return": -0.025339837875234084,
+          "holdings_count": 4,
+          "cash_pct": 34.54
+        },
+        {
+          "year_month": "2023-10",
+          "date": "2023-10-31",
+          "portfolio_equity": 21492.95,
+          "monthly_net_return": -0.02329633240959028,
+          "benchmark_return": -0.02844956791824016,
+          "excess_return": 0.005153235508649878,
+          "holdings_count": 4,
+          "cash_pct": 28.66
+        },
+        {
+          "year_month": "2023-11",
+          "date": "2023-11-30",
+          "portfolio_equity": 23428.39,
+          "monthly_net_return": 0.09004981543120216,
+          "benchmark_return": 0.05521870494244152,
+          "excess_return": 0.03483111048876064,
+          "holdings_count": 4,
+          "cash_pct": 33.5
+        },
+        {
+          "year_month": "2023-12",
+          "date": "2023-12-29",
+          "portfolio_equity": 24447.14,
+          "monthly_net_return": 0.04348341272880307,
+          "benchmark_return": 0.07938399947303942,
+          "excess_return": -0.03590058674423635,
+          "holdings_count": 4,
+          "cash_pct": 27.71
+        },
+        {
+          "year_month": "2024-01",
+          "date": "2024-01-31",
+          "portfolio_equity": 25490.02,
+          "monthly_net_return": 0.04265891807773636,
+          "benchmark_return": -0.0002623471921975318,
+          "excess_return": 0.042921265269933895,
+          "holdings_count": 5,
+          "cash_pct": 11.61
+        },
+        {
+          "year_month": "2024-02",
+          "date": "2024-02-29",
+          "portfolio_equity": 26868.02,
+          "monthly_net_return": 0.054060308163260906,
+          "benchmark_return": 0.011833983335188147,
+          "excess_return": 0.04222632482807276,
+          "holdings_count": 4,
+          "cash_pct": 30.48
+        },
+        {
+          "year_month": "2024-03",
+          "date": "2024-03-28",
+          "portfolio_equity": 27336.2,
+          "monthly_net_return": 0.017425235741248324,
+          "benchmark_return": 0.01565312867996771,
+          "excess_return": 0.0017721070612806145,
+          "holdings_count": 4,
+          "cash_pct": 25.86
+        },
+        {
+          "year_month": "2024-04",
+          "date": "2024-04-30",
+          "portfolio_equity": 29083.13,
+          "monthly_net_return": 0.06390512054171582,
+          "benchmark_return": 0.012449073265302424,
+          "excess_return": 0.0514560472764134,
+          "holdings_count": 3,
+          "cash_pct": 51.72
+        },
+        {
+          "year_month": "2024-05",
+          "date": "2024-05-31",
+          "portfolio_equity": 29891.5,
+          "monthly_net_return": 0.027795254764516386,
+          "benchmark_return": -0.0032802868369559146,
+          "excess_return": 0.0310755416014723,
+          "holdings_count": 4,
+          "cash_pct": 33.11
+        },
+        {
+          "year_month": "2024-06",
+          "date": "2024-06-28",
+          "portfolio_equity": 31382.31,
+          "monthly_net_return": 0.04987384371093806,
+          "benchmark_return": 0.06568373117304005,
+          "excess_return": -0.01580988746210199,
+          "holdings_count": 4,
+          "cash_pct": 36.62
+        },
+        {
+          "year_month": "2024-07",
+          "date": "2024-07-31",
+          "portfolio_equity": 32360.16,
+          "monthly_net_return": 0.031159438283176355,
+          "benchmark_return": 0.03917231541701116,
+          "excess_return": -0.008012877133834806,
+          "holdings_count": 4,
+          "cash_pct": 37.17
+        },
+        {
+          "year_month": "2024-08",
+          "date": "2024-08-30",
+          "portfolio_equity": 32827.03,
+          "monthly_net_return": 0.01442728966578044,
+          "benchmark_return": 0.011412299454817587,
+          "excess_return": 0.0030149902109628535,
+          "holdings_count": 4,
+          "cash_pct": 35.72
+        },
+        {
+          "year_month": "2024-09",
+          "date": "2024-09-30",
+          "portfolio_equity": 32665.84,
+          "monthly_net_return": -0.004910286227375105,
+          "benchmark_return": 0.022782988118133174,
+          "excess_return": -0.02769327434550828,
+          "holdings_count": 3,
+          "cash_pct": 53.74
+        },
+        {
+          "year_month": "2024-10",
+          "date": "2024-10-31",
+          "portfolio_equity": 32059.03,
+          "monthly_net_return": -0.01857633893919508,
+          "benchmark_return": -0.062202524298806905,
+          "excess_return": 0.043626185359611824,
+          "holdings_count": 3,
+          "cash_pct": 54.76
+        },
+        {
+          "year_month": "2024-11",
+          "date": "2024-11-29",
+          "portfolio_equity": 31624.18,
+          "monthly_net_return": -0.01356387359416844,
+          "benchmark_return": -0.003067503721212228,
+          "excess_return": -0.010496369872956213,
+          "holdings_count": 4,
+          "cash_pct": 30.61
+        },
+        {
+          "year_month": "2024-12",
+          "date": "2024-12-31",
+          "portfolio_equity": 31740.1,
+          "monthly_net_return": 0.0036655554041493676,
+          "benchmark_return": -0.020152369183212504,
+          "excess_return": 0.02381792458736187,
+          "holdings_count": 4,
+          "cash_pct": 35.86
+        },
+        {
+          "year_month": "2025-01",
+          "date": "2025-01-31",
+          "portfolio_equity": 30357.19,
+          "monthly_net_return": -0.04356978527791444,
+          "benchmark_return": -0.005768726574899463,
+          "excess_return": -0.03780105870301498,
+          "holdings_count": 4,
+          "cash_pct": 33.14
+        },
+        {
+          "year_month": "2025-02",
+          "date": "2025-02-28",
+          "portfolio_equity": 28137.79,
+          "monthly_net_return": -0.07310960889542717,
+          "benchmark_return": -0.058859860683111886,
+          "excess_return": -0.014249748212315283,
+          "holdings_count": 4,
+          "cash_pct": 25.98
+        },
+        {
+          "year_month": "2025-03",
+          "date": "2025-03-28",
+          "portfolio_equity": 29888.97,
+          "monthly_net_return": 0.062235681313549174,
+          "benchmark_return": 0.06303590285390537,
+          "excess_return": -0.0008002215403561941,
+          "holdings_count": 4,
+          "cash_pct": 24.76
+        },
+        {
+          "year_month": "2025-04",
+          "date": "2025-04-30",
+          "portfolio_equity": 30105.52,
+          "monthly_net_return": 0.007245366492609984,
+          "benchmark_return": 0.03464592443705139,
+          "excess_return": -0.027400557944441406,
+          "holdings_count": 4,
+          "cash_pct": 44.67
+        },
+        {
+          "year_month": "2025-05",
+          "date": "2025-05-30",
+          "portfolio_equity": 31551.51,
+          "monthly_net_return": 0.04803072610785075,
+          "benchmark_return": 0.017115829300808905,
+          "excess_return": 0.030914896807041847,
+          "holdings_count": 4,
+          "cash_pct": 48.04
+        },
+        {
+          "year_month": "2025-06",
+          "date": "2025-06-30",
+          "portfolio_equity": 33342.57,
+          "monthly_net_return": 0.056766025990059754,
+          "benchmark_return": 0.030962824756055607,
+          "excess_return": 0.025803201234004147,
+          "holdings_count": 5,
+          "cash_pct": 26.95
+        },
+        {
+          "year_month": "2025-07",
+          "date": "2025-07-31",
+          "portfolio_equity": 31027.05,
+          "monthly_net_return": -0.06944613973625735,
+          "benchmark_return": -0.029341211031532977,
+          "excess_return": -0.040104928704724374,
+          "holdings_count": 5,
+          "cash_pct": 28.64
+        },
+        {
+          "year_month": "2025-08",
+          "date": "2025-08-29",
+          "portfolio_equity": 30485.2,
+          "monthly_net_return": -0.017463894256152468,
+          "benchmark_return": -0.013787757577143567,
+          "excess_return": -0.003676136679008901,
+          "holdings_count": 5,
+          "cash_pct": 28.23
+        },
+        {
+          "year_month": "2025-09",
+          "date": "2025-09-30",
+          "portfolio_equity": 30451.55,
+          "monthly_net_return": -0.0011037770717450268,
+          "benchmark_return": 0.007542929315341729,
+          "excess_return": -0.008646706387086756,
+          "holdings_count": 3,
+          "cash_pct": 46.13
+        },
+        {
+          "year_month": "2025-10",
+          "date": "2025-10-31",
+          "portfolio_equity": 31438.72,
+          "monthly_net_return": 0.032417795253666615,
+          "benchmark_return": 0.04514223328634981,
+          "excess_return": -0.012724438032683194,
+          "holdings_count": 3,
+          "cash_pct": 41.32
+        },
+        {
+          "year_month": "2025-11",
+          "date": "2025-11-28",
+          "portfolio_equity": 31867.68,
+          "monthly_net_return": 0.013644204675445692,
+          "benchmark_return": 0.01869402640831641,
+          "excess_return": -0.0050498217328707184,
+          "holdings_count": 3,
+          "cash_pct": 41.37
+        },
+        {
+          "year_month": "2025-12",
+          "date": "2025-12-31",
+          "portfolio_equity": 31156.22,
+          "monthly_net_return": -0.022325526603150236,
+          "benchmark_return": -0.0027992883076883857,
+          "excess_return": -0.01952623829546185,
+          "holdings_count": 3,
+          "cash_pct": 42.92
+        },
+        {
+          "year_month": "2026-01",
+          "date": "2026-01-30",
+          "portfolio_equity": 31039.11,
+          "monthly_net_return": -0.003758717992857541,
+          "benchmark_return": -0.030959112686126167,
+          "excess_return": 0.027200394693268626,
+          "holdings_count": 5,
+          "cash_pct": 10.51
+        },
+        {
+          "year_month": "2026-02",
+          "date": "2026-02-27",
+          "portfolio_equity": 32541.43,
+          "monthly_net_return": 0.04840097782892583,
+          "benchmark_return": -0.00560807079634007,
+          "excess_return": 0.0540090486252659,
+          "holdings_count": 5,
+          "cash_pct": 3.12
+        },
+        {
+          "year_month": "2026-03",
+          "date": "2026-03-30",
+          "portfolio_equity": 27791.49,
+          "monthly_net_return": -0.14596594931450635,
+          "benchmark_return": -0.11308191486943808,
+          "excess_return": -0.032884034445068266,
+          "holdings_count": 4,
+          "cash_pct": 26.23
+        },
+        {
+          "year_month": "2026-04",
+          "date": "2026-04-30",
+          "portfolio_equity": 29410.88,
+          "monthly_net_return": 0.05826935609570172,
+          "benchmark_return": 0.07461020632295279,
+          "excess_return": -0.01634085022725107,
+          "holdings_count": 5,
+          "cash_pct": 3.95
+        },
+        {
+          "year_month": "2026-05",
+          "date": "2026-05-29",
+          "portfolio_equity": 31463.1,
+          "monthly_net_return": 0.06977754868602548,
+          "benchmark_return": -0.01874361201899999,
+          "excess_return": 0.08852116070502547,
+          "holdings_count": 4,
+          "cash_pct": 23.21
+        },
+        {
+          "year_month": "2026-06",
+          "date": "2026-06-30",
+          "portfolio_equity": 30917.98,
+          "monthly_net_return": -0.017325701927714987,
+          "benchmark_return": 0.013504474949835865,
+          "excess_return": -0.030830176877550852,
+          "holdings_count": 4,
+          "cash_pct": 23.04
+        },
+        {
+          "year_month": "2026-07",
+          "date": "2026-07-31",
+          "portfolio_equity": 31026.04,
+          "monthly_net_return": 0.0034947796070725623,
+          "benchmark_return": 0.021698442721263644,
+          "excess_return": -0.018203663114191082,
+          "holdings_count": 4,
+          "cash_pct": 27.68
+        },
+        {
+          "year_month": "2026-08",
+          "date": "2026-08-31",
+          "portfolio_equity": 31193.72,
+          "monthly_net_return": 0.005404725322144088,
+          "benchmark_return": -0.01243455534077198,
+          "excess_return": 0.01783928066291607,
+          "holdings_count": 5,
+          "cash_pct": 9.73
+        },
+        {
+          "year_month": "2026-09",
+          "date": "2026-09-30",
+          "portfolio_equity": 29686.3,
+          "monthly_net_return": -0.048324703881656994,
+          "benchmark_return": -0.06062819339346992,
+          "excess_return": 0.012303489511812926,
+          "holdings_count": 4,
+          "cash_pct": 28.34
+        },
+        {
+          "year_month": "2026-10",
+          "date": "2026-10-30",
+          "portfolio_equity": 29481.39,
+          "monthly_net_return": -0.006902493227022188,
+          "benchmark_return": 0.019126516296872564,
+          "excess_return": -0.026029009523894753,
+          "holdings_count": 4,
+          "cash_pct": 28.89
+        }
+      ]
+    },
+    "C2_existing_vcp": {
+      "India": {
+        "candidate": "Candidate C2 (VCP)",
+        "market": "IN",
+        "completed_trades": 7,
+        "net_pnl": -293.59,
+        "total_costs": 143.79,
+        "expectancy_r": -0.64,
+        "profit_factor": 0.08,
+        "max_drawdown_pct": 1.7,
+        "win_rate_pct": 14.3,
+        "gates": {
+          "gate_min_150_trades": false,
+          "gate_expectancy_gte_015R": false,
+          "gate_profit_factor_gte_130": false,
+          "gate_max_dd_lte_20pct": true,
+          "gate_untouched_holdout_verified": false
+        },
+        "verdict": "INCONCLUSIVE"
+      },
+      "US": {
+        "candidate": "Candidate C2 (VCP)",
+        "market": "US",
+        "completed_trades": 12,
+        "net_pnl": 642.53,
+        "total_costs": 212.33,
+        "expectancy_r": 0.72,
+        "profit_factor": 2.4,
+        "max_drawdown_pct": 1.9,
+        "win_rate_pct": 58.3,
+        "gates": {
+          "gate_min_150_trades": false,
+          "gate_expectancy_gte_015R": true,
+          "gate_profit_factor_gte_130": true,
+          "gate_max_dd_lte_20pct": true,
+          "gate_untouched_holdout_verified": false
+        },
+        "verdict": "INCONCLUSIVE"
+      }
+    }
+  },
+  "controls": {
+    "Control_A_55day_breakout": {
+      "India": {
+        "candidate": "Control A (55-Day Breakout)",
+        "market": "IN",
+        "completed_trades": 27,
+        "net_pnl": -1177.65,
+        "total_costs": 566.13,
+        "expectancy_r": -0.66,
+        "profit_factor": 0.15,
+        "max_drawdown_pct": 6.7,
+        "win_rate_pct": 18.5,
+        "gates": {
+          "gate_min_150_trades": false,
+          "gate_expectancy_gte_015R": false,
+          "gate_profit_factor_gte_130": false,
+          "gate_max_dd_lte_20pct": true,
+          "gate_untouched_holdout_verified": false
+        },
+        "verdict": "INCONCLUSIVE"
+      },
+      "US": {
+        "candidate": "Control A (55-Day Breakout)",
+        "market": "US",
+        "completed_trades": 43,
+        "net_pnl": -748.22,
+        "total_costs": 752.91,
+        "expectancy_r": -0.22,
+        "profit_factor": 0.67,
+        "max_drawdown_pct": 9.7,
+        "win_rate_pct": 23.3,
+        "gates": {
+          "gate_min_150_trades": false,
+          "gate_expectancy_gte_015R": false,
+          "gate_profit_factor_gte_130": false,
+          "gate_max_dd_lte_20pct": true,
+          "gate_untouched_holdout_verified": false
+        },
+        "verdict": "INCONCLUSIVE"
+      }
+    },
+    "Control_B_random_portfolios": {
+      "India": {
+        "n_simulations": 1000,
+        "random_p05_excess_pct": -2.16,
+        "random_p50_excess_pct": 1.35,
+        "random_p95_excess_pct": 5.19,
+        "candidate_excess_ann_pct": 5.47,
+        "candidate_percentile_rank": 96.0,
+        "passed_95th_percentile_gate": true
+      },
+      "US": {
+        "n_simulations": 1000,
+        "random_p05_excess_pct": -0.09,
+        "random_p50_excess_pct": 4.12,
+        "random_p95_excess_pct": 8.54,
+        "candidate_excess_ann_pct": 9.47,
+        "candidate_percentile_rank": 97.6,
+        "passed_95th_percentile_gate": true
+      }
+    }
+  },
+  "sensitivity": {
+    "C1a_India": {
+      "costs_plus_25pct": {
+        "annualized_net_return_pct": 12.54,
+        "annualized_excess_return_pct": 5.34,
+        "max_drawdown_pct": 22.68
+      },
+      "slippage_times_2": {
+        "annualized_net_return_pct": 12.06,
+        "annualized_excess_return_pct": 4.86,
+        "max_drawdown_pct": 22.79
+      },
+      "lookback_10m": {
+        "annualized_net_return_pct": 16.05,
+        "annualized_excess_return_pct": 8.31,
+        "max_drawdown_pct": 21.3
+      },
+      "lookback_14m": {
+        "annualized_net_return_pct": 10.42,
+        "annualized_excess_return_pct": 2.83,
+        "max_drawdown_pct": 23.1
+      },
+      "portfolio_size_16": {
+        "annualized_net_return_pct": 13.14,
+        "annualized_excess_return_pct": 5.95,
+        "max_drawdown_pct": 23.64
+      },
+      "portfolio_size_24": {
+        "annualized_net_return_pct": 12.92,
+        "annualized_excess_return_pct": 5.72,
+        "max_drawdown_pct": 22.23
+      }
+    }
+  },
+  "verdicts": {
+    "C1a_India": {
+      "gate_1_ann_excess_gte_2pct": true,
+      "gate_2_bootstrap_ci_lower_gt_0": false,
+      "gate_3_max_dd_lte_12x_bench": false,
+      "gate_4_calendar_consistency_gte_60pct": true,
+      "gate_5_untouched_holdout_positive": false,
+      "gate_6_cost_sensitivity_positive": true,
+      "gate_7_beat_random_control_95th": true,
+      "gate_8_parameter_sensitivity_robust": true,
+      "verdict": "FAIL"
+    },
+    "C1b_India": {
+      "gate_1_ann_excess_gte_2pct": true,
+      "gate_2_bootstrap_ci_lower_gt_0": true,
+      "gate_3_max_dd_lte_12x_bench": true,
+      "gate_4_calendar_consistency_gte_60pct": true,
+      "gate_5_untouched_holdout_positive": false,
+      "gate_6_cost_sensitivity_positive": true,
+      "gate_7_beat_random_control_95th": true,
+      "gate_8_parameter_sensitivity_robust": true,
+      "verdict": "FAIL"
+    },
+    "C1a_US": {
+      "gate_1_ann_excess_gte_2pct": true,
+      "gate_2_bootstrap_ci_lower_gt_0": false,
+      "gate_3_max_dd_lte_12x_bench": true,
+      "gate_4_calendar_consistency_gte_60pct": true,
+      "gate_5_untouched_holdout_positive": false,
+      "gate_6_cost_sensitivity_positive": true,
+      "gate_7_beat_random_control_95th": true,
+      "gate_8_parameter_sensitivity_robust": true,
+      "verdict": "FAIL"
+    },
+    "C1b_US": {
+      "gate_1_ann_excess_gte_2pct": false,
+      "gate_2_bootstrap_ci_lower_gt_0": false,
+      "gate_3_max_dd_lte_12x_bench": true,
+      "gate_4_calendar_consistency_gte_60pct": false,
+      "gate_5_untouched_holdout_positive": false,
+      "gate_6_cost_sensitivity_positive": true,
+      "gate_7_beat_random_control_95th": true,
+      "gate_8_parameter_sensitivity_robust": true,
+      "verdict": "FAIL"
+    },
+    "C2_India": "INCONCLUSIVE",
+    "C2_US": "INCONCLUSIVE",
+    "Control_A_India": "INCONCLUSIVE",
+    "Control_A_US": "INCONCLUSIVE"
+  }
+}
