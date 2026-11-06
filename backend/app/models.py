@@ -35,7 +35,41 @@ class Instrument(Base):
     industry = Column(String(100), nullable=True)
     provider_token = Column(String(50), nullable=True)  # Angel One token, etc.
     active = Column(Boolean, default=True)
+    series = Column(String(10), default="EQ", nullable=True)
+    universe_tier = Column(String(20), default="Small", nullable=True)  # Large, Mid, Small
+    is_higher_risk = Column(Boolean, default=False, nullable=True)
+    status = Column(String(50), default="SCANNED", nullable=True)  # SCANNED | NO_DATA | INSUFFICIENT_HISTORY (<252 bars) | ILLIQUID | PRICE_FLOOR | VOLATILITY_CAP | SERIES_EXCLUDED | DATA_ERROR
+    status_reason = Column(String(255), nullable=True)
+    last_scanned_at = Column(DateTime(timezone=True), nullable=True)
+    avg_turnover_20d = Column(Float, nullable=True)
+    last_price = Column(Float, nullable=True)
+    atr_pct = Column(Float, nullable=True)
     added_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+
+class FundamentalSnapshot(Base):
+    __tablename__ = "fundamental_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    market = Column(String(10), nullable=False, default="IN")
+    as_of = Column(Date, nullable=False, default=datetime.date.today)
+    period_end = Column(String(50), nullable=True)
+    source = Column(String(50), nullable=False, default="yfinance")  # yfinance, owner_csv, screener, manual
+    revenue_yoy = Column(Float, nullable=True)
+    profit_yoy = Column(Float, nullable=True)
+    op_margin = Column(Float, nullable=True)
+    roce = Column(Float, nullable=True)
+    roe = Column(Float, nullable=True)
+    debt_equity = Column(Float, nullable=True)
+    interest_coverage = Column(Float, nullable=True)
+    pe = Column(Float, nullable=True)
+    sector_median_pe = Column(Float, nullable=True)
+    promoter_holding = Column(Float, nullable=True)
+    pledge_pct = Column(Float, nullable=True)
+    completeness = Column(String(20), nullable=False, default="NONE")  # COMPLETE | PARTIAL | NONE
+    lights_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
 
 class DailyBar(Base):

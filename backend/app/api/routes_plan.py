@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.engine.planner import TradePlan, planner
+from app.engine.value_radar import value_radar_engine
 from app.models import Position, Scan, Signal
 from app.providers.manager import provider_manager
 
@@ -132,14 +133,41 @@ def get_trade_plan(
         else:
             candidate_dicts.append(item)
 
+    regime_detail = json.loads(scan_row.regime_detail_json) if scan_row.regime_detail_json else {}
+    regime_allows_entries = regime_detail.get("allows_entries", True)
+
+    all_opps = sig_dicts + shadow_dicts + candidate_dicts
+    scanned_count = scan_row.passed_filters
+    trend_pass_count = sum(
+        1 for s in all_opps
+        if any(stage.get("stage_name") == "Setup Validator" and any("Trend Template" in r or "SMA" in r for r in stage.get("rejection_reasons", [])) is False for stage in s.get("decision_stages", []))
+    )
+    trend_count = min(scanned_count, trend_pass_count)
+    setup_count = min(trend_count, sum(1 for s in all_opps if s.get("setup") not in ("MONITORING", None, "")))
+    fund_count = min(setup_count, sum(1 for s in all_opps if (s.get("fundamentals") or {}).get("red_count", 0) == 0 and s.get("setup") not in ("MONITORING", None, "")))
+    news_count = min(fund_count, sum(1 for s in all_opps if (s.get("news_coverage") or {}).get("status") == "CLEAR" and s.get("setup") not in ("MONITORING", None, "")))
+    risk_count = min(news_count, sum(1 for s in all_opps if any(st.get("stage_name") == "Risk Validator" and st.get("status") == "PASS" for st in s.get("decision_stages", [])) and regime_allows_entries))
+    pass_count = min(risk_count, len(sig_dicts))
+
+    funnel = [
+        {"key": "ALL", "label": "Scanned", "count": scanned_count, "denominator": scan_row.universe_size, "tooltip": "Eligible instruments passing price floor, liquidity ADV, volatility cap and affordability filters"},
+        {"key": "TREND", "label": "Trend OK", "count": trend_count, "denominator": scanned_count or 1, "tooltip": "Passing Minervini Stage 2 Trend Template rules (SMA50/150/200, 52w high/low, RS Rank >= 0.70)"},
+        {"key": "SETUPS", "label": "Valid Setups" if regime_allows_entries else "Patterns (blocked by regime)", "count": setup_count, "denominator": trend_count or 1, "tooltip": "Consolidation structure formed: tight VCP contraction or EMA pullback"},
+        {"key": "FUNDAMENTALS", "label": "Fundamentals OK", "count": fund_count, "denominator": setup_count or 1, "tooltip": "Fundamental health check has 0 RED traffic lights (mode: warn)"},
+        {"key": "NEWS", "label": "News Clear", "count": news_count, "denominator": fund_count or 1, "tooltip": "No high-risk corporate disclosures, earnings blackout, or adverse news events"},
+        {"key": "RISK", "label": "Risk OK", "count": risk_count, "denominator": news_count or 1, "tooltip": "Passes portfolio heat, sector limits, cost drag gate <= 0.25R, and regime allow_entries"},
+        {"key": "PASS", "label": "PASS", "count": pass_count, "denominator": risk_count or 1, "tooltip": "Approved actionable order ready for execution upon 15m intraday trigger confirmation"},
+    ]
+
     return {
         "market": market,
         "session_date": scan_row.session_date.isoformat(),
-        "regime": json.loads(scan_row.regime_detail_json) if scan_row.regime_detail_json else {},
+        "regime": regime_detail,
         "signals": sig_dicts,
         "shadow_signals": shadow_dicts,
         "candidate_opportunities": candidate_dicts,
         "pre_breakout_watchlist": [item for item in candidate_dicts if item["state"] == "PRE_BREAKOUT_WATCHLIST"],
+        "funnel": funnel,
         "universe_size": scan_row.universe_size,
         "passed_filters": scan_row.passed_filters,
         "data_warnings": json.loads(scan_row.data_warnings_json) if scan_row.data_warnings_json else [],
@@ -295,37 +323,17 @@ def get_decision_audits(
 
 
 @router.get("/value-radar")
-def get_value_radar(market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
-    """Return research ideas only; candidates still use the regular pipeline and risk validator."""
-    ideas = []
-    rows = db.query(Signal).filter(Signal.market == market, Signal.fundamentals_json.isnot(None)).order_by(Signal.created_at.desc()).limit(500).all()
-    seen = set()
-    for signal in rows:
-        if signal.symbol in seen:
-            continue
-        seen.add(signal.symbol)
-        try:
-            snapshot = json.loads(signal.fundamentals_json or "{}")
-            lights = {light.get("metric"): light for light in snapshot.get("lights", [])}
-        except (TypeError, ValueError):
-            continue
-        valuation = next((item for name, item in lights.items() if name.startswith("Valuation:")), {})
-        quality = next((item for name, item in lights.items() if name in {"ROCE", "ROE"}), {})
-        growth = [item for name, item in lights.items() if name in {"Latest-quarter profit growth YoY", "Revenue growth YoY"}]
-        stabilizing = signal.state == "PRE_BREAKOUT_WATCHLIST" or (signal.setup == "VCP" and signal.trigger > 0)
-        try:
-            stages = _audit_payload_for_signal(db, signal, signal.created_at.date())[0]
-            tt_checks = next((stage.get("checks", []) for stage in stages if stage.get("stage_name") == "Setup Validator"), [])
-            above_200 = any(check.get("name") == "Price > SMA150 & SMA200" and check.get("passed") for check in tt_checks)
-        except Exception:
-            above_200 = False
-        if valuation.get("status") not in {"GREEN", "YELLOW"} or quality.get("status") not in {"GREEN", "YELLOW"}:
-            continue
-        if any(item.get("status") == "RED" for item in growth) or not (above_200 or stabilizing):
-            continue
-        ideas.append({"symbol": signal.symbol, "market": market, "tag": "VALUE_RADAR", "source": "VALUE_RADAR",
-                      "valuation": valuation, "quality": quality, "growth": growth, "stabilizing": "ABOVE_200_SMA" if above_200 else "VALID_BASE",
-                      "detail_url": snapshot.get("detail_url"), "label": "Research idea, not a trade signal; cheap stocks can stay cheap.",
-                      "warning": "Check for value traps and cyclical peak earnings. A value idea still requires the normal DecisionPipeline and Risk Validator."})
-    return ideas
+def get_value_radar(
+    market: str = Query("IN", pattern="^(IN|US)$"),
+    format: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return research ideas only; candidates still use the regular pipeline and risk validator.
+    Includes transparent 'Why Zero' exclusion metrics.
+    """
+    res = value_radar_engine.evaluate_universe(market=market, db=db)
+    if format == "list":
+        return res["ideas"]
+    # Return full object with ideas, summary and explanation
+    return res
 

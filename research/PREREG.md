@@ -147,3 +147,4 @@ The objective of Phase 2 is to determine through controlled, reproducible experi
 - **`FAIL`:** At least one required gate fails with adequate statistical evidence.
 - **`INCONCLUSIVE`:** Insufficient observations, lack of untouched holdout, or insufficient statistical power.
 - **Kill Rule:** If no candidate achieves `PASS`, strategy search ceases immediately. No parameter retuning, no indicator additions. Recommend passive indexing or research-only platform usage.
+

@@ -1,7 +1,7 @@
 import datetime
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import pandas as pd
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from app.engine.setups import SetupCandidate, setup_engine
 from app.engine.pipeline import StageResult, decision_pipeline
 from app.engine.sizing import PositionSizer
 from app.engine.universe import universe_manager
+from app.engine.fundamentals_engine import fundamentals_engine
 from app.models import DecisionAudit, Position, Scan, Signal, Watchlist, WatchlistItem
 from app.providers.manager import provider_manager
 from app.settings import settings
@@ -41,6 +42,10 @@ class PlannedSignal(BaseModel):
     atr: float
     gap95: float
     state: str
+    tier: str = "Small"
+    is_higher_risk: bool = False
+    setup_edge_status: str = "VALIDATED"
+    setup_note: Optional[str] = None
     sources: List[str] = ["AUTO"]
     first_failing_check: Optional[str] = None
     blocked_reason: Optional[Dict[str, str]] = None
@@ -48,6 +53,7 @@ class PlannedSignal(BaseModel):
     checklist: List[ChecklistItem]
     decision_stages: List[StageResult] = []
     news_coverage: SymbolNewsCoverage
+    fundamentals: Optional[Dict[str, Any]] = None
     valid_until: datetime.date
     is_experimental: bool = False
     shadow_mode: bool = False
@@ -61,6 +67,8 @@ class TradePlan(BaseModel):
     shadow_signals: List[PlannedSignal] = []
     candidate_opportunities: List[PlannedSignal] = []
     pre_breakout_watchlist: List[PlannedSignal] = []
+    funnel: List[Dict[str, Any]] = []
+    coverage_summary: Optional[Dict[str, Any]] = None
     universe_size: int
     passed_filters: int
     data_warnings: List[str]
@@ -85,10 +93,14 @@ class Planner:
         data_warnings = []
 
         # 1. Load Universe Candidates
-        stocks = universe_manager.load_universe(market)
+        stocks = universe_manager.load_universe(market, db=db)
         symbols = [s.symbol for s in stocks]
         if not symbols:
             symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+
+        stock_tier_map = {s.symbol: getattr(s, "tier", "Small") for s in stocks}
+        stock_risk_map = {s.symbol: getattr(s, "is_higher_risk", False) for s in stocks}
+        snapshots_map = fundamentals_engine.get_all_latest_snapshots(market=market, db=db)
 
         # Tag candidate sources: 1 instrument = 1 candidate = 1 alert stream
         candidate_sources: Dict[str, List[str]] = {s: ["AUTO"] for s in symbols}
@@ -133,9 +145,14 @@ class Planner:
         index_df = index_bars.get(mkt_cfg.index_symbol)
         regime = evaluate_market_regime(index_df, market=market)
 
+        dist_pct = ((regime.last_close - regime.sma200) / regime.sma200 * 100.0) if regime.sma200 > 0 else 0.0
+        dist_str = f", {dist_pct:+.2f}%" if dist_pct != 0 else ""
+        index_name = "Nifty" if market == "IN" else "S&P 500"
+        regime_weak_msg = f"Regime WEAK ({index_name} {regime.last_close:,.2f} below SMA200 {regime.sma200:,.2f}{dist_str})"
+
         if not regime.allows_entries:
             data_warnings.append(
-                f"Market regime is WEAK ({regime.detail}). All new entries blocked."
+                f"Market regime is WEAK ({regime_weak_msg}). All new entries blocked."
             )
 
         # 3. Pull Historical Daily Bars for Universe + Watchlist Candidates
@@ -152,8 +169,7 @@ class Planner:
             else:
                 data_warnings.append(f"Insufficient historical bars for {sym}")
 
-        # 4. Calculate Relative Strength Percentile Ranks
-        # Out-of-universe Relative Strength evaluated against the systematic universe return distribution without distorting ranking population
+        # 4. Calculate Relative Strength Percentile Ranks across whole scanned liquid universe
         universe_syms = [s for s in symbols if s in enriched_data]
         universe_scores = [screener_engine.calculate_rs_score(enriched_data[s]) for s in universe_syms]
         rs_ranks = screener_engine.calculate_universe_rs_ranks({s: enriched_data[s] for s in universe_syms})
@@ -166,15 +182,27 @@ class Planner:
         if index_df is not None and len(index_df) >= 126:
             index_ret126 = float(index_df["close"].pct_change(126).iloc[-1] or 0.0)
 
-        # 5. Execute Decision Pipeline across Universe & Watchlists
+        # 5. Execute Decision Pipeline & Monotonic Sequential Funnel Tracking
         primary_signals: List[PlannedSignal] = []
         shadow_signals: List[PlannedSignal] = []
         candidate_opportunities: List[PlannedSignal] = []
         pre_breakout_watchlist: List[PlannedSignal] = []
         passed_filters_count = 0
 
+        funnel_counts = {
+            "scanned": 0,
+            "trend_ok": 0,
+            "setup_ok": 0,
+            "fundamentals_ok": 0,
+            "news_ok": 0,
+            "risk_ok": 0,
+            "pass": 0,
+        }
+
         for sym, df in enriched_data.items():
             stock_rs_rank = rs_ranks.get(sym, 0.5)
+            tier = stock_tier_map.get(sym, "Small")
+            is_higher_risk = stock_risk_map.get(sym, True if tier == "Small" else False)
 
             # Evaluate through the unified 7-stage Trade Decision Pipeline
             decision = decision_pipeline.evaluate(
@@ -188,8 +216,9 @@ class Planner:
                 db=db,
             )
 
-            # Scanner filter counting
-            if decision.stages[0].status == "PASS":
+            # Universe filter evaluation (Price floor, ADV, Volatility cap, Affordability)
+            u_res = universe_manager.filter_stock(sym, df, market=market, capital=mkt_cfg.capital, tier=tier)
+            if u_res.passed:
                 passed_filters_count += 1
 
             # Candidate setup information
@@ -203,6 +232,47 @@ class Planner:
             tt_res = screener_engine.evaluate_trend_template(
                 sym, df, rs_rank=stock_rs_rank, index_ret126=index_ret126
             )
+
+            # Fundamentals evaluation
+            snap = snapshots_map.get(sym)
+            fund_dict = None
+            if snap and snap.lights_json:
+                try:
+                    fund_dict = json.loads(snap.lights_json)
+                except Exception:
+                    fund_dict = None
+            if not fund_dict and snap:
+                fund_dict = fundamentals_engine.evaluate_traffic_lights(sym, {
+                    "revenue_yoy": snap.revenue_yoy,
+                    "profit_yoy": snap.profit_yoy,
+                    "op_margin": snap.op_margin,
+                    "roce": snap.roce,
+                    "roe": snap.roe,
+                    "debt_equity": snap.debt_equity,
+                    "interest_coverage": snap.interest_coverage,
+                    "pe": snap.pe,
+                    "sector_median_pe": snap.sector_median_pe,
+                    "promoter_holding": snap.promoter_holding,
+                    "pledge_pct": snap.pledge_pct,
+                }, market=market)
+
+            # Monotonic sequential funnel accumulation
+            is_scanned = u_res.passed
+            is_trend = is_scanned and tt_res.passed
+            is_setup = is_trend and (cand is not None and getattr(cand, "setup", "") in ("VCP", "PULLBACK"))
+            fund_has_red = (fund_dict.get("red_count", 0) > 0) if fund_dict else False
+            is_fund = is_setup and not fund_has_red
+            is_news = is_fund and (news_cov.status == "CLEAR")
+            is_risk = is_news and regime.allows_entries and (decision.stages[-1].status == "PASS")
+            is_pass = is_risk and (decision.final_decision == "ALLOW")
+
+            if is_scanned: funnel_counts["scanned"] += 1
+            if is_trend: funnel_counts["trend_ok"] += 1
+            if is_setup: funnel_counts["setup_ok"] += 1
+            if is_fund: funnel_counts["fundamentals_ok"] += 1
+            if is_news: funnel_counts["news_ok"] += 1
+            if is_risk: funnel_counts["risk_ok"] += 1
+            if is_pass: funnel_counts["pass"] += 1
 
             if cand:
                 trigger = decision.trigger or cand.pivot
@@ -239,8 +309,6 @@ class Planner:
             if is_already_held:
                 state = "ALREADY_HELD"
             elif cand and cand.classification == "BROKE_OUT_TODAY":
-                # Experimental pivot policy: do not present a signal-day breakout
-                # as a new pre-breakout opportunity. Execution gates still apply.
                 state = "BROKE_OUT_TODAY"
             elif (
                 cand and cand.setup == "VCP" and last_price < cand.pivot
@@ -261,6 +329,27 @@ class Planner:
             else:
                 state = "WATCHLIST"
 
+            # Setup edge validation attribution (Strategy Lab task-9156 caveat)
+            setup_edge_status = "VALIDATED"
+            setup_note = None
+            if cand:
+                if cand.setup == "PULLBACK":
+                    setup_edge_status = "NO_VALIDATED_EDGE"
+                    setup_note = "Strategy Lab (task-9156) found no validated edge for Setup P (EMA pullback). Research only."
+                else:
+                    setup_edge_status = "VALIDATED"
+                    setup_note = "Minervini Stage 2 VCP consolidation structure"
+
+            # If blocked by Market Regime, override blocked reason with exact distance
+            if not regime.allows_entries and state == "BLOCKED":
+                blocked_reason = {
+                    "stage": "Scanner",
+                    "check": "Market Regime",
+                    "value": regime.status,
+                    "threshold": "BULLISH or CAUTION",
+                    "note": regime_weak_msg,
+                }
+
             # Ranking Score Calculation
             score = 100.0 * stock_rs_rank
             if regime.is_bullish:
@@ -278,6 +367,8 @@ class Planner:
             ]
             if not reasons:
                 reasons = ["No valid base consolidation or pullback pattern detected"] if not cand else ["Setup pending breakout confirmation"]
+            if not regime.allows_entries and state == "BLOCKED":
+                reasons = [f"BLOCKED: {regime_weak_msg}"]
 
             sig = PlannedSignal(
                 symbol=sym,
@@ -296,6 +387,10 @@ class Planner:
                 atr=round(last_atr, 2),
                 gap95=round(gap95, 3),
                 state=state,
+                tier=tier,
+                is_higher_risk=is_higher_risk,
+                setup_edge_status=setup_edge_status,
+                setup_note=setup_note,
                 sources=candidate_sources.get(sym, ["AUTO"]),
                 first_failing_check=first_failing,
                 blocked_reason=blocked_reason,
@@ -303,13 +398,20 @@ class Planner:
                 checklist=tt_res.checklist,
                 decision_stages=decision.stages,
                 news_coverage=news_cov,
+                fundamentals=fund_dict,
                 valid_until=valid_until,
                 is_experimental=cand.is_experimental if cand else False,
                 shadow_mode=cand.shadow_mode if cand else False,
             )
 
+            # Small / Illiquid Tier Gating: excluded from primary live BUY alerts unless enabled in Settings
+            allow_small_caps = getattr(mkt_cfg, "allow_higher_risk_small_caps", False)
             if decision.final_decision == "ALLOW" and cand and not is_already_held and state not in {"BROKE_OUT_TODAY", "PRE_BREAKOUT_WATCHLIST"}:
-                if cand.shadow_mode or cand.is_experimental:
+                if (tier == "Small" or is_higher_risk) and not allow_small_caps:
+                    sig.state = "BLOCKED"
+                    sig.reasons.append("Higher risk Small-cap tier excluded from live BUY alerts (enable in Settings to allow)")
+                    candidate_opportunities.append(sig)
+                elif cand.shadow_mode or cand.is_experimental:
                     shadow_signals.append(sig)
                 else:
                     primary_signals.append(sig)
@@ -325,6 +427,59 @@ class Planner:
 
         # Sort candidate opportunities by score descending
         candidate_opportunities.sort(key=lambda s: s.score, reverse=True)
+
+        # Build monotonic sequential funnel
+        funnel = [
+            {
+                "key": "ALL",
+                "label": "Scanned",
+                "count": funnel_counts["scanned"],
+                "denominator": len(symbols),
+                "tooltip": "Eligible instruments passing price floor, liquidity ADV, volatility cap and affordability filters",
+            },
+            {
+                "key": "TREND",
+                "label": "Trend OK",
+                "count": funnel_counts["trend_ok"],
+                "denominator": funnel_counts["scanned"] or 1,
+                "tooltip": "Passing Minervini Stage 2 Trend Template rules (SMA50/150/200, 52w high/low, RS Rank >= 0.70)",
+            },
+            {
+                "key": "SETUPS",
+                "label": "Valid Setups" if regime.allows_entries else "Patterns (blocked by regime)",
+                "count": funnel_counts["setup_ok"],
+                "denominator": funnel_counts["trend_ok"] or 1,
+                "tooltip": "Consolidation structure formed: tight VCP contraction or EMA pullback",
+            },
+            {
+                "key": "FUNDAMENTALS",
+                "label": "Fundamentals OK",
+                "count": funnel_counts["fundamentals_ok"],
+                "denominator": funnel_counts["setup_ok"] or 1,
+                "tooltip": "Fundamental health check has 0 RED traffic lights (mode: warn)",
+            },
+            {
+                "key": "NEWS",
+                "label": "News Clear",
+                "count": funnel_counts["news_ok"],
+                "denominator": funnel_counts["fundamentals_ok"] or 1,
+                "tooltip": "No high-risk corporate disclosures, earnings blackout, or adverse news events",
+            },
+            {
+                "key": "RISK",
+                "label": "Risk OK",
+                "count": funnel_counts["risk_ok"],
+                "denominator": funnel_counts["news_ok"] or 1,
+                "tooltip": "Passes portfolio heat, sector limits, cost drag gate <= 0.25R, and regime allow_entries",
+            },
+            {
+                "key": "PASS",
+                "label": "PASS",
+                "count": funnel_counts["pass"],
+                "denominator": funnel_counts["risk_ok"] or 1,
+                "tooltip": "Approved actionable order ready for execution upon 15m intraday trigger confirmation",
+            },
+        ]
 
         # 6. Persist Scan and Signals into Database
         if db is not None:
@@ -369,7 +524,7 @@ class Planner:
                     reasons_json=json.dumps(s.reasons),
                     sources_json=json.dumps(s.sources),
                     news_flags_json=json.dumps(s.news_coverage.model_dump(), default=str),
-                    fundamentals_json=previous_fundamentals.get(s.symbol, json.dumps({
+                    fundamentals_json=json.dumps(s.fundamentals, default=str) if s.fundamentals else previous_fundamentals.get(s.symbol, json.dumps({
                         "symbol": s.symbol, "mode": settings.fundamentals_config.get("mode", "warn"),
                         "unknown_count": 8, "red_count": 0,
                         "lights": [{"metric": "Fundamental coverage", "status": "UNKNOWN", "value": "No snapshot stored", "period": "N/A", "source": "N/A", "why": "Refresh the Fundamentalist view for available data.", "threshold": "Missing data is never green"}],
@@ -391,6 +546,7 @@ class Planner:
             shadow_signals=shadow_signals,
             candidate_opportunities=candidate_opportunities,
             pre_breakout_watchlist=pre_breakout_watchlist,
+            funnel=funnel,
             universe_size=len(symbols),
             passed_filters=passed_filters_count,
             data_warnings=data_warnings,

@@ -129,6 +129,25 @@ def init_db():
     logger.info("Initializing Neon PostgreSQL database schema...")
     try:
         Base.metadata.create_all(bind=engine)
+        with engine.connect() as conn:
+            columns_to_add = [
+                ("series", "VARCHAR(10) DEFAULT 'EQ'"),
+                ("universe_tier", "VARCHAR(20) DEFAULT 'Small'"),
+                ("is_higher_risk", "BOOLEAN DEFAULT FALSE"),
+                ("status", "VARCHAR(50) DEFAULT 'SCANNED'"),
+                ("status_reason", "VARCHAR(255)"),
+                ("last_scanned_at", "TIMESTAMPTZ"),
+                ("avg_turnover_20d", "FLOAT"),
+                ("last_price", "FLOAT"),
+                ("atr_pct", "FLOAT"),
+            ]
+            for col_name, col_type in columns_to_add:
+                try:
+                    conn.execute(text(f"ALTER TABLE instruments ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
+                    conn.commit()
+                except Exception as ex:
+                    conn.rollback()
+                    logger.debug(f"Could not add column {col_name} to instruments: {ex}")
         logger.info("Neon PostgreSQL schema created or verified successfully.")
     except Exception as e:
         logger.warning(f"Could not connect to Neon PostgreSQL during init_db: {e}")

@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -180,3 +180,63 @@ def apply_verified_corporate_actions(
         df["dividend_factor"] = (df["adj_close"] / safe_split_close).round(4)
 
     return df, True
+
+
+def verify_corporate_action_adjustments_sample(
+    bars_dict: Dict[str, pd.DataFrame], sample_symbols: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Audits corporate action adjustment on a sample of instruments against verified split master.
+    Confirms absence of artificial price discontinuities (>40% drop across ex-dates) and flags unadjusted series.
+    """
+    targets = sample_symbols or ["TATASTEEL", "RELIANCE", "NESTLEIND", "BAJAJFINSV", "EICHERMOT", "BEL", "BPCL"]
+    audits = []
+    unadjusted_flagged = []
+
+    for sym in targets:
+        actions = VERIFIED_SPLITS.get(sym, [])
+        if not actions or sym not in bars_dict:
+            continue
+        df = bars_dict[sym]
+        if df is None or len(df) < 5 or "date" not in df.columns or "close" not in df.columns:
+            continue
+
+        dates = pd.to_datetime(df["date"]).dt.date
+        for act in actions:
+            ex_d = act["ex_date"]
+            ratio = float(act["ratio"])
+            before = df[dates < ex_d]
+            after = df[dates >= ex_d]
+            if before.empty or after.empty:
+                continue
+
+            c_pre = float(before["close"].iloc[-1])
+            c_post = float(after["close"].iloc[0])
+            change_pct = ((c_post - c_pre) / c_pre * 100.0) if c_pre > 0 else 0.0
+
+            # If unadjusted, c_post / c_pre ~ 1/ratio. For 10:1 split, drops ~90%.
+            # For 2:1 split/bonus, drops ~50%.
+            is_unadjusted = (change_pct < -35.0 and ratio >= 1.5)
+            status = "UNADJUSTED_DISCONTINUITY" if is_unadjusted else "SPLIT_ADJUSTED_CLEAN"
+
+            audit_item = {
+                "symbol": sym,
+                "action": act["type"],
+                "ex_date": str(ex_d),
+                "ratio": ratio,
+                "pre_split_close": round(c_pre, 2),
+                "post_split_close": round(c_post, 2),
+                "boundary_change_pct": round(change_pct, 2),
+                "status": status,
+            }
+            audits.append(audit_item)
+            if is_unadjusted:
+                unadjusted_flagged.append(sym)
+
+    return {
+        "sample_size": len(audits),
+        "verified_clean": len(audits) - len(unadjusted_flagged),
+        "unadjusted_count": len(unadjusted_flagged),
+        "unadjusted_symbols": unadjusted_flagged,
+        "audits": audits,
+        "is_safe": len(unadjusted_flagged) == 0,
+    }

@@ -486,7 +486,8 @@ def test_backtester_receives_split_adjusted_prices():
     """
     # Create mock database rows representing a 10:1 split event
     class MockBar:
-        def __init__(self, date, raw_close, split_close):
+        def __init__(self, date, raw_close, split_close, symbol="TATASTEEL"):
+            self.symbol = symbol
             self.date = date
             self.open = raw_close
             self.high = raw_close + 2.0

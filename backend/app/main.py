@@ -11,6 +11,7 @@ from app.api.routes_plan import router as plan_router
 from app.api.routes_portfolio import router as portfolio_router
 from app.api.routes_positions import router as positions_router
 from app.api.routes_system import router as system_router
+from app.api.routes_universe import router as universe_router
 from app.api.routes_watchlists import router as watchlists_router
 from app.db import init_db
 from app.providers.manager import provider_manager
@@ -101,6 +102,7 @@ app.include_router(portfolio_router, prefix="/api", tags=["Zerodha Portfolio & V
 app.include_router(news_router, prefix="/api", tags=["News Intelligence"], dependencies=protected_api)
 app.include_router(backtest_router, prefix="/api", tags=["Backtesting & Research"], dependencies=protected_api)
 app.include_router(data_router, prefix="/api", tags=["Historical Data & Ingestion"], dependencies=protected_api)
+app.include_router(universe_router, prefix="/api", tags=["Universe & Coverage"], dependencies=protected_api)
 
 
 from pathlib import Path

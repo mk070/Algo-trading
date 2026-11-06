@@ -29,7 +29,23 @@ interface DashboardPageProps {
 export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onMarketChange }) => {
   const [plan, setPlan] = useState<TradePlan | null>(null);
   const [valueIdeas, setValueIdeas] = useState<any[]>([]);
+  const [valueRadarSummary, setValueRadarSummary] = useState<any>(null);
+  const [valueRadarExplanation, setValueRadarExplanation] = useState<string>('');
   const [valueRadarAdded, setValueRadarAdded] = useState<Record<string, boolean>>({});
+
+  const updateValueRadar = (res: any) => {
+    if (Array.isArray(res)) {
+      setValueIdeas(res);
+      setValueRadarSummary(null);
+      setValueRadarExplanation('');
+    } else if (res && res.ideas) {
+      setValueIdeas(res.ideas);
+      setValueRadarSummary(res.summary);
+      setValueRadarExplanation(res.explanation);
+    } else {
+      setValueIdeas([]);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [selectedChartSymbol, setSelectedChartSymbol] = useState<string | null>(null);
@@ -43,7 +59,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       setLoading(true);
       const data = await apiClient.getTradePlan(currentMarket);
       setPlan(data);
-      apiClient.getValueRadar(currentMarket).then(setValueIdeas).catch(() => setValueIdeas([]));
+      apiClient.getValueRadar(currentMarket).then(updateValueRadar).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error fetching trade plan:', e);
     } finally {
@@ -56,7 +72,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       setScanning(true);
       const data = await apiClient.runScan(currentMarket);
       setPlan(data);
-      apiClient.getValueRadar(currentMarket).then(setValueIdeas).catch(() => setValueIdeas([]));
+      apiClient.getValueRadar(currentMarket).then(updateValueRadar).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error running scan:', e);
     } finally {
@@ -115,14 +131,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
     (s) => s.state !== 'NO_SETUP' && s.state !== 'BLOCKED' && (s.trigger || 0) > 0 && s.setup !== 'MONITORING'
   );
   const candidates = plan?.candidate_opportunities || [];
-  const funnel = [
-    { key: 'ALL' as const, label: 'Scanned', count: plan?.universe_size || 0 },
-    { key: 'TREND' as const, label: 'Trend OK', count: candidates.filter((s) => s.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.checks?.filter((c) => c.name.includes('Trend Template') && c.passed).length === s.decision_stages?.find((x) => x.stage_name === 'Setup Validator')?.checks?.filter((c) => c.name.includes('Trend Template')).length).length },
-    { key: 'SETUPS' as const, label: 'Setup', count: candidates.filter((s) => s.setup !== 'MONITORING').length },
-    { key: 'FUNDAMENTALS' as const, label: 'Fundamentals OK', count: candidates.filter((s) => s.fundamentals?.red_count === 0 && (s.fundamentals?.unknown_count || 0) === 0).length },
-    { key: 'NEWS' as const, label: 'News clear', count: candidates.filter((s) => s.news_coverage?.status === 'CLEAR').length },
-    { key: 'RISK' as const, label: 'Risk OK', count: candidates.filter((s) => s.decision_stages?.find((x) => x.stage_name === 'Risk Validator')?.status === 'PASS').length },
-    { key: 'PASS' as const, label: 'PASS', count: candidates.filter((s) => s.decision_stages?.every((x) => x.status === 'PASS')).length },
+  const funnel = (plan?.funnel && plan.funnel.length > 0) ? plan.funnel : [
+    { key: 'ALL', label: 'Scanned', count: plan?.passed_filters || 0, denominator: plan?.universe_size || 1, tooltip: 'Passed data, liquidity ADV, price floor and volatility cap' },
+    { key: 'TREND', label: 'Trend OK', count: 0, denominator: plan?.passed_filters || 1, tooltip: 'Minervini Stage 2 Trend Template pass' },
+    { key: 'SETUPS', label: plan?.regime?.allows_entries ? 'Valid Setups' : 'Patterns (blocked by regime)', count: candidates.filter(s => s.setup !== 'MONITORING').length, denominator: 1, tooltip: 'Consolidation base / pullback detected' },
+    { key: 'FUNDAMENTALS', label: 'Fundamentals OK', count: 0, denominator: 1, tooltip: 'Fundamental health checks not RED' },
+    { key: 'NEWS', label: 'News clear', count: 0, denominator: 1, tooltip: 'No earnings blackout or adverse disclosures' },
+    { key: 'RISK', label: 'Risk OK', count: 0, denominator: 1, tooltip: 'Risk gates and regime filter pass' },
+    { key: 'PASS', label: 'PASS', count: actionableSignals.length, denominator: 1, tooltip: 'Approved actionable setups' },
   ];
 
   return (
@@ -228,10 +244,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-3">
         <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Research funnel · click a stage to filter candidates</div>
         <div className="flex flex-wrap items-center gap-2">
-          {funnel.map((item, index) => <React.Fragment key={item.key}>
+          {funnel.map((item: any, index: number) => <React.Fragment key={item.key}>
             {index > 0 && <span className="text-slate-600">›</span>}
-            <button onClick={() => setOppFilter(item.key)} className={`rounded-lg border px-3 py-2 text-left ${oppFilter === item.key ? 'border-indigo-500 bg-indigo-950/40' : 'border-slate-800 bg-slate-950/40 hover:border-slate-600'}`}>
-              <span className="block text-[10px] text-slate-400">{item.label}</span><span className="font-mono text-sm font-bold text-slate-100">{item.count}</span>
+            <button
+              onClick={() => setOppFilter(item.key as any)}
+              title={item.tooltip}
+              className={`rounded-lg border px-3 py-2 text-left transition-all ${
+                oppFilter === item.key ? 'border-indigo-500 bg-indigo-950/50 ring-1 ring-indigo-500/50' : 'border-slate-800 bg-slate-950/40 hover:border-slate-600'
+              }`}
+            >
+              <span className="block text-[10px] text-slate-400 font-medium">{item.label}</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="font-mono text-sm font-bold text-slate-100">{item.count}</span>
+                {item.denominator !== undefined && <span className="font-mono text-[10px] text-slate-500">/ {item.denominator}</span>}
+              </div>
             </button>
           </React.Fragment>)}
         </div>
@@ -244,7 +270,52 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center justify-between"><div><h2 className="text-sm font-bold text-slate-100">Value Radar <span className="ml-1 rounded border border-amber-800 px-1.5 py-0.5 text-[9px] text-amber-300">RESEARCH IDEA</span></h2><p className="mt-1 text-[10px] text-slate-500">Cheap stocks can stay cheap. Every idea still goes through the normal pipeline and risk checks.</p></div><span className="font-mono text-xs text-slate-400">{valueIdeas.length} ideas</span></div>
-        {valueIdeas.length ? <div className="mt-3 flex flex-wrap gap-2">{valueIdeas.map((idea) => <div key={idea.symbol} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 hover:border-amber-700"><a href={idea.detail_url || undefined} target="_blank" rel="noreferrer"><span className="font-mono text-xs font-bold text-slate-100">{idea.symbol}</span><span className="ml-2 rounded bg-amber-950 px-1 text-[9px] text-amber-300">VALUE_RADAR</span><span className="mt-1 block text-[10px] text-slate-500">{idea.stabilizing} · quality {idea.quality.status}</span></a><button type="button" onClick={() => handleAddValueIdea(idea.symbol)} disabled={Boolean(valueRadarAdded[idea.symbol])} className="mt-2 block rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-amber-700 disabled:text-emerald-400">{valueRadarAdded[idea.symbol] ? 'Added to watchlist' : 'Add to watchlist'}</button></div>)}</div> : <p className="mt-3 text-xs text-slate-500">No stored snapshots currently meet the research criteria.</p>}
+        {valueIdeas.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {valueIdeas.map((idea) => (
+              <div key={idea.symbol} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 hover:border-amber-700/80 transition-all">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-bold text-slate-100">{idea.symbol}</span>
+                  <span className="rounded bg-amber-950/80 border border-amber-800/60 px-1 text-[9px] text-amber-300 font-mono">VALUE_RADAR</span>
+                </div>
+                <div className="mt-1.5 text-[10px] space-y-0.5">
+                  <span className="block text-slate-400">{idea.stabilizing} · Quality {idea.quality?.status || 'OK'}</span>
+                  {idea.is_cyclical && <span className="block text-amber-400/90 font-medium">⚠️ Cyclical peak risk</span>}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+                  <a href={idea.detail_url || `https://www.screener.in/company/${idea.symbol}/`} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-400 hover:text-indigo-300">
+                    Screener ↗
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => handleAddValueIdea(idea.symbol)}
+                    disabled={Boolean(valueRadarAdded[idea.symbol])}
+                    className="rounded border border-slate-700 px-2 py-0.5 text-[10px] text-slate-300 hover:border-amber-700 disabled:text-emerald-400"
+                  >
+                    {valueRadarAdded[idea.symbol] ? '✓ Added' : '+ Watchlist'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 text-xs text-slate-400 bg-slate-950/40 border border-slate-800/80 rounded-lg p-3">
+            <p className="font-medium text-slate-300">
+              {valueRadarExplanation || 'No stored snapshots currently meet the research criteria.'}
+            </p>
+            {valueRadarSummary && (
+              <div className="mt-2 flex flex-wrap gap-3 font-mono text-[10px] text-slate-500 border-t border-slate-800/60 pt-2">
+                <span>Total Scanned: <strong className="text-slate-300">{valueRadarSummary.total_scanned}</strong></span>
+                <span>With Fundamentals: <strong className="text-slate-300">{valueRadarSummary.with_fundamentals}</strong></span>
+                <span>No Data: <strong className="text-slate-400">{valueRadarSummary.no_fundamentals}</strong></span>
+                <span>Failed Valuation: <strong className="text-amber-400">{valueRadarSummary.excluded_valuation}</strong></span>
+                <span>Failed Quality: <strong className="text-amber-400">{valueRadarSummary.excluded_quality}</strong></span>
+                <span>Failed Growth: <strong className="text-rose-400">{valueRadarSummary.excluded_growth}</strong></span>
+                <span>Not Stabilising: <strong className="text-slate-400">{valueRadarSummary.excluded_stabilizing}</strong></span>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       <div>
@@ -255,7 +326,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
               Today's Ranked Trade Plan ({actionableSignals.length} Setups)
             </h2>
             <p className="text-xs text-slate-400">
-              Screened from {plan?.universe_size || 0} constituents ({plan?.passed_filters || 0} passed Trend Template).
+              Screened from {plan?.universe_size || 0} constituents ({plan?.passed_filters || 0} passed liquidity & data filters).
             </p>
           </div>
           <span className="text-xs text-slate-500 font-mono">
@@ -415,15 +486,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-sans font-semibold ${
-                            cand.setup === 'VCP'
-                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
-                              : cand.setup === 'PULLBACK'
-                              ? 'bg-purple-950/80 text-purple-300 border border-purple-800/60'
-                              : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            {cand.setup}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-sans font-semibold inline-block w-fit ${
+                              cand.setup === 'VCP'
+                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60'
+                                : cand.setup === 'PULLBACK'
+                                ? 'bg-purple-950/80 text-purple-300 border border-purple-800/60'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {cand.setup === 'VCP' ? 'Setup V (VCP)' : cand.setup === 'PULLBACK' ? 'Setup P (Pullback)' : cand.setup}
+                            </span>
+                            {cand.setup === 'PULLBACK' && (
+                              <span className="text-[9px] text-amber-400/90 font-sans" title="Strategy Lab task-9156 found no validated edge">
+                                ⚠️ No validated edge
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 font-sans">
                           {cand.state === 'BROKE_OUT_TODAY' ? (

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, CheckCircle2, Clock, RefreshCw, ShieldAlert, ShieldCheck, XCircle } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { UniverseCoveragePanel } from '../components/UniverseCoveragePanel';
 
 export const SystemHealthPage: React.FC = () => {
   const [healthData, setHealthData] = useState<any>(null);

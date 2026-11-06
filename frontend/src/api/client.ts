@@ -377,6 +377,20 @@ export const apiClient = {
     return fetchJson(`${API_BASE}/value-radar?market=${market}`);
   },
 
+  async getUniverseCoverage(market: string = 'IN') {
+    return fetchJson(`${API_BASE}/universe/coverage?market=${market}`);
+  },
+
+  async exportUniverseCoverageCsv(market: string = 'IN') {
+    const res = await fetch(`${API_BASE}/universe/coverage/export-csv?market=${market}`);
+    return res.blob();
+  },
+
+  async auditSplitAdjustments(sampleSymbols?: string) {
+    const q = sampleSymbols ? `?sample_symbols=${encodeURIComponent(sampleSymbols)}` : '';
+    return fetchJson(`${API_BASE}/universe/audit-splits${q}`);
+  },
+
   async importFundamentalsCsv(file: File) {
     const form = new FormData();
     form.append('file', file);

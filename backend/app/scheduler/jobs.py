@@ -170,6 +170,29 @@ def job_db_backup(db):
     logger.info(f"Nightly database backup completed: {res.get('file')} ({res.get('total_rows')} rows)")
 
 
+def job_universe_master_sync(db):
+    """Weekly sync of Angel One instrument master and universe coverage."""
+    from app.engine.universe import universe_manager
+    logger.info("Executing scheduled weekly Angel One instrument master sync...")
+    res = universe_manager.refresh_instrument_master(market="IN", db=db)
+    logger.info(f"Instrument master sync completed: {res}")
+
+
+def job_refresh_fundamentals_weekly(db):
+    """Weekly fundamentals refresh for top liquid universe equities."""
+    from app.engine.universe import universe_manager
+    from app.engine.fundamentals_engine import fundamentals_engine
+    logger.info("Executing scheduled weekly fundamental snapshots refresh...")
+    universe = universe_manager.load_universe("IN")
+    liquid_symbols = [s.symbol for s in universe if s.tier in ("Large", "Mid")][:100]
+    for sym in liquid_symbols:
+        try:
+            fundamentals_engine.fetch_and_store_yfinance(sym, market="IN", db=db)
+        except Exception as e:
+            logger.debug(f"Weekly fundamentals skip {sym}: {e}")
+    logger.info(f"Weekly fundamental snapshots refresh completed for {len(liquid_symbols)} symbols.")
+
+
 def start_scheduler():
     if not scheduler.running:
         scheduler.add_job(
@@ -230,6 +253,18 @@ def start_scheduler():
             log_job_execution("db_backup", job_db_backup),
             CronTrigger(hour=23, minute=59),
             id="db_backup",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("universe_master_sync", job_universe_master_sync),
+            CronTrigger(day_of_week="sun", hour=2, minute=0),
+            id="universe_master_sync",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("fundamentals_weekly", job_refresh_fundamentals_weekly),
+            CronTrigger(day_of_week="sun", hour=4, minute=0),
+            id="fundamentals_weekly",
             replace_existing=True,
         )
         scheduler.start()

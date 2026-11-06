@@ -53,47 +53,55 @@ class ProviderManager:
         # 1. Try reading from PostgreSQL cache if DB session is provided
         if db is not None:
             cached_dfs = {}
-            for sym in symbols:
+            from collections import defaultdict
+            # Batch query in chunks of 500 symbols to minimize database roundtrips
+            for i in range(0, len(symbols), 500):
+                chunk = symbols[i : i + 500]
                 rows = (
                     db.query(DailyBar)
                     .filter(
-                        DailyBar.symbol == sym,
+                        DailyBar.symbol.in_(chunk),
                         DailyBar.date >= start,
                         DailyBar.date <= end,
                         DailyBar.source.notin_(['synthetic_fixture', 'mock', 'synthetic_fallback']),
                     )
-                    .order_by(DailyBar.date.asc())
+                    .order_by(DailyBar.symbol, DailyBar.date.asc())
                     .all()
                 )
-                if rows and len(rows) >= 20:
-                    latest_cached_date = rows[-1].date
-                    if (end - latest_cached_date).days <= 3:
-                        df = pd.DataFrame(
-                            [
-                                {
-                                    "date": r.date,
-                                    "open": r.split_adj_open if r.split_adj_open is not None else r.open,
-                                    "high": r.split_adj_high if r.split_adj_high is not None else r.high,
-                                    "low": r.split_adj_low if r.split_adj_low is not None else r.low,
-                                    "close": r.split_adj_close if r.split_adj_close is not None else r.close,
-                                    "raw_open": r.open,
-                                    "raw_high": r.high,
-                                    "raw_low": r.low,
-                                    "raw_close": r.close,
-                                    "adj_close": r.adj_close,
-                                    "volume": r.volume,
-                                    "source": r.source,
-                                    "split_adj_open": r.split_adj_open,
-                                    "split_adj_high": r.split_adj_high,
-                                    "split_adj_low": r.split_adj_low,
-                                    "split_adj_close": r.split_adj_close,
-                                    "dividend_factor": r.dividend_factor or 1.0,
-                                    "is_split_adjusted": r.is_split_adjusted,
-                                }
-                                for r in rows
-                            ]
-                        )
-                        cached_dfs[sym] = df
+                sym_rows = defaultdict(list)
+                for r in rows:
+                    sym_rows[r.symbol].append(r)
+
+                for sym, s_rows in sym_rows.items():
+                    if s_rows and len(s_rows) >= 20:
+                        latest_cached_date = s_rows[-1].date
+                        if (end - latest_cached_date).days <= 3:
+                            df = pd.DataFrame(
+                                [
+                                    {
+                                        "date": r.date,
+                                        "open": r.split_adj_open if r.split_adj_open is not None else r.open,
+                                        "high": r.split_adj_high if r.split_adj_high is not None else r.high,
+                                        "low": r.split_adj_low if r.split_adj_low is not None else r.low,
+                                        "close": r.split_adj_close if r.split_adj_close is not None else r.close,
+                                        "raw_open": r.open,
+                                        "raw_high": r.high,
+                                        "raw_low": r.low,
+                                        "raw_close": r.close,
+                                        "adj_close": r.adj_close,
+                                        "volume": r.volume,
+                                        "source": r.source,
+                                        "split_adj_open": r.split_adj_open,
+                                        "split_adj_high": r.split_adj_high,
+                                        "split_adj_low": r.split_adj_low,
+                                        "split_adj_close": r.split_adj_close,
+                                        "dividend_factor": r.dividend_factor or 1.0,
+                                        "is_split_adjusted": r.is_split_adjusted,
+                                    }
+                                    for r in s_rows
+                                ]
+                            )
+                            cached_dfs[sym] = df
             for sym, df in cached_dfs.items():
                 results[sym] = df
                 if sym in missing_symbols:

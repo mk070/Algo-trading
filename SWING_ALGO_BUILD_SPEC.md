@@ -911,3 +911,45 @@ Known limitations: historical scan signals are not retained for every session, s
 - Corrected simulation accounting: slippage is represented by adverse fills and excluded from the second fee deduction; pending orders count against position and heat limits; remaining positions are marked to market daily and liquidated at the end of the test. Acceptance thresholds and setup thresholds were not changed.
 - Read-only rerun used the top 30 current India universe symbols and 290 stored sessions (2025-09-29 through 2026-11-05), not the requested two years. After slippage, next-open exit, partial-profit and daily mark-to-market fixes, Setup V: 3 trades, -200.40 net P&L, -0.78R expectancy, 0.00 net PF, 3,378.0% cost drag; Setup P: 19 trades, -320.58, -0.27R, 0.51 net PF, 81.9% cost drag; combined: 18 trades, -337.95, -0.33R, 0.38 net PF, 105.1% cost drag. All three fail the acceptance gates. Results are still too sparse and the universe is survivorship-biased; none is eligible to be called a solid/profitable strategy.
 - Further engine gaps remain: trend-break and time-stop exits trigger at the following session's open, and the configured partial-profit fraction is now realized and aggregated into the position trade; historical regime/earnings gates and point-in-time constituents are unavailable; buy-and-hold/random-entry controls and an untouched holdout are not yet wired into Strategy Lab. Do not tune thresholds to rescue these samples.
+
+
+---
+
+## 23. FULL-NSE UNIVERSE COVERAGE, RESEARCH FUNNEL, FUNDAMENTAL SNAPSHOTS & VALUE RADAR (2026-11-06)
+
+This addendum documents the operational enhancement for full-NSE universe scanning, transparent funnel metrics, structured fundamental snapshot storage, and the Value Radar engine. In strict accordance with the non-negotiable rules, **no strategy rules, technical thresholds, regime logic, or risk gates were modified**, and **no order placement capability was introduced**.
+
+### 23.1 Universe: Angel One Instrument Master Ingestion
+- **Master Scrip Ingestion:** Ingests official Angel One instrument master (`data/cache/angelone/instrument_master.json`, 2,745 NSE equity items).
+- **Compliant Free Filter:** Series `-EQ` selected by default. Filters out SME/surveillance series (`-BE`, `-SM`, `-ST`, `-BZ`) and non-equity instruments (ETFs matching `*BEES*`, `*ETF*`, `*GSEC*`, `*INVIT*`, `*REIT*`, Gold bonds). Resulting non-ETF eligible candidate universe: 2,636 NSE equities.
+- **Tiers & Risk Classification:** Instruments are tiered as `Large`, `Mid`, or `Small` based on index constituents and 20-day ADV. Stocks in the `Small` tier are tagged `is_higher_risk = True` and excluded from primary live BUY signals unless explicitly enabled in Settings.
+- **Seven-Stage Coverage Audit:** Visible in the Universe Coverage panel and exportable via `/api/universe/coverage/export-csv`:
+  `Listed -> Has Data -> Enough History (>=252 bars) -> Liquid (ADV >= 50L) -> Passes Filters -> Scanned`.
+  Every instrument receives exactly one status: `SCANNED`, `NO_DATA`, `INSUFFICIENT_HISTORY`, `ILLIQUID`, `PRICE_FLOOR`, `VOLATILITY_CAP`, `SERIES_EXCLUDED`, or `DATA_ERROR`.
+- **Corporate Action Integrity Check:** Verification audits (`/api/universe/audit-splits`) detect unadjusted corporate actions (>40% unadjusted price drops around historical split ex-dates) against verified reference circulars.
+- **Universe-Wide Relative Strength:** RS rank calculation evaluates relative percentile across the entire scanned liquid universe, not a sub-sample.
+
+### 23.2 Sequential Funnel and Transparent Status Labels
+- **Single Monotonic Pipeline:** Funnel counts follow strict sequential evaluation:
+  `Scanned >= Trend Template OK >= Valid Setup >= Fundamentals Not RED >= News Not BLOCKED >= Risk OK >= PASS`.
+  A later stage can never exceed an earlier stage.
+- **Regime Block Disambiguation:** When Market Regime is `WEAK`, rows display the exact distance string:
+  `BLOCKED: Regime WEAK (Nifty 23,810.85 below SMA200 24,017.32, -0.86%)`.
+  The dashboard tab is labeled `Patterns (blocked by regime)` so blocked setups are never misread as trade ideas. Downstream execution stages that were not reached are marked `NOT EVALUATED`.
+- **Strategy Lab Audit Caveat:** Candidates produced by Setup P (EMA Pullback) carry the badge `NO VALIDATED EDGE (Setup P - Task 9156 audit)` to ensure users understand the research desk context.
+
+### 23.3 Fundamental Snapshots Architecture
+- **Table `fundamental_snapshots`:** Persisted in Neon PostgreSQL with columns `(symbol, market, as_of, period_end, source, revenue_yoy, profit_yoy, op_margin, roce, roe, debt_equity, interest_coverage, pe, sector_median_pe, promoter_holding, pledge_pct, completeness, traffic_lights_json, updated_at)`.
+- **Completeness & Traffic Lights:** Completeness is evaluated as `COMPLETE` (>= 5 primary metrics), `PARTIAL` (1-4 metrics), or `NONE` (0 metrics).
+- **Rule of Honest Missing Data:** Missing fundamental metrics evaluate to grey `UNKNOWN`, never green.
+- **Weekly Ingestion Job:** Scheduled background job refreshes Large & Mid cap liquid equities weekly via polite yfinance batch caching and manual CSV imports.
+
+### 23.4 Value Radar Engine
+- **Cross-Universe Scanning:** Evaluates all scanned universe stocks with fundamental snapshots against value criteria:
+  1. Valuation: Green/Yellow vs sector median.
+  2. Quality: ROCE/ROE >= Yellow.
+  3. Growth: Revenue/Profit YoY not Red.
+  4. Technical Stabilizing: Price above 200 SMA or valid base forming.
+- **Transparent "Why Zero" Breakdown:** When zero candidates pass, the UI exposes the exact pipeline tally:
+  `Total Scanned`, `With Fundamentals`, `No Fundamentals`, `Excluded: Valuation`, `Excluded: Quality`, `Excluded: Growth`, `Excluded: Technical Stabilizing`, `Passed Tier`.
+- **Disclaimers:** Every radar idea is tagged `VALUE_RADAR` and labelled "Research idea, not a signal; subject to value trap / cyclical peak risks."

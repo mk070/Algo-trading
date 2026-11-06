@@ -277,3 +277,20 @@ Provenance and freshness:
 - Do not remove or rename any existing feature while restyling
 - Do not use third-party widgets as data sources for decisions
 - Do not show analyst targets, probabilities or predictive scores in the Research Desk
+
+
+## Universe Coverage Panel & Value Radar UX (2026-11-06)
+
+### Universe Coverage Audit Panel (`/system`)
+- **Pipeline Stepper:** 7-stage visual audit pipeline (`Listed -> Has Data -> Enough History -> Liquid -> Passes Filters -> Scanned`) rendering drop rates and status distributions.
+- **Tier Distribution:** Interactive cards for Large, Mid, Small tiers with liquidity averages and risk flags.
+- **Audit Table & Export:** Filterable by status (`SCANNED`, `NO_DATA`, `INSUFFICIENT_HISTORY`, `ILLIQUID`, `PRICE_FLOOR`, `VOLATILITY_CAP`, `SERIES_EXCLUDED`, `DATA_ERROR`), with one-click CSV export button.
+
+### Funnel Disambiguation (`/`)
+- **Metric Presentation:** Sequential `count / denominator` display with tooltips explaining criteria.
+- **Regime Block Notice:** Header and tabs distinguish tradeable setups from blocked patterns. Tab title dynamically flips to `Patterns (blocked by regime)` when market regime is WEAK, and rows render exact percentage distance from the 200 SMA.
+- **Unevaluated Stages:** Downstream pipeline stages rendered as `NOT EVALUATED` (neutral grey) instead of ambiguous pending or warning states.
+
+### Value Radar & "Why Zero" Breakdown (`/`)
+- **Transparent Exclusions:** When 0 research ideas pass value radar filters, displays full exclusion diagnostic tally (`Scanned`, `With Fundamentals`, `No Fundamentals`, `Excluded Valuation`, `Excluded Quality`, `Excluded Growth`, `Excluded Stabilizing`).
+- **Research Warning Banner:** Explicit disclaimer that Value Radar items are unvalidated research ideas and never bypass risk gates or decision pipelines.

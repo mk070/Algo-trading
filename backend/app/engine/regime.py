@@ -43,8 +43,8 @@ def evaluate_market_regime(
 
     df = index_df.copy()
     close_series = df["close"]
-    sma50_series = compute_sma(close_series, 50)
-    sma200_series = compute_sma(close_series, 200)
+    sma50_series = df["sma50"] if "sma50" in df.columns else compute_sma(close_series, 50)
+    sma200_series = df["sma200"] if "sma200" in df.columns else compute_sma(close_series, 200)
 
     last_close = float(close_series.iloc[-1])
     sma50 = float(sma50_series.iloc[-1]) if pd.notna(sma50_series.iloc[-1]) else last_close

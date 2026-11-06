@@ -45,6 +45,18 @@ export interface Signal {
   decision_stages?: DecisionStage[];
   blocked_reason?: BlockedReason | null;
   fundamentals?: any;
+  tier?: string;
+  is_higher_risk?: boolean;
+  setup_edge_status?: string;
+  setup_note?: string;
+}
+
+export interface FunnelStage {
+  key: string;
+  label: string;
+  count: number;
+  denominator: number;
+  tooltip: string;
 }
 
 export interface DecisionCheck {
@@ -91,6 +103,8 @@ export interface TradePlan {
   shadow_signals: Signal[];
   candidate_opportunities?: Signal[];
   pre_breakout_watchlist?: Signal[];
+  funnel?: FunnelStage[];
+  coverage_summary?: any;
   universe_size: number;
   passed_filters: number;
   data_warnings: string[];

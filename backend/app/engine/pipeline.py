@@ -118,17 +118,25 @@ class DecisionPipeline:
 
         # Market Regime Check
         regime = evaluate_market_regime(index_df, market=market)
+        dist_pct = ((regime.last_close - regime.sma200) / regime.sma200 * 100.0) if regime.sma200 > 0 else 0.0
+        dist_str = f", {dist_pct:+.2f}%" if dist_pct != 0 else ""
+        index_name = "Nifty" if market == "IN" else "S&P 500"
+        if not regime.allows_entries:
+            regime_detail = f"Regime WEAK ({index_name} {regime.last_close:,.2f} below SMA200 {regime.sma200:,.2f}{dist_str})"
+        else:
+            regime_detail = regime.detail
+
         s1_checks.append(
             StageCheck(
                 name="Market Regime",
                 value=regime.status,
                 threshold="BULLISH or CAUTION",
                 passed=regime.allows_entries,
-                note=regime.detail,
+                note=regime_detail,
             )
         )
         if not regime.allows_entries:
-            s1_rejections.append(f"Regime {regime.status} blocks new entries ({regime.detail})")
+            s1_rejections.append(f"Regime {regime.status} blocks new entries ({regime_detail})")
 
         # Universe Filters (Price floor, Liquidity ADV, Volatility Cap, Affordability)
         u_res = universe_manager.filter_stock(symbol, df, market=market, capital=capital)
@@ -342,14 +350,14 @@ class DecisionPipeline:
             stages.append(
                 StageResult(
                     stage_name="Entry Planner",
-                    status="WAIT",
+                    status="NOT EVALUATED",
                     checks=[
                         StageCheck(
                             name="Trigger Level",
                             value="None",
                             threshold="Calculated pivot + 0.1*ATR",
                             passed=False,
-                            note="Awaiting valid chart base / breakout setup",
+                            note="NOT EVALUATED - awaiting valid chart base / breakout setup",
                         )
                     ],
                     rejection_reasons=[],
@@ -358,14 +366,14 @@ class DecisionPipeline:
             stages.append(
                 StageResult(
                     stage_name="Exit Planner",
-                    status="WAIT",
+                    status="NOT EVALUATED",
                     checks=[
                         StageCheck(
                             name="Structural Stop Loss",
                             value="None",
                             threshold="Lowest low 10 bars - 0.2*ATR",
                             passed=False,
-                            note="Defined once trigger level confirmed",
+                            note="NOT EVALUATED - defined once trigger level confirmed",
                         )
                     ],
                     rejection_reasons=[],
@@ -374,14 +382,14 @@ class DecisionPipeline:
             stages.append(
                 StageResult(
                     stage_name="Position Sizer",
-                    status="WAIT",
+                    status="NOT EVALUATED",
                     checks=[
                         StageCheck(
                             name="Planned Sizing",
                             value="0 shares",
                             threshold=">= 1 share",
                             passed=False,
-                            note="Position sizing deferred until setup verified",
+                            note="NOT EVALUATED - position sizing deferred until setup verified",
                         )
                     ],
                     rejection_reasons=[],
@@ -390,14 +398,14 @@ class DecisionPipeline:
             stages.append(
                 StageResult(
                     stage_name="Risk Validator",
-                    status="WAIT",
+                    status="NOT EVALUATED",
                     checks=[
                         StageCheck(
                             name="Risk & Cost Gate",
                             value="Pending",
                             threshold="Cost <= 0.25R",
                             passed=False,
-                            note="Validation executed on actionable entries",
+                            note="NOT EVALUATED - validation executed on actionable entries",
                         )
                     ],
                     rejection_reasons=[],
