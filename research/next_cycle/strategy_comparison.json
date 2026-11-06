@@ -1,0 +1,1314 @@
+{
+  "execution_meta": {
+    "timestamp": "2026-11-06T16:52:41.429969+00:00",
+    "git_commit": "9a58dbf048a8ffcc3fccbd431d3933f19f6d8726",
+    "prereg_sha256": "f5d87c02330a7967dba34934ceabbe99df48c09e93c99a3d74bc910710e6d69d",
+    "universe_sha256": "fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e",
+    "snapshot_sha256": "f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f",
+    "benchmark_sha256": "c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be",
+    "random_seed": 42,
+    "market": "IN",
+    "benchmark": "NIFTYBEES.NS",
+    "regime_index": "^NSEI"
+  },
+  "strategies": {
+    "C1b_Baseline_NoBuffer": {
+      "strategy": "C1b_BASELINE",
+      "buffered": false,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 759359.05,
+      "cum_net_return_pct": 51.87,
+      "annualized_net_return_pct": 10.33,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 2.91,
+      "max_drawdown_pct": 22.85,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 1.57,
+      "volatility_pct": 16.36,
+      "sharpe_ratio": 0.63,
+      "sortino_ratio": 0.77,
+      "total_costs_paid": 22738.62,
+      "cost_drag_pct_of_capital": 4.55,
+      "avg_monthly_turnover_pct": 46.88,
+      "positive_calendar_years": "4/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": 4.66,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": 2.54,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 32.87,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": 11.86,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 24.01,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": 13.66,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": -2.0,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -13.66,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -10.14,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": 0.84,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 10.4,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": 2.23,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 92,
+          "turnover_inr": 1620268.88,
+          "pct_of_total_buying": 18.8
+        },
+        "Capital Goods": {
+          "buys_count": 63,
+          "turnover_inr": 910067.09,
+          "pct_of_total_buying": 10.6
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 53,
+          "turnover_inr": 950049.52,
+          "pct_of_total_buying": 11.1
+        },
+        "Healthcare": {
+          "buys_count": 52,
+          "turnover_inr": 994634.12,
+          "pct_of_total_buying": 11.6
+        },
+        "Metals & Mining": {
+          "buys_count": 39,
+          "turnover_inr": 702603.65,
+          "pct_of_total_buying": 8.2
+        },
+        "Information Technology": {
+          "buys_count": 37,
+          "turnover_inr": 711146.23,
+          "pct_of_total_buying": 8.3
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 34,
+          "turnover_inr": 440523.71,
+          "pct_of_total_buying": 5.1
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 24,
+          "turnover_inr": 450483.15,
+          "pct_of_total_buying": 5.2
+        },
+        "Power": {
+          "buys_count": 21,
+          "turnover_inr": 243261.88,
+          "pct_of_total_buying": 2.8
+        },
+        "Telecommunication": {
+          "buys_count": 15,
+          "turnover_inr": 213987.71,
+          "pct_of_total_buying": 2.5
+        },
+        "Consumer Durables": {
+          "buys_count": 14,
+          "turnover_inr": 423176.9,
+          "pct_of_total_buying": 4.9
+        },
+        "Consumer Services": {
+          "buys_count": 13,
+          "turnover_inr": 173459.03,
+          "pct_of_total_buying": 2.0
+        },
+        "Realty": {
+          "buys_count": 12,
+          "turnover_inr": 192624.63,
+          "pct_of_total_buying": 2.2
+        },
+        "Construction Materials": {
+          "buys_count": 10,
+          "turnover_inr": 326262.9,
+          "pct_of_total_buying": 3.8
+        },
+        "Construction": {
+          "buys_count": 7,
+          "turnover_inr": 148425.23,
+          "pct_of_total_buying": 1.7
+        },
+        "Chemicals": {
+          "buys_count": 2,
+          "turnover_inr": 49716.66,
+          "pct_of_total_buying": 0.6
+        },
+        "Energy": {
+          "buys_count": 2,
+          "turnover_inr": 45183.14,
+          "pct_of_total_buying": 0.5
+        }
+      }
+    },
+    "C1b_Baseline_Buffered": {
+      "strategy": "C1b_BASELINE",
+      "buffered": true,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 793552.44,
+      "cum_net_return_pct": 58.71,
+      "annualized_net_return_pct": 11.48,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 4.06,
+      "max_drawdown_pct": 23.81,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 1.64,
+      "volatility_pct": 16.67,
+      "sharpe_ratio": 0.69,
+      "sortino_ratio": 0.88,
+      "total_costs_paid": 13406.08,
+      "cost_drag_pct_of_capital": 2.68,
+      "avg_monthly_turnover_pct": 28.01,
+      "positive_calendar_years": "3/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": 3.29,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": 1.16,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 33.58,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": 12.57,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 30.1,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": 19.74,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": -0.13,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -11.8,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -11.46,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": -0.48,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 11.36,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": 3.2,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 89,
+          "turnover_inr": 996397.61,
+          "pct_of_total_buying": 18.9
+        },
+        "Capital Goods": {
+          "buys_count": 57,
+          "turnover_inr": 576520.55,
+          "pct_of_total_buying": 10.9
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 56,
+          "turnover_inr": 892640.0,
+          "pct_of_total_buying": 16.9
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 38,
+          "turnover_inr": 332533.24,
+          "pct_of_total_buying": 6.3
+        },
+        "Healthcare": {
+          "buys_count": 38,
+          "turnover_inr": 484143.91,
+          "pct_of_total_buying": 9.2
+        },
+        "Metals & Mining": {
+          "buys_count": 36,
+          "turnover_inr": 429948.4,
+          "pct_of_total_buying": 8.1
+        },
+        "Information Technology": {
+          "buys_count": 34,
+          "turnover_inr": 419800.28,
+          "pct_of_total_buying": 8.0
+        },
+        "Power": {
+          "buys_count": 22,
+          "turnover_inr": 167185.64,
+          "pct_of_total_buying": 3.2
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 21,
+          "turnover_inr": 244021.66,
+          "pct_of_total_buying": 4.6
+        },
+        "Consumer Services": {
+          "buys_count": 12,
+          "turnover_inr": 113527.04,
+          "pct_of_total_buying": 2.2
+        },
+        "Consumer Durables": {
+          "buys_count": 12,
+          "turnover_inr": 250496.33,
+          "pct_of_total_buying": 4.7
+        },
+        "Telecommunication": {
+          "buys_count": 12,
+          "turnover_inr": 127716.27,
+          "pct_of_total_buying": 2.4
+        },
+        "Realty": {
+          "buys_count": 10,
+          "turnover_inr": 85513.37,
+          "pct_of_total_buying": 1.6
+        },
+        "Construction": {
+          "buys_count": 7,
+          "turnover_inr": 79769.25,
+          "pct_of_total_buying": 1.5
+        },
+        "Construction Materials": {
+          "buys_count": 2,
+          "turnover_inr": 52398.85,
+          "pct_of_total_buying": 1.0
+        },
+        "Chemicals": {
+          "buys_count": 1,
+          "turnover_inr": 24176.15,
+          "pct_of_total_buying": 0.5
+        }
+      }
+    },
+    "Cand1_Residual_Momentum_NoBuffer": {
+      "strategy": "CAND1_RESIDUAL_MOMENTUM",
+      "buffered": false,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 705666.79,
+      "cum_net_return_pct": 41.13,
+      "annualized_net_return_pct": 8.44,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 1.02,
+      "max_drawdown_pct": 8.52,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 0.59,
+      "volatility_pct": 9.15,
+      "sharpe_ratio": 0.92,
+      "sortino_ratio": 1.96,
+      "total_costs_paid": 11743.9,
+      "cost_drag_pct_of_capital": 2.35,
+      "avg_monthly_turnover_pct": 27.26,
+      "positive_calendar_years": "3/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": 4.47,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": 2.35,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 29.75,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": 8.74,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 0.0,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": -10.36,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": 7.2,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -4.46,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -2.88,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": 8.1,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 9.91,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": -3.3,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 55,
+          "turnover_inr": 949677.28,
+          "pct_of_total_buying": 23.5
+        },
+        "Healthcare": {
+          "buys_count": 28,
+          "turnover_inr": 438858.66,
+          "pct_of_total_buying": 10.8
+        },
+        "Information Technology": {
+          "buys_count": 25,
+          "turnover_inr": 408425.68,
+          "pct_of_total_buying": 10.1
+        },
+        "Capital Goods": {
+          "buys_count": 25,
+          "turnover_inr": 319871.52,
+          "pct_of_total_buying": 7.9
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 20,
+          "turnover_inr": 423769.28,
+          "pct_of_total_buying": 10.5
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 16,
+          "turnover_inr": 247837.37,
+          "pct_of_total_buying": 6.1
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 14,
+          "turnover_inr": 193285.93,
+          "pct_of_total_buying": 4.8
+        },
+        "Metals & Mining": {
+          "buys_count": 13,
+          "turnover_inr": 256668.32,
+          "pct_of_total_buying": 6.3
+        },
+        "Telecommunication": {
+          "buys_count": 10,
+          "turnover_inr": 146994.16,
+          "pct_of_total_buying": 3.6
+        },
+        "Power": {
+          "buys_count": 9,
+          "turnover_inr": 103727.07,
+          "pct_of_total_buying": 2.6
+        },
+        "Consumer Durables": {
+          "buys_count": 8,
+          "turnover_inr": 174346.42,
+          "pct_of_total_buying": 4.3
+        },
+        "Consumer Services": {
+          "buys_count": 7,
+          "turnover_inr": 84606.4,
+          "pct_of_total_buying": 2.1
+        },
+        "Construction": {
+          "buys_count": 4,
+          "turnover_inr": 53897.79,
+          "pct_of_total_buying": 1.3
+        },
+        "Construction Materials": {
+          "buys_count": 3,
+          "turnover_inr": 78627.95,
+          "pct_of_total_buying": 1.9
+        },
+        "Energy": {
+          "buys_count": 3,
+          "turnover_inr": 63699.77,
+          "pct_of_total_buying": 1.6
+        },
+        "Chemicals": {
+          "buys_count": 3,
+          "turnover_inr": 50654.55,
+          "pct_of_total_buying": 1.3
+        },
+        "Realty": {
+          "buys_count": 2,
+          "turnover_inr": 53203.15,
+          "pct_of_total_buying": 1.3
+        }
+      }
+    },
+    "Cand1_Residual_Momentum_Buffered": {
+      "strategy": "CAND1_RESIDUAL_MOMENTUM",
+      "buffered": true,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 713791.99,
+      "cum_net_return_pct": 42.76,
+      "annualized_net_return_pct": 8.74,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 1.31,
+      "max_drawdown_pct": 7.9,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 0.54,
+      "volatility_pct": 9.0,
+      "sharpe_ratio": 0.97,
+      "sortino_ratio": 2.12,
+      "total_costs_paid": 8339.07,
+      "cost_drag_pct_of_capital": 1.67,
+      "avg_monthly_turnover_pct": 19.26,
+      "positive_calendar_years": "3/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": 5.71,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": 3.58,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 31.08,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": 10.07,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 0.0,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": -10.36,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": 6.37,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -5.29,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -3.14,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": 7.84,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 10.25,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": -3.38,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 52,
+          "turnover_inr": 659129.68,
+          "pct_of_total_buying": 23.0
+        },
+        "Healthcare": {
+          "buys_count": 26,
+          "turnover_inr": 343683.0,
+          "pct_of_total_buying": 12.0
+        },
+        "Capital Goods": {
+          "buys_count": 24,
+          "turnover_inr": 269756.0,
+          "pct_of_total_buying": 9.4
+        },
+        "Information Technology": {
+          "buys_count": 20,
+          "turnover_inr": 264978.63,
+          "pct_of_total_buying": 9.2
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 15,
+          "turnover_inr": 158601.79,
+          "pct_of_total_buying": 5.5
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 15,
+          "turnover_inr": 316301.12,
+          "pct_of_total_buying": 11.0
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 12,
+          "turnover_inr": 127068.92,
+          "pct_of_total_buying": 4.4
+        },
+        "Metals & Mining": {
+          "buys_count": 10,
+          "turnover_inr": 129401.7,
+          "pct_of_total_buying": 4.5
+        },
+        "Telecommunication": {
+          "buys_count": 10,
+          "turnover_inr": 122767.39,
+          "pct_of_total_buying": 4.3
+        },
+        "Power": {
+          "buys_count": 8,
+          "turnover_inr": 52883.43,
+          "pct_of_total_buying": 1.8
+        },
+        "Consumer Services": {
+          "buys_count": 6,
+          "turnover_inr": 57818.76,
+          "pct_of_total_buying": 2.0
+        },
+        "Consumer Durables": {
+          "buys_count": 6,
+          "turnover_inr": 117915.05,
+          "pct_of_total_buying": 4.1
+        },
+        "Construction": {
+          "buys_count": 4,
+          "turnover_inr": 53715.11,
+          "pct_of_total_buying": 1.9
+        },
+        "Energy": {
+          "buys_count": 4,
+          "turnover_inr": 65843.16,
+          "pct_of_total_buying": 2.3
+        },
+        "Construction Materials": {
+          "buys_count": 3,
+          "turnover_inr": 78512.84,
+          "pct_of_total_buying": 2.7
+        },
+        "Realty": {
+          "buys_count": 3,
+          "turnover_inr": 27553.03,
+          "pct_of_total_buying": 1.0
+        },
+        "Chemicals": {
+          "buys_count": 1,
+          "turnover_inr": 23613.59,
+          "pct_of_total_buying": 0.8
+        }
+      }
+    },
+    "Cand2_Frog_in_the_Pan_NoBuffer": {
+      "strategy": "CAND2_FROG_IN_THE_PAN",
+      "buffered": false,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 683420.93,
+      "cum_net_return_pct": 36.68,
+      "annualized_net_return_pct": 7.63,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 0.21,
+      "max_drawdown_pct": 20.32,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 1.4,
+      "volatility_pct": 15.17,
+      "sharpe_ratio": 0.5,
+      "sortino_ratio": 0.71,
+      "total_costs_paid": 22726.11,
+      "cost_drag_pct_of_capital": 4.55,
+      "avg_monthly_turnover_pct": 51.04,
+      "positive_calendar_years": "2/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": -0.46,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": -2.58,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 18.31,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": -2.7,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 29.56,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": 19.2,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": -2.16,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -13.82,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -8.44,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": 2.54,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 7.53,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": 2.22,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 112,
+          "turnover_inr": 1685798.84,
+          "pct_of_total_buying": 20.1
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 61,
+          "turnover_inr": 1075948.3,
+          "pct_of_total_buying": 12.8
+        },
+        "Capital Goods": {
+          "buys_count": 40,
+          "turnover_inr": 619205.81,
+          "pct_of_total_buying": 7.4
+        },
+        "Healthcare": {
+          "buys_count": 40,
+          "turnover_inr": 832059.48,
+          "pct_of_total_buying": 9.9
+        },
+        "Metals & Mining": {
+          "buys_count": 38,
+          "turnover_inr": 668329.31,
+          "pct_of_total_buying": 8.0
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 35,
+          "turnover_inr": 575720.46,
+          "pct_of_total_buying": 6.9
+        },
+        "Information Technology": {
+          "buys_count": 27,
+          "turnover_inr": 484020.1,
+          "pct_of_total_buying": 5.8
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 26,
+          "turnover_inr": 527208.8,
+          "pct_of_total_buying": 6.3
+        },
+        "Consumer Durables": {
+          "buys_count": 24,
+          "turnover_inr": 539854.29,
+          "pct_of_total_buying": 6.4
+        },
+        "Power": {
+          "buys_count": 23,
+          "turnover_inr": 330885.75,
+          "pct_of_total_buying": 3.9
+        },
+        "Construction Materials": {
+          "buys_count": 18,
+          "turnover_inr": 371916.51,
+          "pct_of_total_buying": 4.4
+        },
+        "Realty": {
+          "buys_count": 12,
+          "turnover_inr": 152354.39,
+          "pct_of_total_buying": 1.8
+        },
+        "Consumer Services": {
+          "buys_count": 7,
+          "turnover_inr": 62391.4,
+          "pct_of_total_buying": 0.7
+        },
+        "Telecommunication": {
+          "buys_count": 7,
+          "turnover_inr": 126502.24,
+          "pct_of_total_buying": 1.5
+        },
+        "Construction": {
+          "buys_count": 7,
+          "turnover_inr": 137256.52,
+          "pct_of_total_buying": 1.6
+        },
+        "Energy": {
+          "buys_count": 6,
+          "turnover_inr": 155587.42,
+          "pct_of_total_buying": 1.9
+        },
+        "Chemicals": {
+          "buys_count": 2,
+          "turnover_inr": 56914.31,
+          "pct_of_total_buying": 0.7
+        }
+      }
+    },
+    "Cand2_Frog_in_the_Pan_Buffered": {
+      "strategy": "CAND2_FROG_IN_THE_PAN",
+      "buffered": true,
+      "capital": 500000.0,
+      "total_months": 51,
+      "rebalances_count": 51,
+      "final_equity": 697808.09,
+      "cum_net_return_pct": 39.56,
+      "annualized_net_return_pct": 8.16,
+      "annualized_benchmark_return_pct": 7.42,
+      "annualized_excess_return_pct": 0.74,
+      "max_drawdown_pct": 21.93,
+      "benchmark_max_drawdown_pct": 14.52,
+      "drawdown_ratio": 1.51,
+      "volatility_pct": 15.49,
+      "sharpe_ratio": 0.53,
+      "sortino_ratio": 0.7,
+      "total_costs_paid": 14545.28,
+      "cost_drag_pct_of_capital": 2.91,
+      "avg_monthly_turnover_pct": 33.05,
+      "positive_calendar_years": "3/5",
+      "yearly_performance": {
+        "2022": {
+          "portfolio_net_return_pct": -0.39,
+          "benchmark_return_pct": 2.12,
+          "excess_return_pct": -2.52,
+          "months": 5
+        },
+        "2023": {
+          "portfolio_net_return_pct": 21.22,
+          "benchmark_return_pct": 21.01,
+          "excess_return_pct": 0.21,
+          "months": 12
+        },
+        "2024": {
+          "portfolio_net_return_pct": 28.9,
+          "benchmark_return_pct": 10.36,
+          "excess_return_pct": 18.54,
+          "months": 12
+        },
+        "2025": {
+          "portfolio_net_return_pct": -2.31,
+          "benchmark_return_pct": 11.66,
+          "excess_return_pct": -13.97,
+          "months": 12
+        },
+        "2026": {
+          "portfolio_net_return_pct": -8.21,
+          "benchmark_return_pct": -10.98,
+          "excess_return_pct": 2.77,
+          "months": 10
+        }
+      },
+      "regime_breakdown": {
+        "bull_regime": {
+          "months": 48,
+          "annualized_net_return_pct": 7.66,
+          "annualized_benchmark_return_pct": 6.86
+        },
+        "bear_regime": {
+          "months": 3,
+          "total_return_pct": 3.86,
+          "benchmark_total_return_pct": 3.98
+        }
+      },
+      "sector_attribution": {
+        "Financial Services": {
+          "buys_count": 109,
+          "turnover_inr": 1076612.25,
+          "pct_of_total_buying": 19.4
+        },
+        "Automobile and Auto Components": {
+          "buys_count": 52,
+          "turnover_inr": 685918.25,
+          "pct_of_total_buying": 12.4
+        },
+        "Capital Goods": {
+          "buys_count": 36,
+          "turnover_inr": 417604.75,
+          "pct_of_total_buying": 7.5
+        },
+        "Healthcare": {
+          "buys_count": 32,
+          "turnover_inr": 564991.93,
+          "pct_of_total_buying": 10.2
+        },
+        "Metals & Mining": {
+          "buys_count": 31,
+          "turnover_inr": 451127.67,
+          "pct_of_total_buying": 8.1
+        },
+        "Oil Gas & Consumable Fuels": {
+          "buys_count": 30,
+          "turnover_inr": 284012.05,
+          "pct_of_total_buying": 5.1
+        },
+        "Fast Moving Consumer Goods": {
+          "buys_count": 29,
+          "turnover_inr": 433594.43,
+          "pct_of_total_buying": 7.8
+        },
+        "Information Technology": {
+          "buys_count": 26,
+          "turnover_inr": 325441.1,
+          "pct_of_total_buying": 5.9
+        },
+        "Power": {
+          "buys_count": 20,
+          "turnover_inr": 168169.4,
+          "pct_of_total_buying": 3.0
+        },
+        "Consumer Durables": {
+          "buys_count": 18,
+          "turnover_inr": 405934.12,
+          "pct_of_total_buying": 7.3
+        },
+        "Construction Materials": {
+          "buys_count": 13,
+          "turnover_inr": 242239.51,
+          "pct_of_total_buying": 4.4
+        },
+        "Telecommunication": {
+          "buys_count": 11,
+          "turnover_inr": 134373.48,
+          "pct_of_total_buying": 2.4
+        },
+        "Realty": {
+          "buys_count": 9,
+          "turnover_inr": 150250.9,
+          "pct_of_total_buying": 2.7
+        },
+        "Construction": {
+          "buys_count": 7,
+          "turnover_inr": 77867.79,
+          "pct_of_total_buying": 1.4
+        },
+        "Consumer Services": {
+          "buys_count": 6,
+          "turnover_inr": 61419.57,
+          "pct_of_total_buying": 1.1
+        },
+        "Energy": {
+          "buys_count": 3,
+          "turnover_inr": 63036.09,
+          "pct_of_total_buying": 1.1
+        }
+      }
+    },
+    "Cand3_Connors_RSI2_Research500k": {
+      "strategy": "CAND3_CONNORS_RSI2",
+      "capital": 500000.0,
+      "total_trades": 1485,
+      "winning_trades": 829,
+      "losing_trades": 656,
+      "win_rate_pct": 55.8,
+      "expectancy_r": -0.082,
+      "profit_factor": 0.85,
+      "gross_profit_factor": 1.09,
+      "avg_trade_pct": -0.16,
+      "avg_win_pct": 1.76,
+      "avg_loss_pct": -2.58,
+      "avg_holding_days": 3.3,
+      "final_equity": 393568.77,
+      "cum_net_return_pct": -21.29,
+      "annualized_net_return_pct": -5.28,
+      "annualized_benchmark_return_pct": 11.04,
+      "annualized_excess_return_pct": -16.33,
+      "max_drawdown_pct": 29.9,
+      "total_costs_paid": 165573.99,
+      "cost_drag_pct_of_capital": 33.11,
+      "top5_winners_contribution_pct": 3.1,
+      "exit_reasons_breakdown": {
+        "SMA5_EXIT": {
+          "count": 1145,
+          "pct": 77.1,
+          "win_rate_pct": 71.7,
+          "avg_holding_days": 2.8
+        },
+        "TIME_STOP": {
+          "count": 340,
+          "pct": 22.9,
+          "win_rate_pct": 2.4,
+          "avg_holding_days": 5.0
+        }
+      },
+      "yearly_performance": {
+        "2022": {
+          "total_trades": 180,
+          "win_rate_pct": 46.7,
+          "net_pnl": -37273.93,
+          "profit_factor": 0.69
+        },
+        "2023": {
+          "total_trades": 431,
+          "win_rate_pct": 59.6,
+          "net_pnl": -5963.52,
+          "profit_factor": 0.97
+        },
+        "2024": {
+          "total_trades": 463,
+          "win_rate_pct": 53.8,
+          "net_pnl": -66793.17,
+          "profit_factor": 0.75
+        },
+        "2025": {
+          "total_trades": 372,
+          "win_rate_pct": 58.9,
+          "net_pnl": 7515.2,
+          "profit_factor": 1.06
+        },
+        "2026": {
+          "total_trades": 39,
+          "win_rate_pct": 51.3,
+          "net_pnl": -3915.8,
+          "profit_factor": 0.8
+        }
+      },
+      "sector_attribution": {
+        "Automobile and Auto Components": {
+          "trades": 177,
+          "win_rate_pct": 63.3,
+          "net_pnl": 20991.38
+        },
+        "Capital Goods": {
+          "trades": 118,
+          "win_rate_pct": 55.9,
+          "net_pnl": -21404.4
+        },
+        "Chemicals": {
+          "trades": 27,
+          "win_rate_pct": 33.3,
+          "net_pnl": -22809.45
+        },
+        "Construction": {
+          "trades": 25,
+          "win_rate_pct": 56.0,
+          "net_pnl": -4768.03
+        },
+        "Construction Materials": {
+          "trades": 71,
+          "win_rate_pct": 57.7,
+          "net_pnl": -4878.52
+        },
+        "Consumer Durables": {
+          "trades": 64,
+          "win_rate_pct": 50.0,
+          "net_pnl": -10461.38
+        },
+        "Consumer Services": {
+          "trades": 14,
+          "win_rate_pct": 35.7,
+          "net_pnl": -11423.65
+        },
+        "Energy": {
+          "trades": 22,
+          "win_rate_pct": 45.5,
+          "net_pnl": -7733.99
+        },
+        "Fast Moving Consumer Goods": {
+          "trades": 116,
+          "win_rate_pct": 58.6,
+          "net_pnl": -5838.57
+        },
+        "Financial Services": {
+          "trades": 262,
+          "win_rate_pct": 55.0,
+          "net_pnl": -608.76
+        },
+        "Healthcare": {
+          "trades": 173,
+          "win_rate_pct": 59.5,
+          "net_pnl": 11937.46
+        },
+        "Information Technology": {
+          "trades": 181,
+          "win_rate_pct": 54.1,
+          "net_pnl": -8508.63
+        },
+        "Metals & Mining": {
+          "trades": 80,
+          "win_rate_pct": 50.0,
+          "net_pnl": -16593.56
+        },
+        "Oil Gas & Consumable Fuels": {
+          "trades": 56,
+          "win_rate_pct": 55.4,
+          "net_pnl": -7225.83
+        },
+        "Power": {
+          "trades": 32,
+          "win_rate_pct": 62.5,
+          "net_pnl": -9248.53
+        },
+        "Realty": {
+          "trades": 16,
+          "win_rate_pct": 50.0,
+          "net_pnl": -2822.22
+        },
+        "Telecommunication": {
+          "trades": 51,
+          "win_rate_pct": 54.9,
+          "net_pnl": -5034.54
+        }
+      }
+    },
+    "Cand3_Connors_RSI2_Practical17k": {
+      "strategy": "CAND3_CONNORS_RSI2",
+      "capital": 17500.0,
+      "total_trades": 645,
+      "winning_trades": 105,
+      "losing_trades": 540,
+      "win_rate_pct": 16.3,
+      "expectancy_r": -1.214,
+      "profit_factor": 0.1,
+      "gross_profit_factor": 1.02,
+      "avg_trade_pct": -2.72,
+      "avg_win_pct": 1.37,
+      "avg_loss_pct": -3.52,
+      "avg_holding_days": 3.3,
+      "final_equity": 4297.34,
+      "cum_net_return_pct": -75.44,
+      "annualized_net_return_pct": -27.28,
+      "annualized_benchmark_return_pct": 11.04,
+      "annualized_excess_return_pct": -38.32,
+      "max_drawdown_pct": 75.48,
+      "total_costs_paid": 13322.21,
+      "cost_drag_pct_of_capital": 76.13,
+      "top5_winners_contribution_pct": 22.8,
+      "exit_reasons_breakdown": {
+        "SMA5_EXIT": {
+          "count": 492,
+          "pct": 76.3,
+          "win_rate_pct": 21.1,
+          "avg_holding_days": 2.8
+        },
+        "TIME_STOP": {
+          "count": 153,
+          "pct": 23.7,
+          "win_rate_pct": 0.7,
+          "avg_holding_days": 5.0
+        }
+      },
+      "yearly_performance": {
+        "2022": {
+          "total_trades": 137,
+          "win_rate_pct": 24.1,
+          "net_pnl": -3823.14,
+          "profit_factor": 0.14
+        },
+        "2023": {
+          "total_trades": 239,
+          "win_rate_pct": 14.6,
+          "net_pnl": -4699.83,
+          "profit_factor": 0.1
+        },
+        "2024": {
+          "total_trades": 180,
+          "win_rate_pct": 19.4,
+          "net_pnl": -3044.02,
+          "profit_factor": 0.08
+        },
+        "2025": {
+          "total_trades": 80,
+          "win_rate_pct": 0.0,
+          "net_pnl": -1484.82,
+          "profit_factor": 0.0
+        },
+        "2026": {
+          "total_trades": 9,
+          "win_rate_pct": 22.2,
+          "net_pnl": -150.87,
+          "profit_factor": 0.04
+        }
+      },
+      "sector_attribution": {
+        "Automobile and Auto Components": {
+          "trades": 62,
+          "win_rate_pct": 22.6,
+          "net_pnl": -748.31
+        },
+        "Capital Goods": {
+          "trades": 44,
+          "win_rate_pct": 9.1,
+          "net_pnl": -1226.55
+        },
+        "Consumer Durables": {
+          "trades": 2,
+          "win_rate_pct": 0.0,
+          "net_pnl": -27.76
+        },
+        "Consumer Services": {
+          "trades": 8,
+          "win_rate_pct": 12.5,
+          "net_pnl": -262.27
+        },
+        "Energy": {
+          "trades": 4,
+          "win_rate_pct": 0.0,
+          "net_pnl": -139.47
+        },
+        "Fast Moving Consumer Goods": {
+          "trades": 49,
+          "win_rate_pct": 10.2,
+          "net_pnl": -917.6
+        },
+        "Financial Services": {
+          "trades": 169,
+          "win_rate_pct": 14.8,
+          "net_pnl": -3756.61
+        },
+        "Healthcare": {
+          "trades": 45,
+          "win_rate_pct": 24.4,
+          "net_pnl": -725.22
+        },
+        "Information Technology": {
+          "trades": 51,
+          "win_rate_pct": 25.5,
+          "net_pnl": -702.24
+        },
+        "Metals & Mining": {
+          "trades": 69,
+          "win_rate_pct": 15.9,
+          "net_pnl": -1419.88
+        },
+        "Oil Gas & Consumable Fuels": {
+          "trades": 80,
+          "win_rate_pct": 13.8,
+          "net_pnl": -1957.85
+        },
+        "Power": {
+          "trades": 44,
+          "win_rate_pct": 15.9,
+          "net_pnl": -997.34
+        },
+        "Realty": {
+          "trades": 3,
+          "win_rate_pct": 0.0,
+          "net_pnl": -85.7
+        },
+        "Telecommunication": {
+          "trades": 15,
+          "win_rate_pct": 20.0,
+          "net_pnl": -235.88
+        }
+      }
+    }
+  },
+  "controls": {
+    "Control_B_Random_Portfolios": {
+      "n_simulations": 1000,
+      "random_p05_excess_pct": -4.2,
+      "random_p50_excess_pct": -0.82,
+      "random_p95_excess_pct": 2.77,
+      "candidate_excess_ann_pct": 1.02,
+      "candidate_percentile_rank": 80.9,
+      "passed_95th_percentile_gate": false
+    }
+  },
+  "bootstrap_ci": {
+    "C1b_Baseline_NoBuffer": {
+      "ci_lower_pct": -0.462,
+      "ci_upper_pct": 0.969,
+      "mean_pct": 0.268,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    },
+    "C1b_Baseline_Buffered": {
+      "ci_lower_pct": -0.448,
+      "ci_upper_pct": 1.174,
+      "mean_pct": 0.359,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    },
+    "Cand1_Residual_Momentum_NoBuffer": {
+      "ci_lower_pct": -0.748,
+      "ci_upper_pct": 0.802,
+      "mean_pct": 0.045,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    },
+    "Cand1_Residual_Momentum_Buffered": {
+      "ci_lower_pct": -0.735,
+      "ci_upper_pct": 0.832,
+      "mean_pct": 0.067,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    },
+    "Cand2_Frog_in_the_Pan_NoBuffer": {
+      "ci_lower_pct": -0.668,
+      "ci_upper_pct": 0.744,
+      "mean_pct": 0.043,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    },
+    "Cand2_Frog_in_the_Pan_Buffered": {
+      "ci_lower_pct": -0.621,
+      "ci_upper_pct": 0.805,
+      "mean_pct": 0.089,
+      "n_resamples": 2000,
+      "block_length": 6,
+      "strictly_positive_ci": false
+    }
+  },
+  "scale_comparison_17500": {
+    "C1b_Baseline": {
+      "capital_500k_ann_ret_pct": 10.33,
+      "capital_17k_ann_ret_pct": 2.09,
+      "capital_500k_cost_drag_pct": 4.55,
+      "capital_17k_cost_drag_pct": 8.68,
+      "drag_differential_pct": 4.13
+    },
+    "Cand1_Residual_Momentum": {
+      "capital_500k_ann_ret_pct": 8.44,
+      "capital_17k_ann_ret_pct": 2.15,
+      "capital_500k_cost_drag_pct": 2.35,
+      "capital_17k_cost_drag_pct": 5.7,
+      "drag_differential_pct": 3.35
+    },
+    "Cand2_Frog_in_the_Pan": {
+      "capital_500k_ann_ret_pct": 7.63,
+      "capital_17k_ann_ret_pct": 0.18,
+      "capital_500k_cost_drag_pct": 4.55,
+      "capital_17k_cost_drag_pct": 10.18,
+      "drag_differential_pct": 5.63
+    },
+    "Cand3_Connors_RSI2": {
+      "capital_500k_ann_ret_pct": -5.28,
+      "capital_17k_ann_ret_pct": -27.28,
+      "capital_500k_cost_drag_pct": 33.11,
+      "capital_17k_cost_drag_pct": 76.13,
+      "drag_differential_pct": 43.02
+    }
+  }
+}
