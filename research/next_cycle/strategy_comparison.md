@@ -1,276 +1,216 @@
-# Research Cycle 3: Independent Swing Strategy Testing Report
+# Research Cycle 3: Independent Swing Strategy Testing — Final Reconciled Report
 
-**Status:** CYCLE COMPLETE — ALL CANDIDATES EVALUATED  
+**Status:** CYCLE COMPLETE — ALL METHODOLOGICAL CORRECTIONS APPLIED  
 **Date:** 2026-11-06  
 **Cycle:** Research Cycle 3 — Independent Swing Strategy Testing  
 **Research Mode:** Strictly Offline Research — No Live Trading, No Automated Order Placement  
 **Pre-Registration Git Commit:** `9a58dbf048a8ffcc3fccbd431d3933f19f6d8726`  
 **PREREG.md SHA256:** `f5d87c02330a7967dba34934ceabbe99df48c09e93c99a3d74bc910710e6d69d`  
-**Universe:** India NSE Equities (`research_universe_v1.csv` — 70 symbols, SHA256: `fbba1bc1...`)  
-**Data Snapshot:** `research_snapshot_20261106.parquet` (1,316 sessions, SHA256: `f6e564a5...`)  
-**Primary Benchmark:** `NIFTYBEES.NS` Total Return ETF (SHA256: `c9ed07ed...`)  
+**Universe:** India NSE Equities (`research_universe_v1.csv` — 70 symbols, SHA256: `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`)  
+**Data Snapshot:** `research_snapshot_20261106.parquet` (1,316 sessions, SHA256: `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`)  
+**Primary Benchmark:** `NIFTYBEES.NS` Total Return ETF (SHA256: `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`)  
 **Market Regime Index:** `^NSEI` (Nifty 50 Index)  
 
 ---
 
 ## 1. Executive Summary & Master Decision Matrix
 
-Research Cycle 3 tested exactly three genuinely distinct, peer-reviewed/established swing-trading hypotheses against the frozen Phase 2 baseline (Candidate C1b India). Testing was performed strictly offline using the approved frozen research universe, Parquet snapshot, and realistic Indian equity transaction costs (brokerage, STT, exchange turnover fees, SEBI charges, stamp duty, DP charges of ₹15.93 per sold scrip, GST, and 0.10% adverse execution slippage).
+Research Cycle 3 tested three distinct swing-trading hypotheses against the canonical Phase 2 baseline (Candidate C1b India). All simulations were conducted strictly offline on the approved frozen research universe and snapshot, applying exact Zerodha Indian equity delivery costs (including flat DP charges of ₹15.93 per sold scrip and 0.10% adverse execution slippage).
 
-### Master Verdict Table
+### Master Comparison Table (Reconciled)
 
-| Candidate / Strategy | Formulation Reference | Annualized Net Return | Annualized Excess vs NIFTYBEES | Max Drawdown | Sharpe Ratio | Sortino Ratio | Monthly Turnover | Total Cost Drag (₹500k) | Decision Protocol Verdict |
+| Candidate / Strategy | Formulation Reference | Annualized Net Return | Annualized Excess vs NIFTYBEES | Max Drawdown | Sharpe Ratio | Sortino Ratio | Monthly Turnover | Cumulative Cost Drag (% starting capital) | Decision Protocol Verdict |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Comparator: C1b Baseline** (No Buffer) | Jegadeesh & Titman (1993) | +10.33% | +2.91% | 22.85% | 0.63 | 0.77 | 46.88% | 4.55% | **HISTORICAL COMPARATOR** |
-| **Comparator: C1b Baseline** (Buffered 1–30) | Retention Band Control | +11.48% | +4.06% | 23.81% | 0.69 | 0.88 | 28.01% | 2.68% | **CONTROL BENCHMARK** |
-| **Candidate 1: Residual Momentum** (No Buffer) | Blitz, Huij & Martens (2011) | +8.44% | +1.02% | **8.52%** | **0.92** | **1.96** | 27.26% | 2.35% | **INCONCLUSIVE** |
-| **Candidate 1: Residual Momentum** (Buffered 1–30) | Blitz, Huij & Martens (2011) | +8.74% | +1.31% | **7.90%** | **0.97** | **2.12** | **19.26%** | **1.67%** | **INCONCLUSIVE** |
-| **Candidate 2: Frog-in-the-Pan** (No Buffer) | Da, Gurun & Warachka (2014) | +7.63% | +0.21% | 20.32% | 0.50 | 0.71 | 51.04% | 4.55% | **REJECTED** |
-| **Candidate 2: Frog-in-the-Pan** (Buffered 1–30) | Da, Gurun & Warachka (2014) | +8.16% | +0.74% | 21.93% | 0.53 | 0.70 | 33.05% | 2.91% | **REJECTED** |
+| **Canonical Phase 2 Comparator: C1b India** | Clean Regime (`^NSEI > SMA200`) | +16.23% | +8.81% | 9.46% | 0.99 | 1.94 | ₹267.6k avg | 3.63% | **CANONICAL BASELINE** |
+| **Cycle 3 Replicated C1b** (No Buffer) | Jegadeesh & Titman (1993) | +16.11% | +8.69% | 9.25% | 1.42 | 1.92 | 38.69% | 3.84% | **HISTORICAL COMPARATOR** |
+| **Cycle 3 Replicated C1b** (Buffered 1–30) | Retention Band Control | +17.51% | +10.09% | 9.02% | 1.51 | 2.52 | 23.53% | 2.33% | **CONTROL BENCHMARK** |
+| *Cycle 3 Degraded C1b Comparator* | *Weekend NaN Regime Artifact* | *+10.33%* | *+2.91%* | *22.85%* | *0.63* | *0.77* | *46.88%* | *4.55%* | *DEGRADED RUNNER (RECONCILED)* |
+| **Candidate 1: Market-Sector Regression-Alpha** (No Buffer) | Idiosyncratic Alpha Standardized | +13.49% | +6.07% | 10.18% | 1.24 | 1.90 | 38.08% | 3.68% | **INCONCLUSIVE** |
+| **Candidate 1: Market-Sector Regression-Alpha** (Buffered 1–30) | Idiosyncratic Alpha Standardized | +16.88% | +9.46% | **8.31%** | **1.52** | **2.41** | **24.73%** | **2.48%** | **INCONCLUSIVE** |
+| **Candidate 2: Frog-in-the-Pan** (No Buffer) | Da, Gurun & Warachka (2014) | +12.42% | +5.00% | 10.27% | 1.21 | 2.02 | 42.78% | 3.87% | **REJECTED** |
+| **Candidate 2: Frog-in-the-Pan** (Buffered 1–30) | Da, Gurun & Warachka (2014) | +12.83% | +5.41% | 8.44% | 1.25 | 2.08 | 28.97% | 2.65% | **REJECTED** |
 | **Candidate 3: Connors RSI(2)** (Research ₹500k) | Larry Connors Mean Reversion | -5.28% | -16.33% | 29.90% | N/A | N/A | High (1,485 trades) | **33.11%** | **REJECTED IMMEDIATELY** |
 | **Candidate 3: Connors RSI(2)** (Practical ₹17.5k) | Larry Connors Mean Reversion | -27.28% | -38.32% | 75.48% | N/A | N/A | High (645 trades) | **76.13%** | **REJECTED IMMEDIATELY** |
+| **Published Blitz, Huij & Martens (2011)** | Fama-French 3-Factor 36m | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **NOT IMPLEMENTED** |
 
-> **CORE RESEARCH CONCLUSION:**  
+> **CORE DECISION & SUMMARY FINDINGS:**  
 > **ZERO candidates qualify for `VALIDATED` status or live trading deployment.**  
-> - **Candidate 3 (Connors RSI(2)) is REJECTED IMMEDIATELY** due to negative net expectancy ($-0.082R$), a sub-1.0 net profit factor ($0.85$), and catastrophic transaction fee drag ($33.1\%$ of capital at ₹500k and $76.1\%$ at ₹17.5k).  
-> - **Candidate 2 (Frog-in-the-Pan) is REJECTED** because ranking by Information Discreteness ($ID$) severely underperformed raw momentum ($+7.63\%$ vs $+10.33\%$) while producing excess return indistinguishable from zero ($+0.21\%$) and failing bootstrap significance.  
-> - **Candidate 1 (Residual Momentum) is classified as INCONCLUSIVE.** While it failed the pre-registered $+2.0\%$ excess return threshold ($+1.02\%$ to $+1.31\%$) and the bootstrap CI spanned zero, it empirically validated Blitz et al.'s theoretical mechanism: **it slashed maximum drawdown by nearly two-thirds** ($7.90\%$ vs $23.81\%$ for C1b and $22.85\%$ for Nifty) and achieved the highest Sharpe ratio ($0.97$) and Sortino ratio ($2.12$) of any strategy tested. Candidate 1 is the **sole candidate deserving future exploratory prospective paper observation** in a broader universe.
+> 1. **Candidate 3 (Connors RSI(2)) is REJECTED IMMEDIATELY.** It produces negative mathematical currency expectancy ($-₹71.67$ per trade at ₹500k, $-₹20.47$ at ₹17.5k), a net profit factor of $0.85$ (collapsing to $0.10$ at practical scale), and severe transaction cost destruction ($33.11\%$ to $76.13\%$ cumulative cost drag).  
+> 2. **Candidate 2 (Frog-in-the-Pan) is REJECTED.** Ranking by Information Discreteness ($ID$) underperforms conventional momentum by over 360 to 460 bps (+12.83% vs +17.51% buffered) and fails the bootstrap significance test.  
+> 3. **Candidate 1 (Market-Sector Regression-Alpha) is classified as INCONCLUSIVE.** It demonstrates robust empirical risk reduction (achieving an **8.31% maximum drawdown** vs 9.02% for C1b and 14.52% for NIFTYBEES) and a Sharpe ratio of $1.52$. However, because all historical evaluations on this dataset are exploratory and lack an independent untouched holdout, it cannot be validated without prospective forward testing.  
+> 4. **Published Blitz, Huij & Martens (2011) Residual Momentum is marked as NOT IMPLEMENTED.** The required Fama-French Indian SMB and HML factors, historical balance sheet data, and 36-month pre-formation history are unavailable in the frozen snapshot.
 
 ---
 
-## 2. Integrity, Scope & Methodology Invariants
+## 2. Resolution of Methodological Discrepancies
 
-1. **Pre-Registration Enforcement:**  
-   `research/next_cycle/PREREG.md` was authored, frozen, and committed to git (`9a58dbf048a8ffcc3fccbd431d3933f19f6d8726`) before any candidate simulation or factor calculation was executed. No parameters, thresholds, or universes were altered post-hoc.
-2. **Untouched Phase 2 Artifacts:**  
-   `research/PHASE2_FINAL_REPORT.md` (SHA256: `5ddb610b...`) and `research/phase2_results.json` were strictly preserved in read-only state.
-3. **Conservative Execution Fills:**  
-   - All monthly rebalances and daily swing setups execute at the **Open of session $T+1$** following signal close at session $T$.
-   - Fills include $+0.10\%$ adverse slippage on Buy entries and $-0.10\%$ adverse slippage on Sell exits.
-   - Sizing strictly enforces whole shares and cash availability. Cash earns 0.0%.
-4. **Exact Indian Equity Delivery Cost Model:**  
-   - Brokerage: ₹0 flat delivery.
-   - STT: 0.10% buy, 0.10% sell.
-   - Exchange charges: 0.003%.
-   - SEBI charges: ₹10 per crore (0.0001%).
-   - Stamp duty: 0.015% buy only.
-   - Depository Participant (DP) Charge: ₹13.50 + 18% GST = **₹15.93 flat per sold scrip**.
-   - GST: 18% on (Exchange + SEBI + DP charges).
+### A. C1b Baseline Discrepancy Resolution
+- **Phase 2 Canonical Result:** Net Annualized Return: **+16.23%**, Annualized Excess vs NIFTYBEES: **+8.81%**, Maximum Drawdown: **9.46%**, Final Equity: **₹947,619.98**.
+- **Initial Cycle 3 Runner Result:** Net Annualized Return: **+10.33%**, Annualized Excess: **+2.91%**, Maximum Drawdown: **22.85%**, Final Equity: **₹759,359.05**.
+- **Cause of Difference (Technical Audit):**
+  1. *Regime Index Missing Bars:* In the initial Cycle 3 runner script (`backend/run_cycle3_validation.py`), `nsei` was reindexed to `close_df.index`, which contained 6 special Indian weekend/holiday trading sessions (e.g. Diwali Muhurat trading on Sunday 2023-11-12, disaster recovery live sessions on Saturdays in 2024, and Union Budget session on Sunday 2026-02-01). Because `^NSEI` index close in `bench_df` was NaN on those weekend sessions, `rolling(200, min_periods=200)` propagated NaNs across subsequent dates starting in February 2026.
+  2. *Regime Filter Default Fallback:* In the initial Cycle 3 loop, `regime_pass` initialized to `True`. The condition `if pd.notna(b_c) and pd.notna(b_sma): regime_pass = b_c > b_sma` failed to execute because `b_sma` was NaN. Consequently, the initial runner stayed **100% invested throughout the 2026 market correction**, suffering deep drawdowns down to ₹759,359.
+  3. *Phase 2 Implementation:* In Phase 2 (`run_phase2_validation.py`), `bench_sma200` was computed directly on the clean continuous series without NaN gaps. Phase 2 correctly detected `^NSEI Close < SMA200` in early 2025 (Jan–Mar) and early 2026 (Feb–Oct 2026), moving the portfolio to **100% Cash** at ₹947,619.98.
+- **Reconciliation Outcome:** When the regime series is computed cleanly without NaN gap propagation, the Cycle 3 backtester replicates the Phase 2 baseline at **+16.11% annualized net return** (matching Phase 2's +16.23% within 0.12% due to whole-share and cash rounding), **9.25% maximum drawdown** (matching Phase 2's 9.46%), and ₹943,477 final equity. Both figures are transparently reported above.
 
----
-
-## 3. Candidate 1 — Residual Momentum (Blitz, Huij & Martens, 2011)
-
-### Economic Hypothesis & Formula
-Conventional momentum is contaminated by exposure to systematic factor drift (market beta and industry sector trends). Blitz, Huij & Martens (2011) showed that stripping out market and industry sector factors isolates firm-specific idiosyncratic momentum with lower crash risk.
-
-On each monthly rebalance date $T$, using trailing daily returns from $t = T-252$ to $t = T-21$ (232 trading sessions):
-$$R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i,S} R_{S,t} + \epsilon_{i,t}$$
-where $R_{M,t}$ is the daily return of `^NSEI` and $R_{S,t}$ is the equal-weighted return of all other universe stocks in stock $i$'s sector.
-
-Because OLS residuals over the identical estimation window sum to zero by mathematical definition ($\sum \hat{\epsilon}_t \equiv 0$), the firm-specific idiosyncratic return stripping out systematic factor drift is:
-$$R_{i,t}^{\text{idiosyncratic}} = R_{i,t} - \hat{\beta}_{i,M} R_{M,t} - \hat{\beta}_{i,S} R_{S,t} = \hat{\alpha}_i + \hat{\epsilon}_{i,t}$$
-Cumulating over the window yields $\sum R_{i,t}^{\text{idiosyncratic}} = N \hat{\alpha}_i$. Dividing by residual volatility $\sigma(\hat{\epsilon}_i)$ produces the standardized idiosyncratic Sharpe score:
-$$\text{Score}_i = \frac{N \hat{\alpha}_i}{\sigma(\hat{\epsilon}_i)}$$
-
-### Performance Results (₹500,000 Research Capital)
-- **Annualized Net Return:** +8.44% (No Buffer) | **+8.74%** (Buffered 1–30)
-- **Annualized Excess Return (vs NIFTYBEES):** +1.02% (No Buffer) | **+1.31%** (Buffered 1–30)
-- **Maximum Drawdown:** **8.52%** (No Buffer) | **7.90%** (Buffered 1–30)
-- **Benchmark Max Drawdown:** 22.85% (Drawdown ratio: **$0.35\times$**, superior capital preservation)
-- **Annualized Volatility:** 9.17% (No Buffer) | **9.05%** (Buffered 1–30)
-- **Sharpe Ratio:** 0.92 (No Buffer) | **0.97** (Buffered 1–30)
-- **Sortino Ratio:** 1.96 (No Buffer) | **2.12** (Buffered 1–30)
-- **Average Monthly Turnover:** 27.26% (No Buffer) | **19.26%** (Buffered 1–30)
-- **Total Costs Paid:** ₹11,768.42 (No Buffer) | **₹8,359.18** (Buffered 1–30)
-- **Cost Drag of Capital:** 2.35% (No Buffer) | **1.67%** (Buffered 1–30)
-
-### Statistical Uncertainty & Controls
-- **95% Circular Block-Bootstrap CI (Monthly Excess Return):**  
-  - No Buffer: `[-0.748%, +0.802%]`, Mean: `+0.045%`, Strictly Positive: **False**
-  - Buffered: `[-0.735%, +0.832%]`, Mean: `+0.067%`, Strictly Positive: **False**
-- **Control B: 1,000 Random Selection Portfolios:**  
-  - Random 5th percentile: -4.20%, Median: -0.82%, 95th percentile: +2.77%
-  - Candidate 1 Excess Return: +1.02%
-  - Percentile Rank: **80.9%** (fails the 95th percentile significance gate)
-
-### Verdict: `INCONCLUSIVE`
-Candidate 1 decisively confirms the Blitz, Huij & Martens thesis regarding **drawdown mitigation**: it reduced maximum drawdown from 22.85% to 7.90% and doubled the Sharpe ratio (0.97 vs 0.63 for C1b). However, in this 70-stock universe, its net excess return (+1.02% to +1.31%) does not achieve statistical significance against the passive ETF. It does not qualify for validation, but represents the most theoretically sound candidate for prospective forward paper observation.
+### B. Benchmark Drawdown Reconciled
+- **NIFTYBEES.NS (Total Return ETF):**
+  - Full snapshot daily maximum drawdown (2021-07-19 to 2026-11-05): **16.11%** (recorded in Phase 2 report).
+  - Evaluation period daily maximum drawdown (2022-08-30 to 2026-10-30): **15.23%** (peak ₹299.70 on 2026-01-20 to trough ₹254.05 on 2026-03-19).
+  - Evaluation period month-end maximum drawdown (2022-08-30 to 2026-10-30): **14.52%** (peak ₹296.49 on 2026-01-30 to trough ₹253.44 on 2026-03-30).
+- **^NSEI (Nifty 50 Index):**
+  - Full snapshot daily maximum drawdown: **17.23%**.
+  - Evaluation period daily maximum drawdown: **15.77%**.
+  - Evaluation period month-end maximum drawdown: **14.78%** (recorded in Phase 2 report).
+- **Correction:** The "22.85%" figure cited in earlier report text was a typographical misattribution of the degraded C1b strategy's drawdown into the benchmark column. `NIFTYBEES.NS` actual maximum drawdown during the evaluation period was **14.52%** (month-end) and **15.23%** (daily).
 
 ---
 
-## 4. Candidate 2 — Frog-in-the-Pan Momentum (Da, Gurun & Warachka, 2014)
+## 3. Residual Momentum Methodology & Attribution Correction
 
-### Economic Hypothesis & Formula
-Da, Gurun & Warachka (2014) hypothesized that investors underreact to small, continuous price changes (like a frog in warming water) compared to salient, discrete earnings jumps. Among positive momentum stocks, smoother paths should predict persistent outperformance.
+### Accurate Strategy Characterization
+The strategy implemented in `backend/run_cycle3_validation.py` is the **Market-Sector Regression-Alpha Standardized Strategy**:
+- Trailing window: $t = T-252$ to $t = T-21$ (232 trading sessions).
+- Factor model: $R_{i,t} = \alpha_i + \beta_{i,M} R_{M,t} + \beta_{i,S} R_{S,t} + \epsilon_{i,t}$, where $R_M$ is `^NSEI` and $R_S$ is the equal-weighted return of all other universe stocks in stock $i$'s sector.
+- Idiosyncratic return: $R_{i,t}^{\text{idiosyncratic}} = R_{i,t} - \hat{\beta}_{i,M} R_{M,t} - \hat{\beta}_{i,S} R_{S,t} = \hat{\alpha}_i + \hat{\epsilon}_{i,t}$.
+- Score: $\text{Score}_i = \frac{\sum R_{i,t}^{\text{idiosyncratic}}}{\sigma(\hat{\epsilon}_i)} = \frac{N \hat{\alpha}_i}{\sigma(\hat{\epsilon}_i)}$.
 
-Formation window: $t = T-252$ to $t = T-21$. Eligible cohort: $\text{PRET}_i = \frac{P_{T-21}}{P_{T-252}} - 1 > 0$.  
-Information Discreteness:
-$$ID_i = \text{sgn}(\text{PRET}_i) \times [\%neg_i - \%pos_i] = \%neg_i - \%pos_i \quad (\text{since } \text{PRET}_i > 0)$$
-where $\%neg_i = N_{neg} / N$ and $\%pos_i = N_{pos} / N$. Zero-return days count in $N$ but neither in $N_{neg}$ nor $N_{pos}$. Stocks are ranked ascending by $ID_i$ (lowest $ID$ = smoothest positive path = top rank).
+### Discrepancy with Blitz, Huij and Martens (2011)
+The published Blitz et al. (2011) methodology specifies:
+1. Monthly stock excess returns regressed on Fama-French 3 factors (Market, SMB, HML).
+2. A 36-month rolling estimation window.
+3. 12-1 cumulative residual return ranking without adding back estimated alpha.
+4. Standardization by residual return standard deviation over the formation period.
 
-### Performance Results (₹500,000 Research Capital)
-- **Annualized Net Return:** +7.63% (No Buffer) | +8.16% (Buffered 1–30)
-- **Annualized Excess Return (vs NIFTYBEES):** +0.21% (No Buffer) | +0.74% (Buffered 1–30)
-- **Maximum Drawdown:** 20.32% (No Buffer) | 21.93% (Buffered 1–30)
-- **Sharpe Ratio:** 0.50 (No Buffer) | 0.53 (Buffered 1–30)
-- **Sortino Ratio:** 0.71 (No Buffer) | 0.70 (Buffered 1–30)
-- **Average Monthly Turnover:** 51.04% (No Buffer) | 33.05% (Buffered 1–30)
-- **Total Costs Paid:** ₹22,763.45 (No Buffer) | ₹14,554.80 (Buffered 1–30)
-- **Cost Drag of Capital:** 4.55% (No Buffer) | 2.91% (Buffered 1–30)
-
-### Statistical Uncertainty & Controls
-- **95% Circular Block-Bootstrap CI (Monthly Excess Return):**  
-  - No Buffer: `[-0.668%, +0.744%]`, Mean: `+0.043%`, Strictly Positive: **False**
-  - Buffered: `[-0.621%, +0.805%]`, Mean: `+0.089%`, Strictly Positive: **False**
-
-### Verdict: `REJECTED`
-The empirical test directly contradicts the hypothesis for this universe. Sorting by Information Discreteness produced substantial underperformance relative to conventional momentum (+7.63% vs +10.33%), while generating high turnover (51.0%) and near-zero excess return (+0.21%).
+### Factor Availability Audit & Formal Classification
+1. **Factor Data Audit:** Neither Fama-French SMB nor HML factor return series for India exist in `data/research/benchmark_series.parquet` (which contains only `MDY`, `NIFTYBEES.NS`, `SPY`, `^GSPC`, `^NSEI`).
+2. **Fundamental Data Audit:** The snapshot `research_snapshot_20261106.parquet` contains only daily price and volume fields. No historical book-to-market data, financial balance sheets, or shares outstanding exist to construct reliable Fama-French factors without invented data.
+3. **Formal Determination:**  
+   - The published Blitz, Huij & Martens (2011) specification is formally marked as **`NOT IMPLEMENTED`**.  
+   - The evaluated strategy is retained and reported under its accurate technical name: **Market-Sector Regression-Alpha Standardized Strategy**.  
+   - No prospective paper observation is authorized under Blitz et al.'s paper attribution.
 
 ---
 
-## 5. Candidate 3 — Connors RSI(2) Daily Swing Mean Reversion
+## 4. Reconciled Connors RSI(2) Daily Swing Calculations
 
-### Economic Hypothesis & Trading Rules
-Larry Connors' classic mean-reversion hypothesis posits that liquid stocks in primary bull trends ($\text{Close} > \text{SMA}200$) undergo temporary panic selling ($\text{RSI}(2) \le 10$), creating a high-win-rate 2-to-5 day bounce.
-- **Entry:** Next Open ($t+1$) with $+0.10\%$ adverse slippage.
-- **Exit:** Next Open after $\text{Close} > \text{SMA}(5)$ OR 5-day time stop, with $-0.10\%$ adverse slippage.
-- **Capacity:** Max 10 positions (10% allocation per slot), whole shares only. Lowest RSI(2) deterministic priority.
+### R Denominator & Expectancy Clarification
+The pre-registered rules for Connors RSI(2) specify entries at next Open after RSI(2) $\le 10$ and exits at next Open after Close > SMA(5) or after 5 elapsed sessions. The strategy has **no fixed stop loss**. Therefore, standard $R$-multiple expectancy (which previously used $1 \times \text{ATR}(14)$ as an ad-hoc denominator) is mathematically unvalidated and is replaced by **Currency Expectancy per Trade** ($\text{INR per trade}$) and **Average Trade PnL %**.
 
-### Full Trade-Level & Portfolio Performance
+### Reconciled Metrics Breakdown
 
-| Metric | Research Capital (₹500,000) | Practical Scale (₹17,500) | Notes / Friction Impact |
+| Metric | Research Capital (₹500,000) | Practical Scale (₹17,500) | Economic Reality / Friction Analysis |
 | :--- | :---: | :---: | :--- |
-| **Total Completed Trades** | **1,485** | **645** | Statistically massive sample |
-| **Winning Trades** | 828 (55.8%) | 105 (16.3%) | DP charges flip 70% of wins to losses at ₹17.5k |
-| **Losing Trades** | 657 (44.2%) | 540 (83.7%) | Severe fee drag on small account |
-| **Gross Profit Factor** | **1.09** | **1.02** | Theoretical gross edge is weak |
-| **Net Profit Factor** | **0.85** | **0.10** | **Transaction friction destroys the edge** |
-| **Net Expectancy ($R$)** | **-0.082 R** | **-1.214 R** | Negative mathematical expectancy |
+| **Total Completed Trades** | **1,485** | **645** | Large, statistically robust sample |
+| **Gross Winning Trades** | **914 (61.55%)** | **390 (60.47%)** | Gross price edge exists |
+| **Net Winning Trades** | **829 (55.82%)** | **105 (16.28%)** | Fees flip 85 wins at ₹500k, and 285 wins at ₹17.5k! |
+| **Gross Profit Factor** | **1.092** | **1.020** | Weak gross edge before costs |
+| **Net Profit Factor** | **0.850** | **0.097** | **Net loss after realistic slippage and statutory costs** |
+| **Total Net PnL** | **-₹106,431.22** | **-₹13,202.68** | Direct equity destruction |
+| **Currency Expectancy per Trade** | **-₹71.67 / trade** | **-₹20.47 / trade** | **Negative mathematical expectancy** |
 | **Average Trade PnL %** | -0.16% | -2.48% | Net negative average trade |
-| **Average Winning Trade %** | +1.76% | +1.38% | Gross gains are modest (~1.8%) |
-| **Average Losing Trade %** | -2.58% | -3.23% | Losses exceed winners |
-| **Average Holding Duration** | 3.3 days | 3.4 days | Rapid turnover |
-| **Annualized Net Return** | **-5.28%** | **-27.28%** | Portfolio compounds negatively |
-| **Annualized Excess Return** | **-16.33%** | **-38.32%** | Drastic underperformance vs NIFTYBEES |
-| **Maximum Drawdown** | **29.90%** | **75.48%** | Catastrophic capital impairment at ₹17.5k |
-| **Total Transaction Costs Paid** | **₹165,548.80** | **₹13,323.25** | Enormous fee friction |
-| **Cost Drag (% of Capital)** | **33.11%** | **76.13%** | Fixed ticket fees consume equity |
-| **Top 5 Winners Contribution** | 3.1% | 22.8% | Profit not concentrated in outliers |
+| **Average Winning Trade %** | +1.76% | +1.38% | Modest upside on bounces |
+| **Average Losing Trade %** | -2.58% | -3.23% | Losses overwhelm winners |
+| **Cumulative Costs Paid** | **₹165,573.87** | **₹13,322.19** | Substantial transaction fees paid |
+| **Cumulative Costs (% Starting Capital)** | **33.11%** | **76.13%** | Fixed DP charges destroy small account |
+| **Annualized Net Return** | **-5.28%** | **-27.28%** | Negative compounding |
+| **Maximum Drawdown** | **29.90%** | **75.48%** | Severe account impairment |
 
-### Exit Reasons Breakdown
-- **Target Exit ($\text{Close} > \text{SMA}5$):** 1,145 trades (77.1% of all trades), Win Rate: **71.7%**, Average Holding: 2.8 days.
-- **Time Stop (5 Sessions Elapsed):** 340 trades (22.9% of all trades), Win Rate: **2.4%**, Average Holding: 5.0 days.
+### Exit Reasons Breakdown (₹500k Portfolio)
+- **Target Exit ($\text{Close} > \text{SMA}5$):** 1,145 trades (77.1%), Gross Win Rate: 78.2%, Net Win Rate: **71.7%**, Average Holding: 2.8 days.
+- **Time Stop (5 Completed Sessions):** 340 trades (22.9%), Gross Win Rate: 4.1%, Net Win Rate: **2.4%**, Average Holding: 5.0 days.
 
-> **CRITICAL MECHANISM FAILURE:**  
-> When the bounce occurs within 2–3 days, the setup has a 71.7% win rate. However, when the stock fails to bounce within 5 days (22.9% of setups), it suffers severe trending losses (win rate only 2.4%), which wipe out the small accumulated profits of the winners. Coupled with Zerodha delivery charges and DP fees (₹15.93 per exit), the strategy has a net negative expectancy.
-
-### Verdict: `REJECTED IMMEDIATELY`
-Conclusively disproven. Candidate 3 generates negative net expectancy ($-0.082R$), a net profit factor of $0.85$, and loses money after realistic transaction costs even with ₹500,000 capital. At practical scale (₹17,500), the strategy collapses completely (-27.28% CAGR, 75.5% max drawdown).
+### Reaffirmation of Verdict: `REJECTED IMMEDIATELY`
+The empirical test conclusively refutes the viability of cash-equity Connors RSI(2) daily swing mean reversion under real-world transaction friction. While gross win rate is 61.55%, the average gain on winners (+1.76%) is insufficient to overcome adverse slippage, STT, and flat DP charges (₹15.93 per sold scrip). At practical scale (₹17,500), DP charges alone turn 73% of gross winning trades into net losses, generating a catastrophic 75.48% drawdown.
 
 ---
 
-## 6. Turnover-Buffer Control Analysis
+## 5. Matched Random Controls Disclosure
 
-To evaluate the pre-registered turnover-buffer control (enter in Top 20, retain while rank $\le 30$), we compare the unbuffered vs buffered implementations across all three cross-sectional momentum strategies:
+The pre-registered protocol required matched random controls for evaluated candidates:
 
-| Strategy | Metric | No Buffer (Top 20) | Buffered (Rank 1–30) | Differential / Impact |
+| Candidate / Strategy | Random Control Status | Simulations | Random Baseline 95th Percentile | Candidate Excess Return | Percentile Rank | Control Result |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Candidate 1: Market-Sector Regression-Alpha** | **EXECUTED** | 1,000 | +5.04% | +6.07% (No Buffer) | **98.4%** | **PASSED** (Rank $\ge 95\%$) |
+| **Candidate 2: Frog-in-the-Pan** | **NOT RUN / NOT DEMONSTRATED** | N/A | N/A | +5.00% | N/A | Independent control not executed |
+| **Candidate 3: Connors RSI(2)** | **NOT RUN / NOT DEMONSTRATED** | N/A | N/A | -16.33% | N/A | Not executed (net expectancy is negative) |
+
+> **Cost Metric Denominator Clarification:**  
+> In all tables, the cost metric is defined as **Cumulative transaction costs paid as a percentage of starting capital** (`total_costs_paid / initial_capital * 100`). It measures total frictional drag over the 4.25-year evaluation period, not an annualized fee.
+
+---
+
+## 6. Turnover-Buffer Control Analysis (Reconciled)
+
+| Strategy | Metric | No Buffer (Top 20) | Buffered (Rank 1–30) | Differential / Frictional Savings |
 | :--- | :--- | :---: | :---: | :--- |
-| **C1b Baseline** | Monthly Turnover | 46.88% | **28.01%** | **-40.3% turnover reduction** |
-| | Total Costs Paid | ₹22,763 | **₹13,413** | **₹9,350 fee savings** |
-| | Annualized Net Return | +10.33% | **+11.48%** | **+1.15% alpha retention & boost** |
-| | Sharpe Ratio | 0.63 | **0.69** | Improved risk-adjusted profile |
-| **Candidate 1 (Residual Momentum)** | Monthly Turnover | 27.26% | **19.26%** | **-29.3% turnover reduction** |
-| | Total Costs Paid | ₹11,768 | **₹8,359** | **₹3,409 fee savings** |
-| | Annualized Net Return | +8.44% | **+8.74%** | **+0.30% net return gain** |
-| | Max Drawdown | 8.52% | **7.90%** | Lower drawdown |
-| | Sharpe Ratio | 0.92 | **0.97** | Highest Sharpe across all strategies |
-| **Candidate 2 (Frog-in-the-Pan)** | Monthly Turnover | 51.04% | **33.05%** | **-35.2% turnover reduction** |
-| | Total Costs Paid | ₹22,763 | **₹14,555** | **₹8,208 fee savings** |
-| | Annualized Net Return | +7.63% | **+8.16%** | **+0.53% net return gain** |
-
-### Key Insight
-The turnover-buffer control rule is **unambiguously beneficial**: across all three strategies, retaining holdings between ranks 21 and 30 cut portfolio turnover by 29% to 40% and directly increased annualized net return by saving transaction friction without degrading signal quality.
+| **C1b Baseline** | Monthly Turnover | 38.69% | **23.53%** | **-39.2% turnover reduction** |
+| | Cumulative Costs Paid | ₹19,218 | **₹11,634** | **₹7,584 fee savings** |
+| | Annualized Net Return | +16.11% | **+17.51%** | **+1.40% net alpha enhancement** |
+| | Maximum Drawdown | 9.25% | **9.02%** | Lower drawdown |
+| **Candidate 1 (Market-Sector Reg-Alpha)** | Monthly Turnover | 38.08% | **24.73%** | **-35.1% turnover reduction** |
+| | Cumulative Costs Paid | ₹18,391 | **₹12,416** | **₹5,975 fee savings** |
+| | Annualized Net Return | +13.49% | **+16.88%** | **+3.39% net alpha enhancement** |
+| | Maximum Drawdown | 10.18% | **8.31%** | **Lowest drawdown across all strategies** |
+| **Candidate 2 (Frog-in-the-Pan)** | Monthly Turnover | 42.78% | **28.97%** | **-32.3% turnover reduction** |
+| | Cumulative Costs Paid | ₹19,342 | **₹13,266** | **₹6,076 fee savings** |
+| | Annualized Net Return | +12.42% | **+12.83%** | **+0.41% net return gain** |
 
 ---
 
-## 7. Capital Scale Comparison: Practical Scale (₹17,500) vs Research Capital (₹500,000)
+## 7. Scale Comparison: Practical Scale (₹17,500) vs Research Capital (₹500,000)
 
-| Strategy | Capital Level | Annualized Net Return | Total Costs Paid | Cost Drag (% of Capital) | Fee Drag Differential |
-| :--- | :--- | :---: | :---: | :---: | :---: |
-| **C1b Baseline** | ₹500,000 | +10.33% | ₹22,763 | 4.55% | Baseline |
-| | ₹17,500 | +2.09% | ₹1,519 | 8.68% | **+4.13% drag penalty** |
-| **Candidate 1 (Residual Momentum)** | ₹500,000 | +8.44% | ₹11,768 | 2.35% | Baseline |
-| | ₹17,500 | +2.15% | ₹997 | 5.70% | **+3.35% drag penalty** |
-| **Candidate 2 (Frog-in-the-Pan)** | ₹500,000 | +7.63% | ₹22,763 | 4.55% | Baseline |
-| | ₹17,500 | +0.18% | ₹1,781 | 10.18% | **+5.63% drag penalty** |
-| **Candidate 3 (Connors RSI2)** | ₹500,000 | -5.28% | ₹165,549 | 33.11% | Baseline |
-| | ₹17,500 | -27.28% | ₹13,323 | 76.13% | **+43.02% drag penalty** |
+| Strategy | ₹500k Net Ann % | ₹17.5k Net Ann % | ₹500k Cost Drag % | ₹17.5k Cost Drag % | Drag Differential |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **C1b Baseline** | +16.11% | +3.59% | 3.84% | 7.88% | **+4.04%** |
+| **Candidate 1 (Market-Sector Reg-Alpha)** | +13.49% | +2.83% | 3.68% | 7.76% | **+4.08%** |
+| **Candidate 2 (Frog-in-the-Pan)** | +12.42% | +1.18% | 3.87% | 9.19% | **+5.32%** |
+| **Candidate 3 (Connors RSI(2))** | -5.28% | -27.28% | 33.11% | 76.13% | **+43.02%** |
 
-### Practical Scale Findings
-1. **Fixed Ticket Penalty:** In India, the depository participant charge of ₹15.93 per sold scrip is flat. On a ₹50,000 position (₹500k account), ₹15.93 is $0.03\%$. On a ₹1,750 position (₹17.5k account), ₹15.93 is **$0.91\%$ on every single exit**!
-2. **Whole Share Lumpy Sizing:** On a ₹17,500 portfolio, high-priced equities (e.g. MRF at ₹130,000, UltraTech at ₹11,000, Shree Cement at ₹25,000) cannot even be purchased. Lower-priced stocks can only be bought in 1 or 2 shares, creating severe cash drag and tracking error.
-3. **Execution Feasibility:** Small accounts (₹17,500) **cannot viably run daily swing mean-reversion strategies**. Monthly buffered momentum (Candidate 1 or C1b) is the only category that survives with positive net return.
+### Scale Analysis
+1. Flat ticket charges (DP charges of ₹15.93 per sold scrip) disproportionately penalize small accounts. On a ₹1,750 position, ₹15.93 represents a **0.91% friction tax on every exit**, completely destroying daily swing trading.
+2. Whole-share integer sizing constraints prevent small accounts from purchasing high-priced equities (MRF, UltraTech, Shree Cement), creating cash drag.
+3. Monthly buffered momentum strategies are the only architectures capable of generating positive net returns at ₹17,500 scale.
 
 ---
 
-## 8. Sector & Regime Attribution
+## 8. Final Decision Classifications
 
-### Market Regime Breakdown (C1b Regime Filter: `^NSEI Close > SMA200`)
-- **Total Evaluation Months:** 51 months (Aug 2022 to Oct 2026).
-- **Bull Regime Months (Invested):** 46 months (90.2%).
-  - Candidate 1 Annualized Return during Bull: **+10.45%** (vs NIFTYBEES +9.12%).
-  - Candidate 2 Annualized Return during Bull: +9.56%.
-  - C1b Baseline Annualized Return during Bull: +12.52%.
-- **Bear Regime Months (100% Cash):** 5 months (9.8%).
-  - Strategy Return: **0.00%** (Cash).
-  - Benchmark Cumulative Return during Bear: **-4.32%**.
-  - The regime filter successfully preserved capital during prolonged benchmark downtrends.
+In strict accordance with the Section J Decision Protocol:
 
-### Sector Attribution (Candidate 1 Residual Momentum Buys)
-1. **Financial Services:** 172 executed buys (25.1% of total turnover)
-2. **Information Technology:** 114 executed buys (16.6% of total turnover)
-3. **Automobile & Auto Components:** 98 executed buys (14.3% of total turnover)
-4. **Fast Moving Consumer Goods (FMCG):** 74 executed buys (10.8% of total turnover)
-5. **Healthcare:** 62 executed buys (9.1% of total turnover)
-6. **Capital Goods:** 51 executed buys (7.4% of total turnover)
+1. **`REJECTED`:**
+   - **Candidate 3 (Connors RSI(2)):** Conclusively rejected. Generates negative mathematical currency expectancy ($-₹71.67$ per trade), net profit factor $0.85$, and catastrophic cost drag.
+   - **Candidate 2 (Frog-in-the-Pan):** Rejected. Underperforms conventional baseline momentum by 360 to 460 bps and fails bootstrap significance.
+2. **`INCONCLUSIVE`:**
+   - **Candidate 1 (Market-Sector Regression-Alpha):** Classified as inconclusive. While it demonstrates strong exploratory empirical risk mitigation (**8.31% maximum drawdown**, Sharpe 1.52, Sortino 2.41), it cannot be validated because all historical tests on this dataset lack an independent untouched holdout.
+3. **`NOT IMPLEMENTED`:**
+   - **Published Blitz, Huij & Martens (2011) Residual Momentum:** Formal paper specification is not implemented due to lack of Indian Fama-French SMB/HML factor data and pre-2021 fundamentals.
+4. **`VALIDATED`:**
+   - **ZERO CANDIDATES.** Validation strictly requires prospective forward paper evaluation satisfying pre-registered gates over at least 8 weeks.
+5. **Trading Authorization:**
+   - **No candidate is authorized for live trading or automated order placement.**
 
 ---
 
-## 9. Comprehensive Decision Classifications & Next Steps
-
-### 1. Which candidate should be rejected immediately?
-- **Candidate 3 (Connors RSI(2) Mean Reversion)** must be **REJECTED IMMEDIATELY**. It has negative expectancy ($-0.082R$), a sub-1.0 net profit factor ($0.85$), and severe cost drag ($33\%$ to $76\%$) that destroys capital.
-- **Candidate 2 (Frog-in-the-Pan)** is **REJECTED**. It generates near-zero excess return ($+0.21\%$) and underperforms baseline momentum by 270 bps.
-
-### 2. Which candidate, if any, deserves prospective paper observation?
-- **Candidate 1 (Residual Momentum)** is the **sole candidate deserving future prospective paper observation**. While its historical excess return (+1.02% to +1.31%) was too small to pass the statistical significance gates in this 70-stock universe, its **7.90% maximum drawdown** and **0.97 Sharpe ratio** represent an extraordinary risk-reduction achievement compared to raw price momentum (23.81% drawdown, 0.69 Sharpe) and the passive index (22.85% drawdown).
-
-### 3. Unresolved Data Limitations
-- **Current-Constituent Survivorship Bias:** 70 surviving large/mid-cap equities in `research_universe_v1.csv`.
-- **Sample Length:** 5.3 years (1,316 daily trading sessions, 51 monthly rebalances); 2018–2020 market crash is absent from the snapshot.
-- **No Untouched Historical Holdout:** All historical backtests must remain classified as exploratory.
-
----
-
-## 10. Audit Manifest & File Inventory
+## 9. Audit Manifest, Hashes & Test Outcomes
 
 - **Pre-Registration Commit:** `9a58dbf048a8ffcc3fccbd431d3933f19f6d8726`
-- **Pre-Registration Hash:** `f5d87c02330a7967dba34934ceabbe99df48c09e93c99a3d74bc910710e6d69d`
-- **Universe File:** `data/universe/research_universe_v1.csv` (`fbba1bc1...`)
-- **Data Snapshot:** `data/research/research_snapshot_20261106.parquet` (`f6e564a5...`)
-- **Benchmark Series:** `data/research/benchmark_series.parquet` (`c9ed07ed...`)
-- **Results JSON:** `research/next_cycle/strategy_comparison.json` (`1f04d2eb...`)
-- **Run Manifest:** `research/next_cycle/run_manifest.json`
-- **Generated Trade Ledgers:**
-  - `research/next_cycle/trades/cand1_residual_momentum_trades.csv`
-  - `research/next_cycle/trades/cand1_residual_momentum_buffered_trades.csv`
-  - `research/next_cycle/trades/cand2_frog_in_the_pan_trades.csv`
-  - `research/next_cycle/trades/cand2_frog_in_the_pan_buffered_trades.csv`
-  - `research/next_cycle/trades/cand3_connors_rsi2_trades.csv`
-  - `research/next_cycle/trades/cand3_connors_rsi2_practical17k_trades.csv`
-  - `research/next_cycle/trades/c1b_comparator_trades.csv`
-  - `research/next_cycle/trades/c1b_comparator_buffered_trades.csv`
-- **Unit Tests:** `backend/tests/test_cycle3_strategies.py` (5 passing tests)
+- **Pre-Registration Hash (`PREREG.md`):** `f5d87c02330a7967dba34934ceabbe99df48c09e93c99a3d74bc910710e6d69d`
+- **Universe File (`research_universe_v1.csv`):** `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`
+- **Data Snapshot (`research_snapshot_20261106.parquet`):** `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`
+- **Benchmark Series (`benchmark_series.parquet`):** `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`
+- **Phase 2 Report (`PHASE2_FINAL_REPORT.md`):** `5ddb610b79dcc004f332c187a3e99473284bffaf049728f287e3b0623763bd5d` (strictly unmodified)
+- **Machine-Readable Results (`strategy_comparison.json`):** `2395910a186c29189093d96c7609d7f5ed0f485de79260055143ee1a50fba28d`
+- **Run Manifest (`run_manifest.json`):** Fully documented with execution timestamps.
+- **Unit Tests (`backend/tests/test_cycle3_strategies.py`):** 5 tests executed, **5 passed in 0.10s** (regression fixture math, Information Discreteness smooth vs jump fixture, Connors RSI2 indicators, no-lookahead truncation invariance, cost model statutory invariance).
 
-**END OF REPORT — RESEARCH CYCLE 3 CLOSED**
+---
+
+## 10. Explicit Unresolved Limitations
+
+1. **Current-Constituent Survivorship Bias:** Universe is restricted to 70 surviving NSE equities.
+2. **Snapshot Window Coverage:** 5.3 years (July 2021 – November 2026), omitting the 2018–2020 bear market.
+3. **Absence of Untouched Holdout:** Because the historical snapshot was inspected in prior cycles, all historical backtest results remain exploratory.
+4. **Factor Library Gaps:** Fama-French SMB and HML factors for Indian equities do not exist in the repository, precluding faithful replication of multi-factor asset pricing models.
+
+**END OF REPORT — RESEARCH CYCLE 3 FINAL RECONCILIATION CLOSED**

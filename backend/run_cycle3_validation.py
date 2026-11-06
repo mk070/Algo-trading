@@ -124,14 +124,15 @@ class Cycle3ResearchEngine:
         self.vol_df = self.in_snap.pivot(index="date", columns="symbol", values="volume").sort_index()
         self.returns_df = self.close_df.pct_change()
 
-        # Benchmark series
-        nsei = self.bench_df[self.bench_df["symbol"] == "^NSEI"].sort_values("date").set_index("date")["close"]
-        self.nsei_close = nsei.reindex(self.close_df.index)
+        # Benchmark series (clean non-NaN regime series matching Phase 2)
+        nsei_raw = self.bench_df[self.bench_df["symbol"] == "^NSEI"].sort_values("date").set_index("date")["close"].dropna()
+        nsei_sma200_raw = nsei_raw.rolling(200, min_periods=200).mean()
+        self.nsei_close = nsei_raw.reindex(self.close_df.index).ffill()
         self.nsei_returns = self.nsei_close.pct_change()
-        self.nsei_sma200 = self.nsei_close.rolling(200, min_periods=200).mean()
+        self.nsei_sma200 = nsei_sma200_raw.reindex(self.close_df.index).ffill()
 
-        niftybees = self.bench_df[self.bench_df["symbol"] == "NIFTYBEES.NS"].sort_values("date").set_index("date")["close"]
-        self.niftybees_close = niftybees.reindex(self.close_df.index)
+        niftybees = self.bench_df[self.bench_df["symbol"] == "NIFTYBEES.NS"].sort_values("date").set_index("date")["close"].dropna()
+        self.niftybees_close = niftybees.reindex(self.close_df.index).ffill()
 
         # Dates & Turnover
         self.dates = self.close_df.index
@@ -752,10 +753,12 @@ class Cycle3ResearchEngine:
 
         # Calculate Candidate 3 Performance Metrics
         total_trades = len(completed_trades)
+        gross_wins = [t for t in completed_trades if t["gross_pnl"] > 0]
         wins = [t for t in completed_trades if t["net_pnl"] > 0]
         losses = [t for t in completed_trades if t["net_pnl"] < 0]
         ties = [t for t in completed_trades if t["net_pnl"] == 0]
 
+        gross_win_rate = (len(gross_wins) / total_trades * 100.0) if total_trades > 0 else 0.0
         win_rate = (len(wins) / total_trades * 100.0) if total_trades > 0 else 0.0
         gross_profit = sum(t["gross_pnl"] for t in completed_trades if t["gross_pnl"] > 0)
         gross_loss = abs(sum(t["gross_pnl"] for t in completed_trades if t["gross_pnl"] < 0))
@@ -764,6 +767,9 @@ class Cycle3ResearchEngine:
 
         profit_factor = (net_profit / net_loss) if net_loss > 0 else 999.0
         gross_profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 999.0
+
+        total_net_pnl = sum(t["net_pnl"] for t in completed_trades)
+        currency_expectancy = (total_net_pnl / total_trades) if total_trades > 0 else 0.0
 
         r_multiples = [t["r_multiple"] for t in completed_trades]
         expectancy_r = float(np.mean(r_multiples)) if r_multiples else 0.0
@@ -842,10 +848,12 @@ class Cycle3ResearchEngine:
             "strategy": "CAND3_CONNORS_RSI2",
             "capital": capital,
             "total_trades": total_trades,
-            "winning_trades": len(wins),
-            "losing_trades": len(losses),
-            "win_rate_pct": round(win_rate, 1),
-            "expectancy_r": round(expectancy_r, 3),
+            "gross_winning_trades": len(gross_wins),
+            "gross_win_rate_pct": round(gross_win_rate, 2),
+            "net_winning_trades": len(wins),
+            "net_win_rate_pct": round(win_rate, 2),
+            "currency_expectancy_inr": round(currency_expectancy, 2),
+            "expectancy_r_unvalidated": round(expectancy_r, 3),
             "profit_factor": round(profit_factor, 2),
             "gross_profit_factor": round(gross_profit_factor, 2),
             "avg_trade_pct": round(avg_trade_pct, 2),
@@ -1066,7 +1074,19 @@ def main():
     results["bootstrap_ci"]["Cand2_Frog_in_the_Pan_NoBuffer"] = boot_c2
     results["bootstrap_ci"]["Cand2_Frog_in_the_Pan_Buffered"] = boot_c2_buf
 
-    results["controls"]["Control_B_Random_Portfolios"] = ctrl_b
+    results["controls"]["Candidate1_MarketSector_Random_Control_B"] = ctrl_b
+    results["controls"]["Candidate2_FrogInThePan_Random_Control"] = {
+        "status": "NOT RUN / NOT DEMONSTRATED",
+        "reason": "Independent matched random cohort control was not executed for Candidate 2"
+    }
+    results["controls"]["Candidate3_Connors_RSI2_Random_Control"] = {
+        "status": "NOT RUN / NOT DEMONSTRATED",
+        "reason": "Independent matched random trade control was not executed for Candidate 3"
+    }
+    results["strategies"]["Blitz_Huij_Martens_2011_Published_Residual_Momentum"] = {
+        "status": "NOT IMPLEMENTED",
+        "reason": "Absence of historical Indian SMB and HML Fama-French factors, historical balance sheet book-to-market data, and pre-2021 history in frozen snapshot"
+    }
 
     results["scale_comparison_17500"] = {
         "C1b_Baseline": {
