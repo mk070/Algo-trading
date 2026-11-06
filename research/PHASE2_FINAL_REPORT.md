@@ -3,11 +3,11 @@
 **Execution Timestamp:** `2026-11-06T12:05:04Z` (UTC)  
 **Research Mode:** Strictly Offline Research — No Live Trading, No Automatic Order Placement  
 **Source Execution Artifact:** [`research/phase2_results.json`](file:///d:/web%20development/saas-projects/Algo-trading/research/phase2_results.json)  
-**Pre-Registration Specification:** [`research/PREREG.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PREREG.md) (SHA256: `b526b03b8542b46f7f1fbc7b79fc73aea41458618a461c1f4d0f93d4963e39dc` [Git HEAD 18fe7b6 blob]; initial creation SHA256: `7fb0d96d9d1391ab4d0991d7db391b8ff04663fc7799e1074b36de88be3aa91f` prior to EOF newline normalization in commit `7558f93`)  
+**Pre-Registration Specification:** [`research/PREREG.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PREREG.md) (SHA256: `b526b03b8542b46f7f1fbc7b79fc73aea41458618a461c1f4d0f93d4963e39dc` [Git HEAD blob]; initial creation SHA256: `7fb0d96d9d1391ab4d0991d7db391b8ff04663fc7799e1074b36de88be3aa91f` prior to EOF newline normalization in commit `7558f93`)  
 **Frozen Research Universe:** [`data/universe/research_universe_v1.csv`](file:///d:/web%20development/saas-projects/Algo-trading/data/universe/research_universe_v1.csv) (SHA256: `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`)  
 **Frozen Parquet Snapshot:** [`data/research/research_snapshot_20261106.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/research_snapshot_20261106.parquet) (SHA256: `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`)  
 **Dedicated Benchmark Series:** [`data/research/benchmark_series.parquet`](file:///d:/web%20development/saas-projects/Algo-trading/data/research/benchmark_series.parquet) (SHA256: `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`)  
-**Git HEAD Commit:** [`18fe7b66f93a353d73bca1813245cd17e0d1f451`](file:///d:/web%20development/saas-projects/Algo-trading)
+**Git HEAD Commit:** [`ac146a7fcb0daa7b152475e8f61576ec595b8f3f`](file:///d:/web%20development/saas-projects/Algo-trading)
 
 ---
 
@@ -24,8 +24,8 @@ This final frozen report represents the consolidated, verified, and reconciled r
 ### Definitive Final Decision
 **Zero candidates qualify for `PASS`.**
 1. **Candidate C1a India (Always Invested):** Fails on maximum drawdown ratio ($1.40\times$ vs. $1.20\times$ pre-registered ceiling) $\rightarrow$ **`FAIL`**.
-2. **Candidate C1b India (Regime Filtered):** Demonstrates positive in-sample excess return (+8.81%) and controlled drawdown (0.59x), but lacks an untouched holdout, random control simulation, sensitivity suite, and pre-registered bootstrap CI $\rightarrow$ **`NOT DEMONSTRATED`**.
-3. **Candidate C1a US (Always Invested):** Meets excess return (+10.00%), drawdown (0.62x), and random-control (97.6th percentile) gates, but lacks pre-registered benchmark bootstrap confidence intervals, sensitivity testing, and an untouched holdout $\rightarrow$ **`NOT DEMONSTRATED`**.
+2. **Candidate C1b India (Regime Filtered):** Demonstrates positive in-sample excess return (+8.81%) and controlled drawdown (0.59x), but lacks an untouched holdout, random control simulation, sensitivity suite, pre-registered bootstrap CI, and a 4th complete calendar year $\rightarrow$ **`NOT DEMONSTRATED`**.
+3. **Candidate C1a US (Always Invested):** Meets excess return (+10.00%), drawdown (0.62x), and random-control (97.6th percentile) gates, but lacks pre-registered benchmark bootstrap confidence intervals, sensitivity testing, an untouched holdout, and a 4th complete calendar year $\rightarrow$ **`NOT DEMONSTRATED`**.
 4. **Candidate C1b US (Regime Filtered):** Fails on observed excess return ($-2.23\%$ vs. pre-registered benchmark) $\rightarrow$ **`FAIL`**.
 5. **Candidate C2 (VCP Breakout):** Inadequate sample sizes (7 completed trades in India, 12 in the US) strictly mandate an **`INCONCLUSIVE`** verdict.
 6. **Kill Rule Enforcement:** The pre-registered kill rule remains in full effect. No strategy search, parameter tuning, indicator additions, paper trading, or live trading is authorized.
@@ -116,7 +116,7 @@ Candidate C1 rebalances monthly on the final trading day, ranking the top 20 equ
 | **VERDICT**| **Overall Candidate Verdict** | **`FAIL`** | **`NOT DEMONSTRATED`** | **`NOT DEMONSTRATED`** | **`FAIL`** |
 
 ### Detailed Candidate Notes:
-1. **C1a India:** Fails Gate 3 directly because observed maximum drawdown (22.62%) is **$1.40\times$** the pre-registered benchmark's drawdown (16.11%), violating the $1.20\times$ ceiling. Satisfies Gate 1 (+5.24%), Gate 6 (+12.06% net under $2\times$ slippage), Gate 7 (96.0th percentile in 1,000 random portfolios), and Gate 8 (6 of 6 variations profitable). Overall Verdict: **`FAIL`**.
+1. **C1a India:** Fails Gate 3 directly because observed maximum drawdown (22.62%) is **$1.40\times$** the pre-registered benchmark's drawdown (16.11%), violating the $1.20\times$ ceiling. Satisfies Gate 1 (+5.24%), Gate 6 (+12.06% net under $2\times$ slippage), Gate 7 (96.0th percentile in 1,000 random portfolios), and Gate 8 (6 of 6 variations profitable). Gate 4 is NOT DEMONSTRATED because only 3 complete calendar years exist. Overall Verdict: **`FAIL`**.
 2. **C1b India:** Demonstrates strong in-sample alpha (+8.81% excess return, 0.59x drawdown ratio), but lacks pre-registered benchmark bootstrap calculations, random controls, sensitivity testing, an untouched holdout, and a 4th complete calendar year. Overall Verdict: **`NOT DEMONSTRATED`** (disqualified from PASS).
 3. **C1a US:** Meets Gate 1 (+10.00% excess return), Gate 3 (0.62x drawdown ratio), and Gate 7 (97.6th percentile in 1,000 random portfolios). Has no observed failure against pre-registered criteria. However, because required independent evidence (pre-registered bootstrap, sensitivity runs, untouched holdout, 4th complete year) remains missing, its overall status is **`NOT DEMONSTRATED`** (disqualified from PASS).
 4. **C1b US:** Directly fails Gate 1 (observed annualized net excess return of $-2.23\%$ vs. the pre-registered benchmark). Gate 4 is NOT DEMONSTRATED due to fewer than four complete calendar years. Overall Verdict: **`FAIL`**.
@@ -139,12 +139,12 @@ Candidate C2 (VCP Breakout) and Control A (55-day breakout) were evaluated acros
 ### Corrected C2 & Control Acceptance-Gate Table
 
 | Gate | Pre-Registered Requirement | Candidate C2 India | Candidate C2 US | Control A India (Diagnostic) | Control A US (Diagnostic) |
-|---|---|:---:|:---:|:---:|:---:|
+|---|---|---|---|---|---|
 | **Gate 1** | Minimum Sample Size $\ge 150$ Trades | **INCONCLUSIVE** *(7 trades)* | **INCONCLUSIVE** *(12 trades)* | **INCONCLUSIVE** *(27 trades)* | **INCONCLUSIVE** *(43 trades)* |
-| **Gate 2** | Net Expectancy $\ge +0.15R$ | **FAIL** *(-0.64R)* | **PASS** *(+0.72R diagnostic)* | **FAIL** *(-0.66R)* | **FAIL** *(-0.22R)* |
-| **Gate 3** | Profit Factor $\ge 1.30$ | **FAIL** *(0.08)* | **PASS** *(2.40 diagnostic)* | **FAIL** *(0.15)* | **FAIL** *(0.67)* |
-| **Gate 4** | Maximum Drawdown $\le 20.0\%$ | **PASS** *(1.70%)* | **PASS** *(1.90%)* | **PASS** *(6.70%)* | **PASS** *(9.70%)* |
-| **Gate 5** | Period & Yearly Stability ($\ge 3$ of 4 yrs) | **FAIL** *(0/4 years)* | **FAIL** *(2/4 years)* | **FAIL** *(0/4 years)* | **FAIL** *(1/4 years)* |
+| **Gate 2** | Net Expectancy $\ge +0.15R$ | Observed -0.64R; below threshold descriptively, but insufficient sample for validation | Observed +0.72R; above threshold descriptively, but insufficient sample for validation | Observed -0.66R; below threshold descriptively, but insufficient sample for validation | Observed -0.22R; below threshold descriptively, but insufficient sample for validation |
+| **Gate 3** | Profit Factor $\ge 1.30$ | Observed PF 0.08; below threshold descriptively, but insufficient sample for validation | Observed PF 2.40; above threshold descriptively, but insufficient sample for validation | Observed PF 0.15; below threshold descriptively, but insufficient sample for validation | Observed PF 0.67; below threshold descriptively, but insufficient sample for validation |
+| **Gate 4** | Maximum Drawdown $\le 20.0\%$ | Observed 1.70%; within threshold descriptively, but insufficient sample for validation | Observed 1.90%; within threshold descriptively, but insufficient sample for validation | Observed 6.70%; within threshold descriptively, but insufficient sample for validation | Observed 9.70%; within threshold descriptively, but insufficient sample for validation |
+| **Gate 5** | Period & Yearly Stability ($\ge 3$ of 4 yrs) | Observed 0/4 yrs positive; below threshold descriptively, but insufficient sample for validation | Observed 2/4 yrs positive; below threshold descriptively, but insufficient sample for validation | Observed 0/4 yrs positive; below threshold descriptively, but insufficient sample for validation | Observed 1/4 yrs positive; below threshold descriptively, but insufficient sample for validation |
 | **Gate 6** | Walk-Forward Robustness Across Folds | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** |
 | **Gate 7** | Genuinely Untouched Independent Holdout | **NOT DEMONSTRATED** *(No Data)* | **NOT DEMONSTRATED** *(No Data)* | **NOT DEMONSTRATED** *(No Data)* | **NOT DEMONSTRATED** *(No Data)* |
 | **Gate 8** | Matched Random Entry ($> 95\text{th}$ percentile)| **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** | **NOT DEMONSTRATED** |
@@ -152,7 +152,7 @@ Candidate C2 (VCP Breakout) and Control A (55-day breakout) were evaluated acros
 
 *C2 Methodological Rule Applied:*
 - Gate 1 for C2 India (7 trades) and C2 US (12 trades) is classified as **`INCONCLUSIVE`** because inadequate sample size prevents statistical validation under pre-registered rules.
-- The positive net expectancy (+0.72R) and profit factor (2.40) in C2 US are diagnostic observations only and cannot be claimed as a validated edge ($12 \ll 150$).
+- Descriptive observations (e.g. +0.72R expectancy and 2.40 PF in C2 US, or -0.64R expectancy in C2 India) are explicitly documented as descriptive observations only and are not presented as acceptance PASS or FAIL verdicts.
 - Control A (55-day breakout) is retained strictly as a diagnostic technical baseline.
 
 ---
@@ -177,11 +177,11 @@ Candidate C2 (VCP Breakout) and Control A (55-day breakout) were evaluated acros
 - [`backend/run_phase2_validation.py`](file:///d:/web%20development/saas-projects/Algo-trading/backend/run_phase2_validation.py)
 
 ### Files Modified:
-- [`research/PHASE2_FINAL_REPORT.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PHASE2_FINAL_REPORT.md) (created as frozen standalone deliverable)
+- [`research/PHASE2_FINAL_REPORT.md`](file:///d:/web%20development/saas-projects/Algo-trading/research/PHASE2_FINAL_REPORT.md) *(frozen final standalone report deliverable)*
 
 ### Protected Artifact Integrity Confirmation:
-- `research/PREREG.md` was **NOT modified** (SHA256: `7fb0d96d9d1391ab4d0991d7db391b8ff04663fc7799e1074b36de88be3aa91f`).
-- `research/phase2_results.json` was **NOT modified**.
+- `research/PREREG.md` was **NOT modified** (SHA256: `b526b03b8542b46f7f1fbc7b79fc73aea41458618a461c1f4d0f93d4963e39dc`).
+- `research/phase2_results.json` was **NOT modified** (SHA256: `b17c2bb14d1d67866012ad3fc3c3e2485e081a64696b2ab9a9fd2cb508722759`).
 - `data/universe/research_universe_v1.csv` was **NOT modified** (SHA256: `fbba1bc176a5dd6c0d5f2527dc7599f3c1d0117158e54fcd6b8f94a9542ee72e`).
 - `data/research/research_snapshot_20261106.parquet` was **NOT modified** (SHA256: `f6e564a5c3d01f755c5fc0e1356346491c56d66312a13c0da64e421ff8c0c58f`).
 - `data/research/benchmark_series.parquet` was **NOT modified** (SHA256: `c9ed07ede1e98fdf7b869cfc8ffa749d41e68a9781dfebb31c7685325f4093be`).
@@ -196,4 +196,3 @@ Under the complete pre-registered validation protocol:
 2. **The strategy-search kill rule remains strictly in force.**
 3. **No new strategy research, parameter tuning, indicator additions, paper trading, or live execution is authorized.**
 4. **Final Recommendation:** Capital allocation should be directed toward passive index investing, and platform usage should remain strictly confined to research and visualization.
-
