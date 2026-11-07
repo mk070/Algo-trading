@@ -4,6 +4,7 @@ import {
   BookOpen,
   Clock,
   Compass,
+  FlaskConical,
   LayoutGrid,
   LucideIcon,
   Newspaper,
@@ -36,6 +37,7 @@ export const NAV_GROUPS: NavGroup[] = [
     group: 'Portfolio',
     items: [
       { to: '/positions', label: 'Positions & Valuation', icon: BarChart2 },
+      { to: '/paper-trading', label: 'Paper Trading Lab', icon: FlaskConical },
       { to: '/journal', label: 'Journal & Stats', icon: BookOpen },
     ],
   },

@@ -1,0 +1,69 @@
+{
+  "account_id": "stress_cand3_dual_momentum_buf30",
+  "strategy_name": "Candidate 3: Relative-Plus-Absolute Strength (Buf 1\u201330)",
+  "initial_capital": 20000.0,
+  "cash": 13499.54,
+  "holdings": {
+    "BEL": {
+      "shares": 2,
+      "avg_cost": 288.33,
+      "invested_cost": 576.66
+    },
+    "JSWSTEEL": {
+      "shares": 1,
+      "avg_cost": 1023.24,
+      "invested_cost": 1023.24
+    },
+    "ASHOKLEY": {
+      "shares": 6,
+      "avg_cost": 143.29,
+      "invested_cost": 859.74
+    },
+    "SBIN": {
+      "shares": 1,
+      "avg_cost": 874.04,
+      "invested_cost": 874.04
+    },
+    "TATACONSUM": {
+      "shares": 1,
+      "avg_cost": 1167.13,
+      "invested_cost": 1167.13
+    },
+    "TATASTEEL": {
+      "shares": 6,
+      "avg_cost": 180.84,
+      "invested_cost": 1085.04
+    },
+    "BPCL": {
+      "shares": 3,
+      "avg_cost": 362.67,
+      "invested_cost": 1088.02
+    },
+    "IDFCFIRSTB": {
+      "shares": 14,
+      "avg_cost": 80.65,
+      "invested_cost": 1129.1
+    },
+    "FEDERALBNK": {
+      "shares": 4,
+      "avg_cost": 268.19,
+      "invested_cost": 1072.74
+    },
+    "VEDL": {
+      "shares": 5,
+      "avg_cost": 238.11,
+      "invested_cost": 1190.53
+    }
+  },
+  "realized_pnl": 3722.8,
+  "unrealized_pnl": 990.39,
+  "total_equity": 24556.2,
+  "peak_equity": 25367.07,
+  "cumulative_costs": 2068.92,
+  "cumulative_slippage": 255.56,
+  "cost_pct_of_capital": 10.34,
+  "last_processed_date": "2026-11-05",
+  "orders_count": 535,
+  "trades_count": 168,
+  "snapshots_count": 1064
+}

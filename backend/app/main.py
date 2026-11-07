@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.api.routes_backtest import router as backtest_router
 from app.api.routes_data import router as data_router
 from app.api.routes_news import router as news_router
+from app.api.routes_paper_trading import router as paper_trading_router
 from app.api.routes_plan import router as plan_router
 from app.api.routes_portfolio import router as portfolio_router
 from app.api.routes_positions import router as positions_router
@@ -103,6 +104,7 @@ app.include_router(news_router, prefix="/api", tags=["News Intelligence"], depen
 app.include_router(backtest_router, prefix="/api", tags=["Backtesting & Research"], dependencies=protected_api)
 app.include_router(data_router, prefix="/api", tags=["Historical Data & Ingestion"], dependencies=protected_api)
 app.include_router(universe_router, prefix="/api", tags=["Universe & Coverage"], dependencies=protected_api)
+app.include_router(paper_trading_router, prefix="/api", tags=["Paper Trading & Research"], dependencies=protected_api)
 
 
 from pathlib import Path

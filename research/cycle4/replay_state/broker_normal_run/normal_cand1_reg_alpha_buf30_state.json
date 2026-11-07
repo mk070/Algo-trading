@@ -1,0 +1,74 @@
+{
+  "account_id": "normal_cand1_reg_alpha_buf30",
+  "strategy_name": "Candidate 1: Market-Sector Regression-Alpha (Buf 1\u201330)",
+  "initial_capital": 20000.0,
+  "cash": 14862.48,
+  "holdings": {
+    "BEL": {
+      "shares": 2,
+      "avg_cost": 232.44,
+      "invested_cost": 464.88
+    },
+    "JSWSTEEL": {
+      "shares": 1,
+      "avg_cost": 1022.22,
+      "invested_cost": 1022.22
+    },
+    "BAJFINANCE": {
+      "shares": 1,
+      "avg_cost": 858.41,
+      "invested_cost": 858.41
+    },
+    "BPCL": {
+      "shares": 3,
+      "avg_cost": 326.11,
+      "invested_cost": 978.33
+    },
+    "ASHOKLEY": {
+      "shares": 6,
+      "avg_cost": 143.03,
+      "invested_cost": 858.18
+    },
+    "TATACONSUM": {
+      "shares": 1,
+      "avg_cost": 1165.96,
+      "invested_cost": 1165.96
+    },
+    "TATASTEEL": {
+      "shares": 6,
+      "avg_cost": 182.58,
+      "invested_cost": 1095.48
+    },
+    "HDFCLIFE": {
+      "shares": 1,
+      "avg_cost": 750.75,
+      "invested_cost": 750.75
+    },
+    "SBIN": {
+      "shares": 1,
+      "avg_cost": 1077.08,
+      "invested_cost": 1077.08
+    },
+    "FEDERALBNK": {
+      "shares": 4,
+      "avg_cost": 288.84,
+      "invested_cost": 1155.35
+    },
+    "HDFCBANK": {
+      "shares": 1,
+      "avg_cost": 932.93,
+      "invested_cost": 932.93
+    }
+  },
+  "realized_pnl": 5297.67,
+  "unrealized_pnl": 662.68,
+  "total_equity": 25884.74,
+  "peak_equity": 26976.37,
+  "cumulative_costs": 965.76,
+  "cumulative_slippage": 123.3,
+  "cost_pct_of_capital": 4.83,
+  "last_processed_date": "2026-11-05",
+  "orders_count": 529,
+  "trades_count": 162,
+  "snapshots_count": 1064
+}

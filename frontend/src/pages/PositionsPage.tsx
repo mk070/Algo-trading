@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { RecordExitModal } from '../components/RecordExitModal';
+import { Link } from 'react-router-dom';
+import { FlaskConical } from 'lucide-react';
 import { Position } from '../types';
 
 interface PositionsPageProps {
@@ -135,6 +137,10 @@ export const PositionsPage: React.FC<PositionsPageProps> = ({ currentMarket }) =
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing Kite...' : 'Sync Zerodha Holdings & Funds'}
           </button>
+          <Link to="/paper-trading" className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-xs font-semibold text-indigo-300 shadow transition-all">
+            <FlaskConical className="w-3.5 h-3.5 text-indigo-400" />
+            Paper Trading Lab (₹20k)
+          </Link>
         </div>
       </div>
 

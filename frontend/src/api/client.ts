@@ -470,4 +470,28 @@ export const apiClient = {
     const qs = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
     return fetchJson(`${API_BASE}/data/ingest/status${qs}`);
   },
+
+  // Paper Trading & Research Extension (Cycle 4)
+  async getPaperTradingOverview() {
+    return fetchJson(`${API_BASE}/paper-trading/overview`);
+  },
+
+  async getPaperTradingStrategy(strategyId: string) {
+    return fetchJson(`${API_BASE}/paper-trading/strategy/${encodeURIComponent(strategyId)}`);
+  },
+
+  async getPaperTradingReplay(stress: boolean = false) {
+    return fetchJson(`${API_BASE}/paper-trading/replay?stress=${stress ? 'true' : 'false'}`);
+  },
+
+  async runPaperTradingReplay(stress: boolean = false) {
+    return fetchJson(`${API_BASE}/paper-trading/replay/run?stress=${stress ? 'true' : 'false'}`, {
+      method: 'POST',
+    });
+  },
+
+  async getPaperTradingAiNotes(symbol?: string) {
+    const qs = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
+    return fetchJson(`${API_BASE}/paper-trading/ai-notes${qs}`);
+  },
 };

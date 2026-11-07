@@ -1,0 +1,89 @@
+{
+  "account_id": "normal_cand2_c1b_buf30",
+  "strategy_name": "Candidate 2: C1b Baseline Momentum (Buf 1\u201330)",
+  "initial_capital": 20000.0,
+  "cash": 11254.36,
+  "holdings": {
+    "BEL": {
+      "shares": 2,
+      "avg_cost": 160.18,
+      "invested_cost": 320.36
+    },
+    "BAJFINANCE": {
+      "shares": 1,
+      "avg_cost": 858.41,
+      "invested_cost": 858.41
+    },
+    "JSWSTEEL": {
+      "shares": 1,
+      "avg_cost": 1022.22,
+      "invested_cost": 1022.22
+    },
+    "HDFCBANK": {
+      "shares": 1,
+      "avg_cost": 965.86,
+      "invested_cost": 965.86
+    },
+    "HDFCLIFE": {
+      "shares": 1,
+      "avg_cost": 772.52,
+      "invested_cost": 772.52
+    },
+    "KOTAKBANK": {
+      "shares": 3,
+      "avg_cost": 408.44,
+      "invested_cost": 1225.33
+    },
+    "TATASTEEL": {
+      "shares": 7,
+      "avg_cost": 154.63,
+      "invested_cost": 1082.41
+    },
+    "ASHOKLEY": {
+      "shares": 6,
+      "avg_cost": 143.03,
+      "invested_cost": 858.18
+    },
+    "TATACONSUM": {
+      "shares": 1,
+      "avg_cost": 1165.96,
+      "invested_cost": 1165.96
+    },
+    "SBIN": {
+      "shares": 1,
+      "avg_cost": 939.69,
+      "invested_cost": 939.69
+    },
+    "IDFCFIRSTB": {
+      "shares": 15,
+      "avg_cost": 80.57,
+      "invested_cost": 1208.55
+    },
+    "BPCL": {
+      "shares": 3,
+      "avg_cost": 361.86,
+      "invested_cost": 1085.58
+    },
+    "FEDERALBNK": {
+      "shares": 4,
+      "avg_cost": 267.92,
+      "invested_cost": 1071.67
+    },
+    "VEDL": {
+      "shares": 5,
+      "avg_cost": 237.87,
+      "invested_cost": 1189.34
+    }
+  },
+  "realized_pnl": 5094.71,
+  "unrealized_pnl": 1325.17,
+  "total_equity": 26345.62,
+  "peak_equity": 27329.42,
+  "cumulative_costs": 879.61,
+  "cumulative_slippage": 117.21,
+  "cost_pct_of_capital": 4.4,
+  "last_processed_date": "2026-11-05",
+  "orders_count": 516,
+  "trades_count": 161,
+  "snapshots_count": 1064
+}
