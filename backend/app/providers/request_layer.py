@@ -91,7 +91,7 @@ class ProviderRequestLayer:
         self._state = CircuitState.CLOSED
         self._consecutive_failures = 0
         self._cooldown_until: Optional[float] = None
-        self._state_lock = threading.Lock()
+        self._state_lock = threading.RLock()
 
         # Metrics
         self.total_requests = 0

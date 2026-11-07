@@ -1,6 +1,6 @@
 import contextlib
 import logging
-from fastapi import Depends, FastAPI, Header, HTTPException, Security
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -29,10 +29,26 @@ security = HTTPBearer(auto_error=False)
 
 
 def verify_token(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Security(security),
 ):
     """Require the configured bearer token on every non-health API route in production."""
     if settings.env.strip().lower() == "production":
+        path = request.url.path.lower().rstrip("/")
+        # Fast bypass for probes, health checks, root, and ping endpoints
+        if path in (
+            "",
+            "/health",
+            "/healthz",
+            "/ping",
+            "/api",
+            "/api/health",
+            "/api/healthz",
+            "/api/ping",
+            "/api/health/db",
+        ) or path.endswith(("/health", "/healthz", "/ping")):
+            return True
+
         if not credentials or credentials.credentials != settings.app_token:
             raise HTTPException(status_code=401, detail="Invalid or missing API Bearer token")
     return True
@@ -127,6 +143,8 @@ def root():
 @app.api_route("/health", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
 @app.api_route("/healthz", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
 @app.api_route("/ping", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+@app.api_route("/api/healthz", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
+@app.api_route("/api/ping", methods=["GET", "HEAD", "OPTIONS"], tags=["Health"])
 def liveness():
     return {"status": "HEALTHY", "service": "algo-trading-backend"}
 

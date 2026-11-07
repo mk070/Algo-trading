@@ -28,8 +28,19 @@ router = APIRouter()
 @router.get("/health")
 def get_health(db: Session = Depends(get_db)):
     """Health check: provider status, last job runs, database connectivity."""
-    providers = provider_manager.check_health()
-    db_health = check_db_health()
+    providers = {}
+    try:
+        raw_providers = provider_manager.check_health()
+        providers = {k: v.model_dump() for k, v in raw_providers.items()}
+    except Exception as e:
+        logger.warning(f"Failed to fetch provider health: {e}")
+
+    try:
+        db_health = check_db_health()
+    except Exception as e:
+        logger.warning(f"Failed to check db health: {e}")
+        db_health = {"status": "DEGRADED", "error": str(e)}
+
     try:
         last_jobs = (
             db.query(JobRun)
@@ -40,6 +51,7 @@ def get_health(db: Session = Depends(get_db)):
     except Exception as e:
         logger.warning(f"Failed to fetch job runs in health check: {e}")
         last_jobs = []
+
     job_summaries = [
         {
             "job": j.job,
@@ -55,7 +67,7 @@ def get_health(db: Session = Depends(get_db)):
         "status": "HEALTHY" if db_health.get("status") == "HEALTHY" else "DEGRADED",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "database": db_health,
-        "providers": {k: v.model_dump() for k, v in providers.items()},
+        "providers": providers,
         "last_job_runs": job_summaries,
     }
 

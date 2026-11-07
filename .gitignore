@@ -27,7 +27,10 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 data/backups/
-data/cache/
+data/cache/*
+!data/cache/angelone/
+!data/cache/angelone/instrument_master.json
+
 
 # Node & Frontend
 node_modules/

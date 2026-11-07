@@ -160,8 +160,8 @@ def job_poll_media_news(db):
     """
     logger.info("Polling real-time financial media news (Yahoo Finance, Reuters, Moneycontrol)...")
     from app.engine.universe import universe_manager
-    in_stocks = [s.symbol for s in universe_manager.load_universe("IN")][:25]
-    us_stocks = [s.symbol for s in universe_manager.load_universe("US")][:20]
+    in_stocks = [s.symbol for s in universe_manager.load_universe("IN")][:5]
+    us_stocks = [s.symbol for s in universe_manager.load_universe("US")][:5]
     news_engine.poll_financial_news(in_stocks, market="IN", db=db)
     news_engine.poll_financial_news(us_stocks, market="US", db=db)
 
@@ -282,13 +282,13 @@ def start_scheduler():
         )
         scheduler.add_job(
             log_job_execution("live_monitor_IN", job_live_monitor_in),
-            IntervalTrigger(seconds=30),
+            IntervalTrigger(seconds=60),
             id="live_monitor_IN",
             replace_existing=True,
         )
         scheduler.add_job(
             log_job_execution("live_monitor_US", job_live_monitor_us),
-            IntervalTrigger(seconds=30),
+            IntervalTrigger(seconds=60),
             id="live_monitor_US",
             replace_existing=True,
         )
@@ -346,6 +346,6 @@ def start_scheduler():
 
 def stop_scheduler():
     if scheduler.running:
-        scheduler.shutdown()
+        scheduler.shutdown(wait=False)
         logger.info("Background job scheduler stopped.")
 
