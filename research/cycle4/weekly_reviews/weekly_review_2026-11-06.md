@@ -11,11 +11,11 @@
 
 | Metric | Candidate (Reg-Alpha Buf 1–30) | Control (C1b Momentum Buf 1–30) | Benchmark (NIFTYBEES.NS) | Excess (Cand vs Ctrl) | Excess (Cand vs Bench) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Total Equity** | INR 17,528.40 | INR 17,542.37 | — | — | — |
+| **Total Equity** | INR 17,528.41 | INR 17,542.38 | — | — | — |
 | **Cumulative Return** | **+0.16%** | **+0.24%** | **+1.74%** | **-0.08%** | **-1.58%** |
-| **Peak Equity** | INR 17,528.40 | INR 17,542.37 | — | — | — |
+| **Peak Equity** | INR 17,528.41 | INR 17,542.38 | — | — | — |
 | **Maximum Drawdown** | 0.00% | 0.00% | — | — | — |
-| **Cash Balance** | INR 15,507.75 (88.5%) | INR 14,051.72 (80.1%) | — | — | — |
+| **Cash Balance** | INR 15,507.76 (88.5%) | INR 14,051.73 (80.1%) | — | — | — |
 | **Statutory Costs Paid** | INR 2.36 (0.01%) | INR 4.09 (0.02%) | — | — | — |
 | **Total Trades Executed** | 3 | 5 | — | — | — |
 | **Active Holdings** | 3 scrips | 5 scrips | — | — | — |

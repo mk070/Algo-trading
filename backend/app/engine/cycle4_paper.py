@@ -507,9 +507,9 @@ class Cycle4PaperEngine:
             delta_shares = target_shares - curr_shares
 
             if delta_shares > 0:
-                trade_val = delta_shares * fill_buy
+                trade_val = round(delta_shares * fill_buy, 2)
                 cost_dict = calculate_zerodha_delivery_cost(trade_val, "BUY")
-                total_req = trade_val + cost_dict["total_cost"]
+                total_req = round(trade_val + cost_dict["total_cost"], 2)
 
                 # Constrain by available cash (strict whole-share no-leverage check)
                 if state.cash < total_req:
@@ -519,12 +519,12 @@ class Cycle4PaperEngine:
                         logger.info(f"[{state.name}] Insufficient cash (INR {state.cash:.2f}) to buy {sym}; skipping.")
                         continue
                     delta_shares = affordable_shares
-                    trade_val = delta_shares * fill_buy
+                    trade_val = round(delta_shares * fill_buy, 2)
                     cost_dict = calculate_zerodha_delivery_cost(trade_val, "BUY")
-                    total_req = trade_val + cost_dict["total_cost"]
+                    total_req = round(trade_val + cost_dict["total_cost"], 2)
 
-                state.cash -= total_req
-                state.cumulative_costs_paid += cost_dict["total_cost"]
+                state.cash = round(state.cash - total_req, 2)
+                state.cumulative_costs_paid = round(state.cumulative_costs_paid + cost_dict["total_cost"], 2)
 
                 # Update holding cost basis
                 if sym in state.holdings:
@@ -565,13 +565,13 @@ class Cycle4PaperEngine:
                 # Trim position
                 trim_shares = abs(delta_shares)
                 fill_sell = op * (1.0 - slip_pct)
-                gross_val = trim_shares * fill_sell
+                gross_val = round(trim_shares * fill_sell, 2)
                 # Partial trim does not incur additional flat DP charge if position remains open
                 cost_dict = calculate_zerodha_delivery_cost(gross_val, "SELL", n_scrip_sold=0)
-                net_val = gross_val - cost_dict["total_cost"]
+                net_val = round(gross_val - cost_dict["total_cost"], 2)
 
-                state.cash += net_val
-                state.cumulative_costs_paid += cost_dict["total_cost"]
+                state.cash = round(state.cash + net_val, 2)
+                state.cumulative_costs_paid = round(state.cumulative_costs_paid + cost_dict["total_cost"], 2)
 
                 prev = state.holdings[sym]
                 rem_shares = prev["shares"] - trim_shares
@@ -624,12 +624,18 @@ class Cycle4PaperEngine:
         invested_value = 0.0
         unrealized = 0.0
         missing_price_symbols = []
+        stale_price_carry_forwards = {}
 
         for sym, pos in state.holdings.items():
             raw_cp = close_prices.get(sym)
             if raw_cp is None or pd.isna(raw_cp) or float(raw_cp) <= 0:
                 missing_price_symbols.append(sym)
                 cp = float(pos["avg_cost"])
+                stale_price_carry_forwards[sym] = {
+                    "stale_carry_price": cp,
+                    "is_stale": True,
+                    "reason": "MISSING_EOD_CLOSE_QUOTE",
+                }
             else:
                 cp = float(raw_cp)
             cur_val = cp * pos["shares"]
@@ -664,9 +670,10 @@ class Cycle4PaperEngine:
             "benchmark_close": round(benchmark_close, 2),
             "benchmark_daily_return": round(b_ret, 6),
             "regime_status": regime_status,
-            "valuation_status": "WARNING_MISSING_PRICES" if missing_price_symbols else "COMPLETE",
+            "valuation_status": "VERIFIED_COMPLETE" if not missing_price_symbols else f"INCOMPLETE_VALUATION_MISSING_{len(missing_price_symbols)}_PRICES",
             "is_complete_valuation": len(missing_price_symbols) == 0,
             "missing_price_symbols": missing_price_symbols,
+            "stale_price_carry_forwards": stale_price_carry_forwards,
         }
 
         state.daily_history.append(daily_record)

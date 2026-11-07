@@ -333,11 +333,11 @@ The system is declared frozen and operational for Cycle 4 observation.
 - **Evidence & Results:**
   - **2026-11-05 Close Signals:** Regime Bull (`^NSEI` 24,536.60 > SMA200 24,002.44). Target symbols computed and logged to `rebalance_orders_audit.jsonl` (Top 5: `DIVISLAB`, `ASHOKLEY`, `KOTAKBANK`, `COFORGE`, `TITAN`). Candidate and Control initial equity: ₹17,500.00 cash.
   - **2026-11-06 Open Execution:**
-    - Candidate executed 3 buy orders: `ASHOKLEY` (5 sh @ ₹168.92), `KOTAKBANK` (1 sh @ ₹464.61), `FEDERALBNK` (2 sh @ ₹340.34). Total gross turnover ₹1,989.88 + ₹2.36 fees = ₹1,992.24 deducted. Cash: ₹15,507.75.
-    - Control executed 5 buy orders: `FEDERALBNK`, `VEDL`, `COALINDIA`, `KOTAKBANK`, `TATASTEEL`. Cash: ₹14,051.72. Fees paid: ₹4.09.
+    - Candidate executed 3 buy orders: `ASHOKLEY` (5 sh @ ₹168.92), `KOTAKBANK` (1 sh @ ₹464.61), `FEDERALBNK` (2 sh @ ₹340.34). Total gross turnover ₹1,989.88 + ₹2.36 fees = ₹1,992.24 deducted. Cash: ₹15,507.76.
+    - Control executed 5 buy orders: `FEDERALBNK`, `VEDL`, `COALINDIA`, `KOTAKBANK`, `TATASTEEL`. Cash: ₹14,051.73. Fees paid: ₹4.09.
   - **2026-11-06 Close Mark-to-Market:**
-    - Candidate Equity: **INR 17,528.40** (+0.16% return). Holdings value: ₹2,020.65. Cash: ₹15,507.75. Exact invariant holds: `15507.75 + 2020.65 == 17528.40`.
-    - Control Equity: **INR 17,542.37** (+0.24% return).
+    - Candidate Equity: **INR 17,528.41** (+0.16% return). Holdings value: ₹2,020.65. Cash: ₹15,507.76. Exact invariant holds: `15507.76 + 2020.65 == 17528.41`.
+    - Control Equity: **INR 17,542.38** (+0.24% return).
     - Benchmark (`NIFTYBEES.NS`): Close ₹284.22 (+1.74% return).
 
 ### 3. Idempotency & Process Restart Verification
@@ -348,7 +348,7 @@ The system is declared frozen and operational for Cycle 4 observation.
   ```
 - **Result:**
   - Log: `Idempotency Guard: Session 2026-11-06 already marked to market. Skipping re-execution.`
-  - Payload: `{"status": "ALREADY_PROCESSED", "date": "2026-11-06", "candidate_equity": 17528.4, "control_equity": 17542.37}`
+  - Payload: `{"status": "ALREADY_PROCESSED", "date": "2026-11-06", "candidate_equity": 17528.41, "control_equity": 17542.38}`
   - Zero duplicate orders executed.
   - Zero duplicate DP charges or statutory fees incurred.
   - Daily history ledger retains exactly 2 rows (2026-11-05 and 2026-11-06).
@@ -367,14 +367,66 @@ The system is declared frozen and operational for Cycle 4 observation.
 - **Stale Data:** Requesting date ahead of market data returns `FAIL_CLOSED_STALE_DATA`.
 - **Missing Regime Data:** Benchmark DF missing `^NSEI` returns `FAIL_CLOSED_MISSING_REGIME`.
 - **Missing Benchmark Data:** Benchmark DF missing `NIFTYBEES.NS` returns `FAIL_CLOSED_MISSING_BENCHMARK`.
-- **Missing Prices on Held Symbols:** Mark-to-market detects NaN close quotes, logs `missing_price_symbols`, flags `is_complete_valuation = False`, sets `valuation_status = "WARNING_MISSING_PRICES"`, and falls back to carry cost.
+- **Missing Prices on Held Symbols:** Mark-to-market detects NaN close quotes, logs `missing_price_symbols`, flags `is_complete_valuation = False`, sets `valuation_status = "INCOMPLETE_VALUATION_MISSING_1_PRICES"`, records `stale_price_carry_forwards`, and falls back to carry cost.
 - **Provider Failure:** Empty response from market data provider triggers abort without altering portfolio states.
 
 ### 6. Automated Test Suite Results
 ```powershell
 backend\.venv\Scripts\pytest.exe backend/tests/test_paper_broker.py backend/tests/test_cycle4_paper_trading.py backend/tests/test_no_broker_order.py
 ```
-- **Total Tests:** 33 passing in 2.02 seconds (0 failures, 0 skipped).
+- **Total Tests:** 33 passing in 1.93 seconds (0 failures, 0 skipped).
 - **Frontend Build:** `npm run build` completed successfully (`built in 6.57s`, 0 TypeScript errors).
 - **Frozen Baseline Hash:** `research/PHASE2_FINAL_REPORT.md` SHA256 verified identical: `5DDB610B79DCC004F332C187A3E99473284BFFAF049728f287E3B0623763BD5D`.
 - **Unresolved Blockers:** None. Market data provider credentials (AngelOne and Yahoo Finance) are authenticated and operational.
+
+---
+
+## Final Verification Points Reconciliation & Deployment Operational Closure
+
+### Point 1: Cash Ledger & Rounding Reconciliation (Exact ₹0.00 Difference)
+- **Root Cause of Initial 1-Paisa Discrepancy:**
+  - Individual trade contract notes in the ledger recorded `net_cash_delta` rounded to 2 decimal places (paise):
+    - `ASHOKLEY`: `-₹845.59` (`round(-845.59375, 2)`)
+    - `KOTAKBANK`: `-₹465.16` (`round(-465.16415, 2)`)
+    - `FEDERALBNK`: `-₹681.49` (`round(-681.48999, 2)`)
+  - Summing the rounded ledger values gave `-₹1,992.24`.
+  - However, `state.cash` in the execution loop was previously decremented using unrounded floating-point numbers (`17500.0 - 1992.2479 = 15507.7521`), which rounded down to `₹15,507.75` (a 0.0021-fraction rounding divergence).
+- **Correction Applied:**
+  - In `backend/app/engine/cycle4_paper.py`, enforced real-world contract note settlement rounding: `trade_val = round(delta_shares * fill_buy, 2)` and `total_req = round(trade_val + cost_dict["total_cost"], 2)`, ensuring `state.cash = round(state.cash - total_req, 2)`.
+- **Mathematical Reconciliation:**
+  ```
+  Starting Portfolio Cash:       ₹17,500.00
+  ASHOKLEY Outflow (5 sh):      -₹845.59
+  KOTAKBANK Outflow (1 sh):     -₹465.16
+  FEDERALBNK Outflow (2 sh):    -₹681.49
+  -----------------------------------------
+  Total Cash Outflow:            ₹1,992.24
+  Ending Cash in State & Ledger: ₹15,507.76
+  Reconciled Variance:                ₹0.00 (Exact to the single paisa)
+  ```
+
+### Point 2: Missing-Price Carry-Forward & Valuation Integrity
+- **Mechanism:**
+  - When `mark_to_market_session` encounters an absent, NaN, or non-positive close quote for an open holding:
+    1. It logs the symbol in `missing_price_symbols`.
+    2. It populates an explicit audit dictionary:
+       `stale_price_carry_forwards[sym] = {"stale_carry_price": cp, "is_stale": True, "reason": "MISSING_EOD_CLOSE_QUOTE"}`.
+    3. It sets `is_complete_valuation = False`.
+    4. It sets `valuation_status = "INCOMPLETE_VALUATION_MISSING_{N}_PRICES"`.
+- **Safeguard Against Misrepresentation:**
+  - Stale prices are **never** represented as current market quotes. They are isolated in `stale_price_carry_forwards` strictly as a fallback carry value to prevent artificial 100% position write-downs.
+  - Any downstream API, report, or UI consumer checking `is_complete_valuation` is informed that valuation is incomplete and pending verified quotes.
+
+### Point 3: Deployed Backend Continuous Operation & Asia/Kolkata Scheduler Recovery
+- **Application Lifespan Integration (`backend/app/main.py`):**
+  - The FastAPI application uses `@contextlib.asynccontextmanager async def lifespan(app: FastAPI)`:
+    - On startup (server boot, process restart, or container redeploy):
+      1. Initializes database schemas (`init_db()`).
+      2. Asynchronously refreshes market data instrument maps.
+      3. Calls `start_scheduler()`, which registers `daily_paper_trading` (16:00 IST) and `weekly_paper_reporting` (17:00 IST Friday) with `ZoneInfo("Asia/Kolkata")`.
+    - On shutdown: calls `stop_scheduler()` to cleanly flush running tasks.
+- **Persistent Execution Logging:**
+  - Every scheduler job execution is wrapped by `log_job_execution` and recorded in the database table `job_runs` (logging job name, `started_at`, `status`, `finished_at`, and error `detail`). Over 11,940 historical job runs have been logged in the system database.
+- **Distinction Between Local Configuration and Deployment Operation:**
+  - **Local / Process Configuration (VERIFIED):** The scheduler triggers, timezone mapping (`Asia/Kolkata`), job wrappers, and state restoration from `research/cycle4/state/` are fully implemented, tested, and proven.
+  - **Continuous Deployment Operation (OPERATIONAL REQUIREMENT):** The scheduler runs inside the Uvicorn/FastAPI process. For continuous autonomous execution at 16:00 IST without manual invocation, the FastAPI server process (e.g., `uvicorn app.main:app`) must remain running as a system service or container daemon on the host. If the process is stopped, scheduled jobs do not fire during the downtime, but automatically restore upon process restart.

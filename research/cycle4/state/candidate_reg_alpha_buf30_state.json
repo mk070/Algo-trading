@@ -1,7 +1,7 @@
 {
   "name": "candidate_reg_alpha_buf30",
   "initial_capital": 17500.0,
-  "cash": 15507.75,
+  "cash": 15507.76,
   "holdings": {
     "ASHOKLEY": {
       "shares": 5,
@@ -21,8 +21,8 @@
   },
   "realized_pnl": 0.0,
   "unrealized_pnl": 30.76,
-  "total_equity": 17528.4,
-  "peak_equity": 17528.4,
+  "total_equity": 17528.41,
+  "peak_equity": 17528.41,
   "cumulative_costs_paid": 2.36,
   "cost_pct_of_capital": 0.01,
   "last_processed_date": "2026-11-06",

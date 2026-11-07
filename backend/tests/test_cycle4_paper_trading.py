@@ -397,8 +397,10 @@ class TestFailClosedOperationalBehaviors:
             regime_status="BULL_REGIME",
         )
         assert res["is_complete_valuation"] is False
-        assert res["valuation_status"] == "WARNING_MISSING_PRICES"
+        assert res["valuation_status"] == "INCOMPLETE_VALUATION_MISSING_1_PRICES"
         assert "RELIANCE" in res["missing_price_symbols"]
+        assert "RELIANCE" in res["stale_price_carry_forwards"]
+        assert res["stale_price_carry_forwards"]["RELIANCE"]["is_stale"] is True
         # Fallback to avg_cost prevents equity wipeout
         assert res["invested_value"] == 6500.0
 
