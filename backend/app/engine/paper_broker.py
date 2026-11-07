@@ -109,6 +109,8 @@ def calculate_indian_delivery_charges(
 
     gst_base = exchange_charges + sebi_charges + dp_charges
     gst = 0.18 * gst_base
+    dp_gst = 0.18 * dp_charges
+    dp_total = dp_charges + dp_gst
 
     total = brokerage + stt + exchange_charges + sebi_charges + stamp_duty + dp_charges + gst
 
@@ -119,6 +121,8 @@ def calculate_indian_delivery_charges(
         "sebi_charges": round(sebi_charges, 2),
         "stamp_duty": round(stamp_duty, 2),
         "dp_charges": round(dp_charges, 2),
+        "dp_gst": round(dp_gst, 2),
+        "dp_total": round(dp_total, 2),
         "gst": round(gst, 2),
         "total_cost": round(total, 2),
     }
@@ -143,6 +147,8 @@ class PaperAccount:
         self.cumulative_costs = 0.0
         self.cumulative_slippage = 0.0
         self.last_processed_date: Optional[str] = None
+        self.position_counter: int = 0
+        self.dp_charged_dates: Dict[str, List[str]] = {}
         self.orders_journal: List[Dict[str, Any]] = []
         self.trades_journal: List[Dict[str, Any]] = []
         self.daily_snapshots: List[Dict[str, Any]] = []
@@ -162,6 +168,8 @@ class PaperAccount:
             "cumulative_slippage": round(self.cumulative_slippage, 2),
             "cost_pct_of_capital": round((self.cumulative_costs / self.initial_capital) * 100.0, 2),
             "last_processed_date": self.last_processed_date,
+            "position_counter": self.position_counter,
+            "dp_charged_dates": self.dp_charged_dates,
             "orders_count": len(self.orders_journal),
             "trades_count": len(self.trades_journal),
             "snapshots_count": len(self.daily_snapshots),
@@ -183,6 +191,8 @@ class PaperAccount:
         acc.cumulative_costs = float(data.get("cumulative_costs", 0.0))
         acc.cumulative_slippage = float(data.get("cumulative_slippage", 0.0))
         acc.last_processed_date = data.get("last_processed_date")
+        acc.position_counter = int(data.get("position_counter", 0))
+        acc.dp_charged_dates = data.get("dp_charged_dates", {})
         return acc
 
 
@@ -336,7 +346,7 @@ class DeterministicPaperBroker:
                 slippage_cost = (op - fill_sell) * shares
 
                 is_full = True  # Liquidating entire holding
-                already_charged = sym in dp_charged_scrip_today
+                already_charged = sym in account.dp_charged_dates.get(exec_date, [])
                 cost_dict = calculate_indian_delivery_charges(
                     turnover=gross_val,
                     side="SELL",
@@ -345,7 +355,7 @@ class DeterministicPaperBroker:
                     stress_multiplier=self.cost_stress_multiplier,
                 )
                 if cost_dict["dp_charges"] > 0:
-                    dp_charged_scrip_today.add(sym)
+                    account.dp_charged_dates.setdefault(exec_date, []).append(sym)
 
                 total_fees = cost_dict["total_cost"]
                 net_proceeds = gross_val - total_fees
@@ -360,6 +370,7 @@ class DeterministicPaperBroker:
 
                 trade_record = {
                     "trade_id": f"TRD_{exec_date}_{account.account_id}_{sym}_SELL",
+                    "position_id": pos.get("position_id", f"POS_{account.account_id}_{sym}"),
                     "exec_date": exec_date,
                     "signal_date": signal_date,
                     "account_id": account.account_id,
@@ -377,6 +388,8 @@ class DeterministicPaperBroker:
                     "sebi_charges": cost_dict["sebi_charges"],
                     "stamp_duty": cost_dict["stamp_duty"],
                     "dp_charges": cost_dict["dp_charges"],
+                    "dp_gst": cost_dict["dp_gst"],
+                    "dp_total": cost_dict["dp_total"],
                     "gst": cost_dict["gst"],
                     "total_costs": total_fees,
                     "net_cash_delta": round(net_proceeds, 2),
@@ -525,13 +538,20 @@ class DeterministicPaperBroker:
                     prev = account.holdings[sym]
                     tot_sh = prev["shares"] + delta_shares
                     tot_inv = (prev["avg_cost"] * prev["shares"]) + trade_turnover
+                    pos_id = prev.get("position_id", f"POS_{account.account_id}_{sym}_{exec_date}_1")
                     account.holdings[sym] = {
+                        "position_id": pos_id,
+                        "entry_date": prev.get("entry_date", exec_date),
                         "shares": tot_sh,
                         "avg_cost": round(tot_inv / tot_sh, 2),
                         "invested_cost": round(tot_inv, 2),
                     }
                 else:
+                    account.position_counter += 1
+                    pos_id = f"POS_{account.account_id}_{sym}_{exec_date}_{account.position_counter}"
                     account.holdings[sym] = {
+                        "position_id": pos_id,
+                        "entry_date": exec_date,
                         "shares": delta_shares,
                         "avg_cost": round(fill_buy, 2),
                         "invested_cost": round(trade_turnover, 2),
@@ -539,6 +559,7 @@ class DeterministicPaperBroker:
 
                 trade_record = {
                     "trade_id": f"TRD_{exec_date}_{account.account_id}_{sym}_BUY",
+                    "position_id": pos_id,
                     "exec_date": exec_date,
                     "signal_date": signal_date,
                     "account_id": account.account_id,
@@ -556,6 +577,8 @@ class DeterministicPaperBroker:
                     "sebi_charges": cost_dict["sebi_charges"],
                     "stamp_duty": cost_dict["stamp_duty"],
                     "dp_charges": cost_dict["dp_charges"],
+                    "dp_gst": cost_dict["dp_gst"],
+                    "dp_total": cost_dict["dp_total"],
                     "gst": cost_dict["gst"],
                     "total_costs": cost_dict["total_cost"],
                     "net_cash_delta": round(-total_required, 2),
@@ -585,10 +608,11 @@ class DeterministicPaperBroker:
                 slippage_cost = (op - fill_sell) * trim_shares
 
                 prev = account.holdings[sym]
+                pos_id = prev.get("position_id", f"POS_{account.account_id}_{sym}")
                 rem_shares = prev["shares"] - trim_shares
                 is_full = (rem_shares <= 0)
 
-                already_charged = sym in dp_charged_scrip_today
+                already_charged = sym in account.dp_charged_dates.get(exec_date, [])
                 cost_dict = calculate_indian_delivery_charges(
                     turnover=gross_val,
                     side="SELL",
@@ -597,7 +621,7 @@ class DeterministicPaperBroker:
                     stress_multiplier=self.cost_stress_multiplier,
                 )
                 if cost_dict["dp_charges"] > 0:
-                    dp_charged_scrip_today.add(sym)
+                    account.dp_charged_dates.setdefault(exec_date, []).append(sym)
 
                 total_fees = cost_dict["total_cost"]
                 net_proceeds = gross_val - total_fees
@@ -610,6 +634,8 @@ class DeterministicPaperBroker:
 
                 if rem_shares > 0:
                     account.holdings[sym] = {
+                        "position_id": pos_id,
+                        "entry_date": prev.get("entry_date", exec_date),
                         "shares": rem_shares,
                         "avg_cost": prev["avg_cost"],
                         "invested_cost": round(prev["avg_cost"] * rem_shares, 2),
@@ -619,6 +645,7 @@ class DeterministicPaperBroker:
 
                 trade_record = {
                     "trade_id": f"TRD_{exec_date}_{account.account_id}_{sym}_SELL",
+                    "position_id": pos_id,
                     "exec_date": exec_date,
                     "signal_date": signal_date,
                     "account_id": account.account_id,
@@ -636,6 +663,8 @@ class DeterministicPaperBroker:
                     "sebi_charges": cost_dict["sebi_charges"],
                     "stamp_duty": cost_dict["stamp_duty"],
                     "dp_charges": cost_dict["dp_charges"],
+                    "dp_gst": cost_dict["dp_gst"],
+                    "dp_total": cost_dict["dp_total"],
                     "gst": cost_dict["gst"],
                     "total_costs": total_fees,
                     "net_cash_delta": round(net_proceeds, 2),
@@ -675,9 +704,16 @@ class DeterministicPaperBroker:
         """
         invested_value = 0.0
         unrealized = 0.0
+        is_complete = True
+        missing_price_symbols: List[str] = []
 
         for sym, pos in account.holdings.items():
-            cp = close_prices.get(sym, pos["avg_cost"])
+            cp = close_prices.get(sym)
+            if cp is None or pd.isna(cp) or cp <= 0:
+                is_complete = False
+                missing_price_symbols.append(sym)
+                cp = pos["avg_cost"]  # Fallback for numerical stability, explicitly flagged below
+
             cur_val = cp * pos["shares"]
             invested_value += cur_val
             unrealized += cur_val - (pos["avg_cost"] * pos["shares"])
@@ -711,6 +747,9 @@ class DeterministicPaperBroker:
             "benchmark_close": round(benchmark_close, 2),
             "benchmark_daily_return": round(b_ret, 6),
             "regime_status": regime_status,
+            "is_complete_valuation": is_complete,
+            "missing_price_symbols": missing_price_symbols,
+            "valuation_status": "VERIFIED_COMPLETE" if is_complete else f"INCOMPLETE_VALUATION_MISSING_{len(missing_price_symbols)}_SYMBOLS",
         }
 
         account.daily_snapshots.append(snapshot)

@@ -4,6 +4,9 @@ import shutil
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
+from zoneinfo import ZoneInfo
+from pathlib import Path
+import pandas as pd
 
 from app.db import SessionLocal
 from app.engine.newsfilter import news_engine
@@ -193,17 +196,86 @@ def job_refresh_fundamentals_weekly(db):
     logger.info(f"Weekly fundamental snapshots refresh completed for {len(liquid_symbols)} symbols.")
 
 
+
+
+def job_daily_paper_trading(db):
+    """Executes daily paper-trading step at 16:00 IST post-market close."""
+    from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step
+    from app.engine.calendars import is_exchange_holiday
+    today = datetime.date.today()
+    if is_exchange_holiday("IN", today):
+        logger.info(f"Daily paper trading skipped: {today} is an official exchange holiday or weekend.")
+        return
+
+    snap_path = Path("data/research/research_snapshot_20261106.parquet")
+    bench_path = Path("data/research/benchmark_series.parquet")
+    if not snap_path.exists() or not bench_path.exists():
+        logger.warning("Paper trading market data snapshot missing; skipping.")
+        return
+
+    snap_df = pd.read_parquet(snap_path)
+    bench_df = pd.read_parquet(bench_path)
+    snap_df["date"] = pd.to_datetime(snap_df["date"])
+    bench_df["date"] = pd.to_datetime(bench_df["date"])
+
+    engine = Cycle4PaperEngine(
+        universe_path="data/universe/research_universe_v1.csv",
+        state_dir="research/cycle4/state",
+        initial_capital=17500.0,
+    )
+
+    past_dates = [r["date"] for r in engine.candidate_state.daily_history]
+    if str(today) in past_dates:
+        logger.info(f"Session {today} already marked to market. Skipping duplicate execution.")
+        return
+
+    res = run_cycle4_daily_step(
+        engine=engine,
+        session_date=today,
+        historical_bars=snap_df,
+        benchmark_df=bench_df,
+        force_rebalance=False,
+    )
+    logger.info(f"Daily paper trading completed: {res.get('status')}")
+
+
+def job_weekly_paper_reporting(db):
+    """Executes Friday weekly paper-trading audit and report generation at 17:00 IST."""
+    import sys
+    proj_root = Path(__file__).resolve().parent.parent.parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    from research.cycle4.weekly_reporter import generate_weekly_report
+    state_dir = Path("research/cycle4/state")
+    output_dir = Path("research/cycle4/weekly_reviews")
+    report_file = generate_weekly_report(state_dir=state_dir, output_dir=output_dir)
+    logger.info(f"Weekly paper-trading review generated: {report_file}")
+
+
 def start_scheduler():
     if not scheduler.running:
+        kolkata_tz = ZoneInfo("Asia/Kolkata")
+        scheduler.add_job(
+            log_job_execution("daily_paper_trading", job_daily_paper_trading),
+            CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone=kolkata_tz),
+            id="daily_paper_trading",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            log_job_execution("weekly_paper_reporting", job_weekly_paper_reporting),
+            CronTrigger(day_of_week="fri", hour=17, minute=0, timezone=kolkata_tz),
+            id="weekly_paper_reporting",
+            replace_existing=True,
+        )
         scheduler.add_job(
             log_job_execution("eod_scan_IN", job_eod_scan_in),
-            CronTrigger(hour=16, minute=30),
+            CronTrigger(hour=16, minute=30, timezone=ZoneInfo("Asia/Kolkata")),
             id="eod_scan_IN",
             replace_existing=True,
         )
         scheduler.add_job(
             log_job_execution("eod_scan_US", job_eod_scan_us),
-            CronTrigger(hour=21, minute=45),
+            CronTrigger(hour=21, minute=45, timezone=ZoneInfo("Asia/Kolkata")),
             id="eod_scan_US",
             replace_existing=True,
         )
@@ -251,19 +323,19 @@ def start_scheduler():
         )
         scheduler.add_job(
             log_job_execution("db_backup", job_db_backup),
-            CronTrigger(hour=23, minute=59),
+            CronTrigger(hour=23, minute=59, timezone=ZoneInfo("Asia/Kolkata")),
             id="db_backup",
             replace_existing=True,
         )
         scheduler.add_job(
             log_job_execution("universe_master_sync", job_universe_master_sync),
-            CronTrigger(day_of_week="sun", hour=2, minute=0),
+            CronTrigger(day_of_week="sun", hour=2, minute=0, timezone=ZoneInfo("Asia/Kolkata")),
             id="universe_master_sync",
             replace_existing=True,
         )
         scheduler.add_job(
             log_job_execution("fundamentals_weekly", job_refresh_fundamentals_weekly),
-            CronTrigger(day_of_week="sun", hour=4, minute=0),
+            CronTrigger(day_of_week="sun", hour=4, minute=0, timezone=ZoneInfo("Asia/Kolkata")),
             id="fundamentals_weekly",
             replace_existing=True,
         )

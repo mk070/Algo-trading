@@ -282,3 +282,119 @@ class TestPerformanceMetrics:
         assert m["win_rate_pct"] == 100.0
         assert m["total_costs"] == 25.0
 
+
+class TestPositionLifecycleAndAccountingInvariants:
+    def setup_method(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.broker = DeterministicPaperBroker(base_dir=self.temp_dir)
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_dp_charge_and_gst_sum_invariant(self):
+        turnover = 12000.0
+        c = calculate_indian_delivery_charges(turnover, side="SELL", is_full_closure=True, already_charged_dp_today=False)
+
+        assert c["dp_charges"] == 13.50
+        assert c["dp_gst"] == 2.43
+        assert c["dp_total"] == 15.93
+        assert round(c["dp_charges"] + c["dp_gst"], 2) == c["dp_total"]
+
+        # Ensure GST is NOT calculated on top of dp_total (which would be 18% of 15.93)
+        expected_gst_base = c["exchange_charges"] + c["sebi_charges"] + 13.50
+        assert c["gst"] == round(0.18 * expected_gst_base, 2)
+
+    def test_position_lifecycles_and_separate_closures(self):
+        acc = self.broker.get_or_create_account("cand1", "Candidate 1", initial_capital=20000.0)
+
+        # 1. First Buy on 2026-01-02
+        self.broker.execute_target_portfolio(
+            account=acc,
+            target_symbols=["INFY.NS"],
+            open_prices={"INFY.NS": 1000.0},
+            exec_date="2026-01-02",
+            signal_date="2026-01-01",
+            regime_pass=True,
+        )
+        assert "INFY.NS" in acc.holdings
+        pos_id_1 = acc.holdings["INFY.NS"]["position_id"]
+        assert "POS_cand1_INFY.NS" in pos_id_1
+
+        # 2. First Full Closure on 2026-01-15
+        trades_1 = self.broker.execute_target_portfolio(
+            account=acc,
+            target_symbols=[],
+            open_prices={"INFY.NS": 1100.0},
+            exec_date="2026-01-15",
+            signal_date="2026-01-14",
+            regime_pass=True,
+        )
+        assert len(trades_1) == 1
+        assert trades_1[0]["position_id"] == pos_id_1
+        assert trades_1[0]["dp_total"] == 15.93
+        assert "INFY.NS" not in acc.holdings
+
+        # 3. Second Buy on 2026-02-02 (New Position Lifecycle)
+        self.broker.execute_target_portfolio(
+            account=acc,
+            target_symbols=["INFY.NS"],
+            open_prices={"INFY.NS": 1050.0},
+            exec_date="2026-02-02",
+            signal_date="2026-02-01",
+            regime_pass=True,
+        )
+        assert "INFY.NS" in acc.holdings
+        pos_id_2 = acc.holdings["INFY.NS"]["position_id"]
+        assert pos_id_2 != pos_id_1, "Subsequent re-entry must generate a distinct position lifecycle identifier"
+
+        # 4. Second Full Closure on 2026-02-20 (Separate date)
+        trades_2 = self.broker.execute_target_portfolio(
+            account=acc,
+            target_symbols=[],
+            open_prices={"INFY.NS": 1150.0},
+            exec_date="2026-02-20",
+            signal_date="2026-02-19",
+            regime_pass=True,
+        )
+        assert len(trades_2) == 1
+        assert trades_2[0]["position_id"] == pos_id_2
+        assert trades_2[0]["dp_total"] == 15.93, "Distinct lifecycle closure on a separate date must incur DP fee"
+
+    def test_missing_price_flags_incomplete_valuation(self):
+        acc = self.broker.get_or_create_account("cand1", "Candidate 1", initial_capital=20000.0)
+        acc.holdings["INFY.NS"] = {
+            "position_id": "POS_1",
+            "shares": 5,
+            "avg_cost": 1000.0,
+            "invested_cost": 5000.0,
+        }
+
+        # Closing price is missing (None or NaN)
+        snapshot = self.broker.mark_to_market_session(
+            account=acc,
+            close_prices={},  # Missing INFY.NS price
+            session_date="2026-01-02",
+            benchmark_close=250.0,
+            prev_benchmark_close=248.0,
+            regime_status="BULL_REGIME",
+        )
+
+        assert snapshot["is_complete_valuation"] is False
+        assert "INFY.NS" in snapshot["missing_price_symbols"]
+        assert "INCOMPLETE_VALUATION" in snapshot["valuation_status"]
+
+
+class TestSchedulerJobRegistration:
+    def test_scheduler_jobs_and_timezone(self):
+        from app.scheduler.jobs import scheduler, start_scheduler, stop_scheduler
+        start_scheduler()
+        try:
+            job_ids = [j.id for j in scheduler.get_jobs()]
+            assert "daily_paper_trading" in job_ids, "daily_paper_trading must be registered in scheduler"
+            assert "weekly_paper_reporting" in job_ids, "weekly_paper_reporting must be registered in scheduler"
+
+            daily_job = scheduler.get_job("daily_paper_trading")
+            assert str(daily_job.trigger.timezone) == "Asia/Kolkata", "Scheduler timezone must be Asia/Kolkata"
+        finally:
+            stop_scheduler()
+
