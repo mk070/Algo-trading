@@ -1,0 +1,41 @@
+{
+  "name": "control_c1b_buf30",
+  "initial_capital": 17500.0,
+  "cash": 14051.72,
+  "holdings": {
+    "FEDERALBNK": {
+      "shares": 2,
+      "avg_cost": 340.34,
+      "invested_cost": 680.68
+    },
+    "VEDL": {
+      "shares": 3,
+      "avg_cost": 260.26,
+      "invested_cost": 780.78
+    },
+    "COALINDIA": {
+      "shares": 2,
+      "avg_cost": 396.9,
+      "invested_cost": 793.79
+    },
+    "KOTAKBANK": {
+      "shares": 1,
+      "avg_cost": 464.61,
+      "invested_cost": 464.61
+    },
+    "TATASTEEL": {
+      "shares": 4,
+      "avg_cost": 181.08,
+      "invested_cost": 724.32
+    }
+  },
+  "realized_pnl": 0.0,
+  "unrealized_pnl": 46.46,
+  "total_equity": 17542.37,
+  "peak_equity": 17542.37,
+  "cumulative_costs_paid": 4.09,
+  "cost_pct_of_capital": 0.02,
+  "last_processed_date": "2026-11-06",
+  "trades_count": 5,
+  "sessions_count": 2
+}

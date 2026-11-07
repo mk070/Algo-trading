@@ -1,0 +1,3 @@
+date,portfolio,cash,invested_value,total_equity,peak_equity,drawdown_pct,cumulative_return_pct,cumulative_costs,cost_pct_of_capital,realized_pnl,unrealized_pnl,holdings_count,benchmark_close,benchmark_daily_return,regime_status,valuation_status,is_complete_valuation,missing_price_symbols
+2026-11-05,candidate_reg_alpha_buf30,17500.0,0.0,17500.0,17500.0,0.0,0.0,0.0,0.0,0.0,0.0,0,279.36,0.024009,BULL_REGIME (Close > SMA200),COMPLETE,True,[]
+2026-11-06,candidate_reg_alpha_buf30,15507.75,2020.65,17528.4,17528.4,0.0,0.16,2.36,0.01,0.0,30.76,3,284.22,0.017397,BULL_REGIME (Close > SMA200),COMPLETE,True,[]

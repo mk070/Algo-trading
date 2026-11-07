@@ -275,7 +275,8 @@ class Cycle4PaperEngine:
 
         start_idx = n_bars - 1 - lookback
         stop_idx = n_bars - 1 - skip
-        rm_win = nsei_returns.iloc[start_idx : stop_idx + 1].values
+        window_dates = close_df.index[start_idx : stop_idx + 1]
+        rm_series = nsei_returns.reindex(window_dates)
 
         for sym in self.symbols:
             if sym not in close_df.columns:
@@ -294,14 +295,23 @@ class Cycle4PaperEngine:
             if pd.isna(p_start) or pd.isna(p_stop) or p_start <= 0:
                 continue
 
-            y = returns_df[sym].iloc[start_idx : stop_idx + 1].values
-            if np.isnan(y).any() or np.isnan(rm_win).any():
+            y_series = returns_df[sym].reindex(window_dates)
+            sec = self.sector_map.get(sym, "Unknown")
+            other_syms = [s for s in self.sector_to_syms.get(sec, []) if s != sym and s in returns_df.columns]
+
+            if other_syms:
+                rs_series = returns_df[other_syms].reindex(window_dates).mean(axis=1)
+                valid_mask = ~(y_series.isna() | rm_series.isna() | rs_series.isna())
+            else:
+                valid_mask = ~(y_series.isna() | rm_series.isna())
+
+            if valid_mask.sum() < 120:
                 continue
 
-            sec = self.sector_map[sym]
-            other_syms = [s for s in self.sector_to_syms[sec] if s != sym and s in returns_df.columns]
+            y = y_series[valid_mask].values
+            rm_win = rm_series[valid_mask].values
             if other_syms:
-                rs_win = returns_df[other_syms].iloc[start_idx : stop_idx + 1].mean(axis=1).values
+                rs_win = rs_series[valid_mask].values
                 X = np.column_stack([np.ones_like(y), rm_win, rs_win])
             else:
                 X = np.column_stack([np.ones_like(y), rm_win])
@@ -613,9 +623,15 @@ class Cycle4PaperEngine:
         """
         invested_value = 0.0
         unrealized = 0.0
+        missing_price_symbols = []
 
         for sym, pos in state.holdings.items():
-            cp = close_prices.get(sym, pos["avg_cost"])
+            raw_cp = close_prices.get(sym)
+            if raw_cp is None or pd.isna(raw_cp) or float(raw_cp) <= 0:
+                missing_price_symbols.append(sym)
+                cp = float(pos["avg_cost"])
+            else:
+                cp = float(raw_cp)
             cur_val = cp * pos["shares"]
             invested_value += cur_val
             unrealized += cur_val - (pos["avg_cost"] * pos["shares"])
@@ -648,6 +664,9 @@ class Cycle4PaperEngine:
             "benchmark_close": round(benchmark_close, 2),
             "benchmark_daily_return": round(b_ret, 6),
             "regime_status": regime_status,
+            "valuation_status": "WARNING_MISSING_PRICES" if missing_price_symbols else "COMPLETE",
+            "is_complete_valuation": len(missing_price_symbols) == 0,
+            "missing_price_symbols": missing_price_symbols,
         }
 
         state.daily_history.append(daily_record)
@@ -676,8 +695,13 @@ def run_cycle4_daily_step(
     if is_exchange_holiday("IN", session_date):
         return {"status": "SKIPPED_HOLIDAY", "date": date_str, "reason": "Official NSE holiday or weekend closure"}
 
-    # 2. Extract session market data
-    sub_bars = historical_bars[pd.to_datetime(historical_bars["date"]).dt.date <= session_date].copy()
+    # 2. Extract and validate session market data
+    h_bars = historical_bars.copy()
+    h_bars["date"] = pd.to_datetime(h_bars["date"])
+    b_df = benchmark_df.copy()
+    b_df["date"] = pd.to_datetime(b_df["date"])
+
+    sub_bars = h_bars[h_bars["date"].dt.date <= session_date].copy()
     if sub_bars.empty:
         return {"status": "NO_DATA", "date": date_str}
 
@@ -686,16 +710,41 @@ def run_cycle4_daily_step(
     open_pivot = sub_bars.pivot(index="date", columns="symbol", values="split_adj_open").sort_index()
     vol_pivot = sub_bars.pivot(index="date", columns="symbol", values="volume").sort_index()
 
+    # Fail-closed check: verify session_date actually exists in market data
+    latest_bar_date = pd.to_datetime(close_pivot.index[-1]).date()
+    if latest_bar_date != session_date:
+        logger.error(f"Market data date mismatch: requested session {session_date}, but latest available bar is {latest_bar_date}.")
+        return {
+            "status": "FAIL_CLOSED_STALE_DATA",
+            "date": date_str,
+            "latest_available_date": str(latest_bar_date),
+            "reason": f"No market data available for session {date_str}. Latest available bar is {latest_bar_date}. Fail-closed: refusing to treat stale research snapshot as new daily data."
+        }
+
     returns_pivot = close_pivot.pct_change()
     med_to_60d = (close_pivot * vol_pivot).rolling(60, min_periods=40).median().iloc[-1]
 
-    # Benchmark series
-    sub_bench = benchmark_df[pd.to_datetime(benchmark_df["date"]).dt.date <= session_date].copy()
+    # Benchmark series validation
+    sub_bench = b_df[b_df["date"].dt.date <= session_date].copy()
     nsei_series = sub_bench[sub_bench["symbol"] == "^NSEI"].sort_values("date").set_index("date")["close"]
+    if nsei_series.empty or pd.to_datetime(nsei_series.index[-1]).date() != session_date:
+        logger.error(f"Regime data mismatch: ^NSEI missing for session {session_date}.")
+        return {
+            "status": "FAIL_CLOSED_MISSING_REGIME",
+            "date": date_str,
+            "reason": f"^NSEI benchmark series missing for session {date_str}. Fail-closed: cannot verify market regime."
+        }
     nsei_returns = nsei_series.pct_change()
 
     niftybees_series = sub_bench[sub_bench["symbol"] == "NIFTYBEES.NS"].sort_values("date").set_index("date")["close"]
-    cur_niftybees = float(niftybees_series.iloc[-1]) if not niftybees_series.empty else 0.0
+    if niftybees_series.empty or pd.to_datetime(niftybees_series.index[-1]).date() != session_date:
+        logger.error(f"Benchmark data mismatch: NIFTYBEES missing for session {session_date}.")
+        return {
+            "status": "FAIL_CLOSED_MISSING_BENCHMARK",
+            "date": date_str,
+            "reason": f"NIFTYBEES benchmark series missing for session {date_str}. Fail-closed: cannot compute relative benchmark return."
+        }
+    cur_niftybees = float(niftybees_series.iloc[-1])
     prev_niftybees = float(niftybees_series.iloc[-2]) if len(niftybees_series) > 1 else cur_niftybees
 
     # 3. Evaluate Regime

@@ -1,0 +1,4 @@
+exec_date,portfolio,symbol,side,action,shares,ref_open,fill_price,gross_turnover,costs,net_cash_delta,realized_pnl,regime_pass
+2026-11-06,candidate_reg_alpha_buf30,ASHOKLEY,BUY,ENTER_NEW,5,168.75,168.92,844.59,"{'brokerage': 0.0, 'stt': 0.84, 'exchange_charges': 0.03, 'sebi_charges': 0.0, 'stamp_duty': 0.13, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 1.0}",-845.59,0.0,True
+2026-11-06,candidate_reg_alpha_buf30,KOTAKBANK,BUY,ENTER_NEW,1,464.15,464.61,464.61,"{'brokerage': 0.0, 'stt': 0.46, 'exchange_charges': 0.01, 'sebi_charges': 0.0, 'stamp_duty': 0.07, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.55}",-465.16,0.0,True
+2026-11-06,candidate_reg_alpha_buf30,FEDERALBNK,BUY,ENTER_NEW,2,340.0,340.34,680.68,"{'brokerage': 0.0, 'stt': 0.68, 'exchange_charges': 0.02, 'sebi_charges': 0.0, 'stamp_duty': 0.1, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.81}",-681.49,0.0,True

@@ -1,0 +1,6 @@
+exec_date,portfolio,symbol,side,action,shares,ref_open,fill_price,gross_turnover,costs,net_cash_delta,realized_pnl,regime_pass
+2026-11-06,control_c1b_buf30,FEDERALBNK,BUY,ENTER_NEW,2,340.0,340.34,680.68,"{'brokerage': 0.0, 'stt': 0.68, 'exchange_charges': 0.02, 'sebi_charges': 0.0, 'stamp_duty': 0.1, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.81}",-681.49,0.0,True
+2026-11-06,control_c1b_buf30,VEDL,BUY,ENTER_NEW,3,260.0,260.26,780.78,"{'brokerage': 0.0, 'stt': 0.78, 'exchange_charges': 0.02, 'sebi_charges': 0.0, 'stamp_duty': 0.12, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.93}",-781.71,0.0,True
+2026-11-06,control_c1b_buf30,COALINDIA,BUY,ENTER_NEW,2,396.5,396.9,793.79,"{'brokerage': 0.0, 'stt': 0.79, 'exchange_charges': 0.02, 'sebi_charges': 0.0, 'stamp_duty': 0.12, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.94}",-794.73,0.0,True
+2026-11-06,control_c1b_buf30,KOTAKBANK,BUY,ENTER_NEW,1,464.15,464.61,464.61,"{'brokerage': 0.0, 'stt': 0.46, 'exchange_charges': 0.01, 'sebi_charges': 0.0, 'stamp_duty': 0.07, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.55}",-465.16,0.0,True
+2026-11-06,control_c1b_buf30,TATASTEEL,BUY,ENTER_NEW,4,180.9,181.08,724.32,"{'brokerage': 0.0, 'stt': 0.72, 'exchange_charges': 0.02, 'sebi_charges': 0.0, 'stamp_duty': 0.11, 'dp_charges': 0.0, 'gst': 0.0, 'total_cost': 0.86}",-725.18,0.0,True

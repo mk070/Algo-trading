@@ -202,21 +202,22 @@ def job_daily_paper_trading(db):
     """Executes daily paper-trading step at 16:00 IST post-market close."""
     from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step
     from app.engine.calendars import is_exchange_holiday
+    import sys
+    proj_root = Path(__file__).resolve().parent.parent.parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    from research.cycle4.daily_paper_runner import load_market_data
+
     today = datetime.date.today()
     if is_exchange_holiday("IN", today):
         logger.info(f"Daily paper trading skipped: {today} is an official exchange holiday or weekend.")
         return
 
-    snap_path = Path("data/research/research_snapshot_20261106.parquet")
-    bench_path = Path("data/research/benchmark_series.parquet")
-    if not snap_path.exists() or not bench_path.exists():
-        logger.warning("Paper trading market data snapshot missing; skipping.")
+    try:
+        snap_df, bench_df = load_market_data(today)
+    except Exception as e:
+        logger.error(f"Paper trading market data loading failed: {e}")
         return
-
-    snap_df = pd.read_parquet(snap_path)
-    bench_df = pd.read_parquet(bench_path)
-    snap_df["date"] = pd.to_datetime(snap_df["date"])
-    bench_df["date"] = pd.to_datetime(bench_df["date"])
 
     engine = Cycle4PaperEngine(
         universe_path="data/universe/research_universe_v1.csv",

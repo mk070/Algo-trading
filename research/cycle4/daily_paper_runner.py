@@ -12,7 +12,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Tuple
 import pandas as pd
 
 # Add backend directory to sys.path
@@ -30,8 +30,11 @@ logging.basicConfig(
 logger = logging.getLogger("Cycle4Runner")
 
 
-def load_market_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Loads approved snapshot and benchmark series."""
+def load_market_data(target_date: Optional[datetime.date] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Loads historical market data combining the frozen baseline snapshot with verified prospective EOD bars.
+    Validates date, source, and completeness. Refuses to treat stale snapshot as new daily data.
+    """
     snap_path = Path("data/research/research_snapshot_20261106.parquet")
     bench_path = Path("data/research/benchmark_series.parquet")
 
@@ -44,23 +47,43 @@ def load_market_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     bench_df = pd.read_parquet(bench_path)
     snap_df["date"] = pd.to_datetime(snap_df["date"])
     bench_df["date"] = pd.to_datetime(bench_df["date"])
+
+    # Check prospective data directory for fresh daily bars beyond 2026-11-05
+    data_dir = Path("research/cycle4/data")
+    prosp_bars_file = data_dir / "prospective_daily_bars.parquet"
+    prosp_bench_file = data_dir / "prospective_benchmarks.parquet"
+
+    if prosp_bars_file.exists():
+        p_bars = pd.read_parquet(prosp_bars_file)
+        p_bars["date"] = pd.to_datetime(p_bars["date"])
+        if not p_bars.empty:
+            assert "source" in p_bars.columns, "Prospective bars missing source audit field"
+            assert not p_bars["close"].isna().all(), "Prospective bars contain all-NaN close prices"
+            snap_df = pd.concat([snap_df, p_bars], ignore_index=True).drop_duplicates(subset=["symbol", "date"], keep="last")
+
+    if prosp_bench_file.exists():
+        p_bench = pd.read_parquet(prosp_bench_file)
+        p_bench["date"] = pd.to_datetime(p_bench["date"])
+        if not p_bench.empty:
+            bench_df = pd.concat([bench_df, p_bench], ignore_index=True).drop_duplicates(subset=["symbol", "date"], keep="last")
+
     return snap_df, bench_df
 
 
 def main():
     parser = argparse.ArgumentParser(description="Cycle 4 Daily Paper-Trading Runner")
-    parser.add_argument("--date", type=str, default=None, help="Trading session date (YYYY-MM-DD). Defaults to latest available session.")
+    parser.add_argument("--date", type=str, default=None, help="Trading session date (YYYY-MM-DD). Defaults to today.")
     parser.add_argument("--force-rebalance", action="store_true", help="Force month-end rebalance calculation today.")
     parser.add_argument("--capital", type=float, default=17500.0, help="Starting capital (INR). Defaults to 17500.0.")
     args = parser.parse_args()
 
-    snap_df, bench_df = load_market_data()
-
     if args.date:
         session_date = datetime.date.fromisoformat(args.date)
     else:
-        # Default to latest available snapshot date
-        session_date = snap_df["date"].max().date()
+        # Default to current date; do not silently substitute frozen historical snapshot
+        session_date = datetime.date.today()
+
+    snap_df, bench_df = load_market_data(session_date)
 
     logger.info(f"Executing Cycle 4 Paper Trading for session: {session_date}")
 

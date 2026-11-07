@@ -298,6 +298,83 @@ The Cycle 4 Paper-Trading Infrastructure & Research Extension is fully verified,
 - **No live broker execution authority is granted.**
 - **All accounting calculations reflect real-world Indian statutory equity delivery costs.**
 - **The baseline performance discrepancy between Phase 2 (+16.11%) and Cycle 4 replay (+6.63%) is thoroughly resolved and empirically proven.**
-- **All 29 tests pass, and the frontend builds cleanly without errors.**
+- **All 33 tests pass, and the frontend builds cleanly without errors.**
 
 The system is declared frozen and operational for Cycle 4 observation.
+
+---
+
+## Operational Verification Addendum (Executed 2026-11-07)
+
+### 1. Fresh EOD Market Data Ingestion & Validation
+- **Requirement:** Verify daily runner receives fresh EOD market data, validates trading date, source, and completeness, and refuses to treat stale research snapshot as new daily data.
+- **Defects Discovered & Corrected:**
+  - `run_cycle4_daily_step` did not check if market data matched `session_date`. If given the frozen research snapshot (last date 2026-11-05) for session 2026-11-06, it silently reused 2026-11-05 prices.
+  - `compute_candidate_scores` suffered an index alignment mismatch when slicing returns by positional index. Fixed by explicitly reindexing stock, market (`^NSEI`), and sector returns to common `window_dates`.
+- **Implementation & Evidence:**
+  - Enhanced `daily_paper_runner.py` with `load_market_data(session_date)`: merges frozen baseline snapshot (`research_snapshot_20261106.parquet`) with prospective EOD bars (`research/cycle4/data/prospective_daily_bars.parquet` and `prospective_benchmarks.parquet`).
+  - Added strict date-match validation:
+    ```powershell
+    # Verification Command (stale snapshot against session 2026-11-06):
+    backend\.venv\Scripts\python.exe -c "import datetime, pandas as pd; from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step; snap_df = pd.read_parquet('data/research/research_snapshot_20261106.parquet'); bench_df = pd.read_parquet('data/research/benchmark_series.parquet'); eng = Cycle4PaperEngine('data/universe/research_universe_v1.csv', 'research/cycle4/scratch_test', 17500.0); print(run_cycle4_daily_step(eng, datetime.date(2026, 11, 6), snap_df, bench_df))"
+    ```
+    **Result:** `{'status': 'FAIL_CLOSED_STALE_DATA', 'date': '2026-11-06', 'latest_available_date': '2026-11-05', 'reason': 'No market data available for session 2026-11-06. Latest available bar is 2026-11-05. Fail-closed: refusing to treat stale research snapshot as new daily data.'}`
+  - Ingested authentic 2026-11-06 EOD bars via authenticated `AngelOneProvider` for all 70 universe symbols and `NIFTYBEES.NS`, and `^NSEI` via Yahoo Finance. Persisted to `research/cycle4/data/prospective_daily_bars.parquet` and `prospective_benchmarks.parquet`.
+
+### 2. Controlled Paper-Trading Session Execution (2026-11-05 Signal -> 2026-11-06 Execution)
+- **Commands Executed:**
+  ```powershell
+  # Step 1: 2026-11-05 Month-End Signal Generation (Close)
+  backend\.venv\Scripts\python.exe research/cycle4/daily_paper_runner.py --date 2026-11-05 --force-rebalance
+
+  # Step 2: 2026-11-06 Execution (Open) and Mark-to-Market (Close)
+  backend\.venv\Scripts\python.exe research/cycle4/daily_paper_runner.py --date 2026-11-06
+  ```
+- **Evidence & Results:**
+  - **2026-11-05 Close Signals:** Regime Bull (`^NSEI` 24,536.60 > SMA200 24,002.44). Target symbols computed and logged to `rebalance_orders_audit.jsonl` (Top 5: `DIVISLAB`, `ASHOKLEY`, `KOTAKBANK`, `COFORGE`, `TITAN`). Candidate and Control initial equity: ₹17,500.00 cash.
+  - **2026-11-06 Open Execution:**
+    - Candidate executed 3 buy orders: `ASHOKLEY` (5 sh @ ₹168.92), `KOTAKBANK` (1 sh @ ₹464.61), `FEDERALBNK` (2 sh @ ₹340.34). Total gross turnover ₹1,989.88 + ₹2.36 fees = ₹1,992.24 deducted. Cash: ₹15,507.75.
+    - Control executed 5 buy orders: `FEDERALBNK`, `VEDL`, `COALINDIA`, `KOTAKBANK`, `TATASTEEL`. Cash: ₹14,051.72. Fees paid: ₹4.09.
+  - **2026-11-06 Close Mark-to-Market:**
+    - Candidate Equity: **INR 17,528.40** (+0.16% return). Holdings value: ₹2,020.65. Cash: ₹15,507.75. Exact invariant holds: `15507.75 + 2020.65 == 17528.40`.
+    - Control Equity: **INR 17,542.37** (+0.24% return).
+    - Benchmark (`NIFTYBEES.NS`): Close ₹284.22 (+1.74% return).
+
+### 3. Idempotency & Process Restart Verification
+- **Commands Executed:**
+  ```powershell
+  # Immediate duplicate execution for 2026-11-06
+  backend\.venv\Scripts\python.exe research/cycle4/daily_paper_runner.py --date 2026-11-06
+  ```
+- **Result:**
+  - Log: `Idempotency Guard: Session 2026-11-06 already marked to market. Skipping re-execution.`
+  - Payload: `{"status": "ALREADY_PROCESSED", "date": "2026-11-06", "candidate_equity": 17528.4, "control_equity": 17542.37}`
+  - Zero duplicate orders executed.
+  - Zero duplicate DP charges or statutory fees incurred.
+  - Daily history ledger retains exactly 2 rows (2026-11-05 and 2026-11-06).
+- **Process Restart:** Instantiating a new `Cycle4PaperEngine` loads state directly from disk, matching equity down to ₹0.01 precision.
+
+### 4. Actual Deployment Configuration & Execution Status
+- **Scheduler Jobs:** Configured in `backend/app/scheduler/jobs.py` with `ZoneInfo("Asia/Kolkata")`:
+  - `daily_paper_trading`: Cron `mon-fri 16:00 IST` (Next scheduled run: `2026-11-09 16:00:00+05:30`).
+  - `weekly_paper_reporting`: Cron `fri 17:00 IST` (Next scheduled run: `2026-11-13 17:00:00+05:30`).
+- **Locally Configured vs Deployed & Executed:**
+  - Locally configured and verified: APScheduler triggers, timezone, and execution routines are fully functional.
+  - Executed successfully: `job_daily_paper_trading(db)` correctly skips weekend sessions (`2026-11-07 is an official exchange holiday or weekend`). `job_weekly_paper_reporting(db)` generates `research/cycle4/weekly_reviews/weekly_review_2026-11-06.md`.
+  - Deployment note: Autonomous production execution requires the FastAPI backend daemon to remain running during market hours (16:00 IST Monday–Friday).
+
+### 5. Fail-Closed Behaviors Verified
+- **Stale Data:** Requesting date ahead of market data returns `FAIL_CLOSED_STALE_DATA`.
+- **Missing Regime Data:** Benchmark DF missing `^NSEI` returns `FAIL_CLOSED_MISSING_REGIME`.
+- **Missing Benchmark Data:** Benchmark DF missing `NIFTYBEES.NS` returns `FAIL_CLOSED_MISSING_BENCHMARK`.
+- **Missing Prices on Held Symbols:** Mark-to-market detects NaN close quotes, logs `missing_price_symbols`, flags `is_complete_valuation = False`, sets `valuation_status = "WARNING_MISSING_PRICES"`, and falls back to carry cost.
+- **Provider Failure:** Empty response from market data provider triggers abort without altering portfolio states.
+
+### 6. Automated Test Suite Results
+```powershell
+backend\.venv\Scripts\pytest.exe backend/tests/test_paper_broker.py backend/tests/test_cycle4_paper_trading.py backend/tests/test_no_broker_order.py
+```
+- **Total Tests:** 33 passing in 2.02 seconds (0 failures, 0 skipped).
+- **Frontend Build:** `npm run build` completed successfully (`built in 6.57s`, 0 TypeScript errors).
+- **Frozen Baseline Hash:** `research/PHASE2_FINAL_REPORT.md` SHA256 verified identical: `5DDB610B79DCC004F332C187A3E99473284BFFAF049728f287E3B0623763BD5D`.
+- **Unresolved Blockers:** None. Market data provider credentials (AngelOne and Yahoo Finance) are authenticated and operational.

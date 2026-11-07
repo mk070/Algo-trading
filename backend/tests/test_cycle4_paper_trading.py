@@ -315,3 +315,91 @@ class TestStrictSafetyAssertions:
         for term in forbidden:
             assert term not in source, f"Forbidden live trading call '{term}' found in cycle4_paper!"
 
+
+class TestFailClosedOperationalBehaviors:
+    def setup_method(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.state_dir = Path(self.temp_dir) / "state"
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_fail_closed_on_stale_data(self):
+        engine = Cycle4PaperEngine(
+            universe_path="data/universe/research_universe_v1.csv",
+            state_dir=str(self.state_dir),
+            initial_capital=17500.0,
+        )
+        snap_df = pd.read_parquet("data/research/research_snapshot_20261106.parquet")
+        bench_df = pd.read_parquet("data/research/benchmark_series.parquet")
+        # Request session 2026-11-06 but pass snapshot only containing up to 2026-11-05
+        res = run_cycle4_daily_step(engine, datetime.date(2026, 11, 6), snap_df, bench_df)
+        assert res["status"] == "FAIL_CLOSED_STALE_DATA"
+        assert res["latest_available_date"] == "2026-11-05"
+
+    def test_fail_closed_on_missing_regime(self):
+        engine = Cycle4PaperEngine(
+            universe_path="data/universe/research_universe_v1.csv",
+            state_dir=str(self.state_dir),
+            initial_capital=17500.0,
+        )
+        snap_df = pd.read_parquet("data/research/research_snapshot_20261106.parquet")
+        bench_df = pd.read_parquet("data/research/benchmark_series.parquet")
+        # Add bar for snap_df on 2026-11-06 but omit ^NSEI in bench_df
+        dummy_row = snap_df.iloc[-1:].copy()
+        dummy_row["date"] = pd.to_datetime("2026-11-06")
+        fake_snap = pd.concat([snap_df, dummy_row], ignore_index=True)
+        res = run_cycle4_daily_step(engine, datetime.date(2026, 11, 6), fake_snap, bench_df)
+        assert res["status"] == "FAIL_CLOSED_MISSING_REGIME"
+
+    def test_fail_closed_on_missing_benchmark(self):
+        engine = Cycle4PaperEngine(
+            universe_path="data/universe/research_universe_v1.csv",
+            state_dir=str(self.state_dir),
+            initial_capital=17500.0,
+        )
+        snap_df = pd.read_parquet("data/research/research_snapshot_20261106.parquet")
+        bench_df = pd.read_parquet("data/research/benchmark_series.parquet")
+        dummy_row = snap_df.iloc[-1:].copy()
+        dummy_row["date"] = pd.to_datetime("2026-11-06")
+        fake_snap = pd.concat([snap_df, dummy_row], ignore_index=True)
+        # Create bench with ^NSEI but without NIFTYBEES on 2026-11-06
+        nsei_row = pd.DataFrame([{
+            "symbol": "^NSEI",
+            "date": pd.to_datetime("2026-11-06"),
+            "open": 24500.0,
+            "high": 25000.0,
+            "low": 24400.0,
+            "close": 25000.0,
+            "volume": 500000,
+            "description": "NSEI"
+        }])
+        fake_bench = pd.concat([bench_df, nsei_row], ignore_index=True)
+        res = run_cycle4_daily_step(engine, datetime.date(2026, 11, 6), fake_snap, fake_bench)
+        assert res["status"] == "FAIL_CLOSED_MISSING_BENCHMARK"
+
+    def test_mark_to_market_incomplete_price_flagging(self):
+        engine = Cycle4PaperEngine(
+            universe_path="data/universe/research_universe_v1.csv",
+            state_dir=str(self.state_dir),
+            initial_capital=17500.0,
+        )
+        engine.candidate_state.holdings = {
+            "RELIANCE": {"shares": 5, "avg_cost": 1300.0, "invested_cost": 6500.0}
+        }
+        # Close price missing (NaN)
+        res = engine.mark_to_market_session(
+            engine.candidate_state,
+            close_prices={"RELIANCE": float("nan")},
+            session_date="2026-11-06",
+            benchmark_close=280.0,
+            prev_benchmark_close=278.0,
+            regime_status="BULL_REGIME",
+        )
+        assert res["is_complete_valuation"] is False
+        assert res["valuation_status"] == "WARNING_MISSING_PRICES"
+        assert "RELIANCE" in res["missing_price_symbols"]
+        # Fallback to avg_cost prevents equity wipeout
+        assert res["invested_value"] == 6500.0
+
+
