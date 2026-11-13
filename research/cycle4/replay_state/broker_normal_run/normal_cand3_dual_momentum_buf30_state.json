@@ -2,68 +2,200 @@
   "account_id": "normal_cand3_dual_momentum_buf30",
   "strategy_name": "Candidate 3: Relative-Plus-Absolute Strength (Buf 1\u201330)",
   "initial_capital": 20000.0,
-  "cash": 14739.42,
+  "cash": 14633.8,
   "holdings": {
     "BEL": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_BEL_2022-11-01_12",
+      "entry_date": "2022-11-01",
       "shares": 2,
       "avg_cost": 243.84,
       "invested_cost": 487.68
     },
     "JSWSTEEL": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_JSWSTEEL_2025-05-02_45",
+      "entry_date": "2025-05-02",
       "shares": 1,
       "avg_cost": 1022.22,
       "invested_cost": 1022.22
     },
     "ASHOKLEY": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_ASHOKLEY_2025-10-01_52",
+      "entry_date": "2025-10-01",
       "shares": 6,
       "avg_cost": 143.14,
       "invested_cost": 858.84
     },
     "SBIN": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_SBIN_2025-10-01_53",
+      "entry_date": "2025-10-01",
       "shares": 1,
       "avg_cost": 873.17,
       "invested_cost": 873.17
     },
     "TATACONSUM": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_TATACONSUM_2025-11-03_55",
+      "entry_date": "2025-11-03",
       "shares": 1,
       "avg_cost": 1165.96,
       "invested_cost": 1165.96
     },
     "TATASTEEL": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_TATASTEEL_2025-11-03_56",
+      "entry_date": "2025-11-03",
       "shares": 6,
-      "avg_cost": 182.58,
-      "invested_cost": 1095.48
+      "avg_cost": 180.66,
+      "invested_cost": 1083.96
     },
     "BPCL": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_BPCL_2025-11-03_58",
+      "entry_date": "2025-11-03",
       "shares": 3,
       "avg_cost": 362.31,
       "invested_cost": 1086.94
     },
     "IDFCFIRSTB": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_IDFCFIRSTB_2025-12-01_59",
+      "entry_date": "2025-12-01",
       "shares": 15,
       "avg_cost": 80.57,
       "invested_cost": 1208.56
     },
     "FEDERALBNK": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_FEDERALBNK_2026-01-01_60",
+      "entry_date": "2026-01-01",
       "shares": 4,
       "avg_cost": 267.92,
       "invested_cost": 1071.67
     },
     "VEDL": {
+      "position_id": "POS_normal_cand3_dual_momentum_buf30_VEDL_2026-02-01_61",
+      "entry_date": "2026-02-01",
       "shares": 5,
       "avg_cost": 237.87,
       "invested_cost": 1189.34
     }
   },
-  "realized_pnl": 4878.85,
-  "unrealized_pnl": 1074.6,
-  "total_equity": 25873.88,
+  "realized_pnl": 4839.29,
+  "unrealized_pnl": 1086.12,
+  "total_equity": 25768.26,
   "peak_equity": 26679.76,
-  "cumulative_costs": 1020.7,
-  "cumulative_slippage": 129.75,
-  "cost_pct_of_capital": 5.1,
+  "cumulative_costs": 2138.63,
+  "cumulative_slippage": 261.32,
+  "cost_pct_of_capital": 10.69,
   "last_processed_date": "2026-11-05",
-  "orders_count": 534,
-  "trades_count": 170,
-  "snapshots_count": 1064
+  "position_counter": 61,
+  "dp_charged_dates": {
+    "2022-08-01": [
+      "JSWSTEEL",
+      "TATACONSUM",
+      "TATASTEEL",
+      "BPCL",
+      "IDFCFIRSTB",
+      "VEDL"
+    ],
+    "2022-10-03": [
+      "BEL",
+      "ASHOKLEY",
+      "SBIN",
+      "FEDERALBNK",
+      "KPITTECH",
+      "ITC",
+      "MAXHEALTH",
+      "COALINDIA",
+      "POWERGRID",
+      "SUNPHARMA",
+      "NTPC",
+      "TRENT",
+      "OBEROIRLTY",
+      "TATAMOTORS"
+    ],
+    "2023-01-02": [
+      "MAXHEALTH"
+    ],
+    "2023-02-01": [
+      "TRENT"
+    ],
+    "2023-05-02": [
+      "ASHOKLEY",
+      "JSWSTEEL"
+    ],
+    "2023-06-01": [
+      "BHARTIARTL",
+      "NTPC",
+      "FEDERALBNK",
+      "KPITTECH"
+    ],
+    "2023-07-03": [
+      "HDFCBANK"
+    ],
+    "2023-08-01": [
+      "COALINDIA",
+      "ICICIBANK",
+      "SBIN"
+    ],
+    "2023-10-03": [
+      "JSWSTEEL"
+    ],
+    "2023-11-01": [
+      "AXISBANK"
+    ],
+    "2023-12-01": [
+      "COFORGE"
+    ],
+    "2024-02-01": [
+      "ITC"
+    ],
+    "2024-03-01": [
+      "IDFCFIRSTB",
+      "TATACONSUM"
+    ],
+    "2024-07-01": [
+      "TATACONSUM"
+    ],
+    "2024-08-01": [
+      "AUROPHARMA"
+    ],
+    "2024-11-01": [
+      "TATAMOTORS",
+      "ONGC",
+      "COALINDIA",
+      "BPCL"
+    ],
+    "2024-12-02": [
+      "NTPC"
+    ],
+    "2025-05-02": [
+      "POWERGRID",
+      "VEDL",
+      "SBIN",
+      "WIPRO"
+    ],
+    "2025-07-01": [
+      "ASHOKLEY",
+      "MAXHEALTH"
+    ],
+    "2025-08-01": [
+      "BPCL"
+    ],
+    "2025-09-01": [
+      "FEDERALBNK",
+      "KOTAKBANK"
+    ],
+    "2025-10-01": [
+      "MAXHEALTH",
+      "TATASTEEL"
+    ],
+    "2026-01-01": [
+      "HDFCLIFE",
+      "MAXHEALTH"
+    ],
+    "2026-02-01": [
+      "BAJFINANCE",
+      "HDFCBANK",
+      "KOTAKBANK"
+    ]
+  },
+  "orders_count": 1074,
+  "trades_count": 346,
+  "snapshots_count": 2128
 }
