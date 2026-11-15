@@ -112,20 +112,35 @@ def compute_factor_score_breakdown(
         fundamental_score = 50.0
 
     # 4. Catalyst Score (0-100)
-    status = news_cov.get("status", "CLEAR") if isinstance(news_cov, dict) else getattr(news_cov, "status", "CLEAR") if news_cov else "CLEAR"
-    has_warn = news_cov.get("has_earnings_warning", False) if isinstance(news_cov, dict) else getattr(news_cov, "has_earnings_warning", False) if news_cov else False
+    # Status can be: CLEAR, REVIEW, BLOCKED, UNKNOWN (Rule 11: Unknown is NOT Clear)
+    if isinstance(news_cov, dict):
+        status = news_cov.get("status", "UNKNOWN")
+        has_warn = news_cov.get("has_earnings_warning", False) or news_cov.get("has_earnings_blackout", False)
+    elif news_cov is not None:
+        status = getattr(news_cov, "status", "UNKNOWN")
+        has_warn = getattr(news_cov, "has_earnings_warning", False) or getattr(news_cov, "has_earnings_blackout", False)
+    else:
+        status = "UNKNOWN"
+        has_warn = False
 
     cat_score = 50.0
-    if status == "CLEAR":
-        cat_score += 25.0
-    elif status == "NEWS_RED":
+    if status in ("BLOCKED", "NEWS_RED", "RED"):
         cat_score -= 40.0
+    elif status in ("REVIEW", "AMBER"):
+        cat_score -= 20.0
+    elif status in ("UNKNOWN", "UNAVAILABLE"):
+        # Missing or unverified coverage incurs a data-gap penalty; never awards a bonus
+        cat_score -= 15.0
+    elif status == "CLEAR":
+        # Clean coverage: baseline 50.0 preserved (absence of negative news != positive catalyst)
+        pass
 
     if has_warn:
         cat_score -= 25.0
 
-    if catalyst_count > 0:
-        cat_score += 15.0
+    # Only award positive bonus for verified material catalysts when coverage is verified CLEAR
+    if catalyst_count > 0 and status == "CLEAR":
+        cat_score += min(35.0, catalyst_count * 15.0)
 
     catalyst_score = min(100.0, max(0.0, round(cat_score, 1)))
 
@@ -138,7 +153,14 @@ def compute_factor_score_breakdown(
         1,
     )
 
-    trend_desc = f"LEADING {sector_name} tailwind" if sector_trend == "LEADING" else (f"LAGGING {sector_name} drag" if sector_trend == "LAGGING" else f"{sector_name} neutral momentum")
+    if sector_trend in ("UNKNOWN", "INSUFFICIENT_COVERAGE"):
+        trend_desc = f"{sector_name} (insufficient peer data)"
+    elif sector_trend == "LEADING":
+        trend_desc = f"LEADING {sector_name} tailwind"
+    elif sector_trend == "LAGGING":
+        trend_desc = f"LAGGING {sector_name} drag"
+    else:
+        trend_desc = f"{sector_name} neutral momentum"
 
     if setup in ("VCP", "PULLBACK", "BREAKOUT"):
         summary = f"{setup} setup ({technical_score:.0f}/100 tech) with {trend_desc} (RS: {stock_component:.0f}th pctl); {status} news profile ({catalyst_score:.0f}/100 catalyst)."
@@ -267,16 +289,33 @@ class Planner:
         if db is not None and all_symbols:
             cutoff_dt = datetime.datetime.combine(session_date - datetime.timedelta(days=14), datetime.time.min)
             try:
-                news_rows = (
+                # Disambiguate cross-market sources and filter unverified
+                forbidden_sources = ["sec_edgar", "fed_rss"] if market == "IN" else ["nse_rss", "rbi_rss"]
+                market_native_sources = {"nse_rss", "rbi_rss"} if market == "IN" else {"sec_edgar", "fed_rss"}
+
+                # Detect cross-market symbol collisions (symbols that exist in both IN and US instruments)
+                other_market = "US" if market == "IN" else "IN"
+                colliding_syms = set(
+                    r[0] for r in db.query(Instrument.symbol)
+                    .filter(Instrument.symbol.in_(all_symbols), Instrument.market == other_market)
+                    .all()
+                )
+
+                news_query = (
                     db.query(NewsEvent)
                     .filter(
                         NewsEvent.symbol.in_(all_symbols),
                         NewsEvent.published_at >= cutoff_dt,
+                        (NewsEvent.is_unverified == False) | (NewsEvent.is_unverified.is_(None)),
+                        NewsEvent.source.notin_(forbidden_sources),
                     )
                     .order_by(NewsEvent.published_at.desc())
-                    .all()
                 )
+                news_rows = news_query.all()
                 for nr in news_rows:
+                    # Where market attribution is ambiguous (symbol in both markets and source is not native), exclude
+                    if nr.symbol in colliding_syms and nr.source not in market_native_sources:
+                        continue
                     if len(recent_news_map[nr.symbol]) < 5:
                         recent_news_map[nr.symbol].append(
                             NewsCatalystItem(
@@ -555,15 +594,24 @@ class Planner:
             sector_name = stock_sector_map.get(sym, "General")
             if not isinstance(sector_name, str):
                 sector_name = "General"
-            sec_avg_rs = sector_avg_rs.get(sector_name, stock_rs_rank)
-            sec_trend = sector_trends_map.get(sector_name, "NEUTRAL")
+
+            peer_scores_list = sector_scores_map.get(sector_name, [])
+            if sector_name in ("General", "UNKNOWN", "Unknown", ""):
+                sec_avg_rs = None
+                sec_trend = "UNKNOWN"
+            elif len(peer_scores_list) < 2:
+                sec_avg_rs = sum(peer_scores_list) / len(peer_scores_list) if peer_scores_list else None
+                sec_trend = "INSUFFICIENT_COVERAGE"
+            else:
+                sec_avg_rs = sector_avg_rs.get(sector_name)
+                sec_trend = sector_trends_map.get(sector_name, "NEUTRAL")
 
             # Peer ranking within sector with small-sample guard (Phase 3.5)
             peer_syms = sector_stock_map.get(sector_name, [sym])
             peer_scores = sorted([(s, rs_ranks.get(s, 0.5)) for s in peer_syms], key=lambda x: x[1], reverse=True)
             peer_rank = next((idx + 1 for idx, (s, _) in enumerate(peer_scores) if s == sym), 1)
             peer_total = len(peer_scores) or 1
-            if peer_total >= 3:
+            if peer_total >= 3 and sector_name not in ("General", "UNKNOWN", "Unknown", ""):
                 peer_pct = round(((peer_total - peer_rank + 1) / peer_total) * 100.0)
                 peer_rank_str = f"Rank {peer_rank}/{peer_total} ({peer_pct}th pctl in {sector_name})"
             else:
@@ -590,7 +638,7 @@ class Planner:
                 fundamental_source=snap.source if snap else None,
                 catalysts=sym_catalysts,
                 sector_name=sector_name,
-                sector_rs_rank=round(sec_avg_rs, 2),
+                sector_rs_rank=round(sec_avg_rs, 2) if sec_avg_rs is not None else None,
                 sector_trend=sec_trend,
                 sector_peer_rank=peer_rank_str,
             )

@@ -544,9 +544,14 @@ class NewsIntelligenceEngine:
 
         if db is not None:
             cutoff = datetime.datetime.combine(ref_date - datetime.timedelta(days=14), datetime.time.min)
+            forbidden_sources = ["sec_edgar", "fed_rss"] if market == "IN" else ["nse_rss", "rbi_rss"]
             db_evts = (
                 db.query(NewsEvent)
-                .filter(NewsEvent.symbol == clean_sym, NewsEvent.published_at >= cutoff)
+                .filter(
+                    NewsEvent.symbol == clean_sym,
+                    NewsEvent.published_at >= cutoff,
+                    NewsEvent.source.notin_(forbidden_sources),
+                )
                 .order_by(NewsEvent.published_at.desc())
                 .all()
             )

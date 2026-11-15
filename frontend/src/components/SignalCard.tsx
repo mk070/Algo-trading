@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, GitCommit, LockKeyhole, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, GitCommit, LockKeyhole, ShieldAlert, Sparkles, TrendingUp, BookOpen, X, AlertTriangle, Info } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ResearchDesk } from './ResearchDesk';
 import { tradingViewChartUrl } from '../utils/tradingView';
-import { DecisionAudit, Signal } from '../types';
+import { DecisionAudit, Signal, OpportunityDossier } from '../types';
 
 interface SignalCardProps {
   signal: Signal;
@@ -22,6 +22,26 @@ export const SignalCard: React.FC<SignalCardProps> = ({
   const [auditData, setAuditData] = useState<DecisionAudit | null>(null);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showDossier, setShowDossier] = useState(false);
+  const [dossier, setDossier] = useState<OpportunityDossier | null>(null);
+  const [loadingDossier, setLoadingDossier] = useState(false);
+  const [dossierError, setDossierError] = useState<string | null>(null);
+
+  const openDossier = async () => {
+    setShowDossier(true);
+    if (!dossier) {
+      try {
+        setLoadingDossier(true);
+        setDossierError(null);
+        const data = await apiClient.getOpportunityDossier(signal.symbol, signal.market);
+        setDossier(data);
+      } catch (err: any) {
+        setDossierError(err.message || 'Failed to fetch opportunity dossier');
+      } finally {
+        setLoadingDossier(false);
+      }
+    }
+  };
 
   const toggleDecisionTrail = async () => {
     if (!expandedTrail && !auditData) {
@@ -387,13 +407,23 @@ export const SignalCard: React.FC<SignalCardProps> = ({
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between pt-2 border-t border-slate-800 flex-wrap gap-2 text-xs">
-        <button
-          onClick={copyOrderSummary}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-        >
-          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? 'Copied Order' : 'Copy Order Summary'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyOrderSummary}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copied Order' : 'Copy Order Summary'}
+          </button>
+          <button
+            onClick={openDossier}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/70 border border-indigo-800/60 hover:bg-indigo-900/80 text-indigo-200 transition-colors"
+            title="Open AI Research Dossier"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+            Research Dossier
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <a href={tradingViewChartUrl(signal.symbol, signal.market)} target="_blank" rel="noreferrer" className="flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-slate-300 hover:bg-slate-700" title="Open this symbol on TradingView">
             <ExternalLink className="h-3.5 w-3.5" /> TradingView
@@ -420,6 +450,218 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Research Dossier Modal */}
+      {showDossier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl text-slate-200">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowDossier(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Disclaimer Banner */}
+            <div className="mb-4 p-3 bg-amber-950/40 border border-amber-800/60 rounded-lg flex items-start gap-2.5 text-xs text-amber-200">
+              <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold block mb-0.5">Informational Research Dossier Only — Not a Trading Directive</span>
+                <span>Deterministic rules govern all orders. AI explanations are retrospective and synthetic; they do not alter risk limits, sizing, or deterministic invalidation.</span>
+              </div>
+            </div>
+
+            {loadingDossier ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm">Synthesizing research evidence for {signal.symbol}...</span>
+              </div>
+            ) : dossierError ? (
+              <div className="py-8 text-center text-rose-400">
+                <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-80" />
+                <p className="font-semibold">{dossierError}</p>
+              </div>
+            ) : dossier ? (
+              <div className="space-y-5">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-white tracking-wide">{dossier.symbol}</h3>
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">{dossier.market}</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/50">{dossier.sector}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      Tier: {dossier.tier} · State: <span className="font-mono text-slate-200">{dossier.state}</span>
+                      {dossier.last_price != null ? ` · Last Price: ${currencySymbol}${dossier.last_price.toFixed(2)}` : ''}
+                    </span>
+                  </div>
+                  {dossier.factors && (
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Opportunity Score</span>
+                      <span className="text-2xl font-bold text-indigo-400 font-mono">{dossier.factors.composite_score.toFixed(0)}</span>
+                      <span className="text-xs text-slate-500"> / 100</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Technical Setup & Explicit Invalidation */}
+                <div className="bg-slate-950/60 p-4 rounded-lg border border-slate-800 space-y-2.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+                    Technical Setup & Invalidation Framework
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                      <span className="text-slate-400 block text-[10px]">Pattern</span>
+                      <span className="font-bold text-slate-200">{dossier.setup.pattern}</span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                      <span className="text-slate-400 block text-[10px]">Trigger Level</span>
+                      <span className="font-bold text-slate-200">
+                        {dossier.setup.trigger != null ? `${currencySymbol}${dossier.setup.trigger.toFixed(2)}` : 'None (No setup)'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                      <span className="text-slate-400 block text-[10px]">Hard Stop</span>
+                      <span className="font-bold text-rose-400">
+                        {dossier.setup.stop != null ? `${currencySymbol}${dossier.setup.stop.toFixed(2)}` : 'None'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded border border-slate-800/80">
+                      <span className="text-slate-400 block text-[10px]">Target 1 / R:R</span>
+                      <span className="font-bold text-emerald-400">
+                        {dossier.setup.target1 != null ? `${currencySymbol}${dossier.setup.target1.toFixed(2)} (${dossier.setup.risk_reward_ratio != null ? dossier.setup.risk_reward_ratio + 'R' : 'N/A'})` : 'None'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {dossier.setup.invalidation_rules && dossier.setup.invalidation_rules.length > 0 && (
+                    <div className="mt-2 text-xs space-y-1">
+                      <span className="text-slate-400 font-medium block text-[11px]">Strict Invalidation Rules:</span>
+                      <ul className="list-disc pl-4 space-y-0.5 text-slate-300">
+                        {dossier.setup.invalidation_rules.map((rule, idx) => (
+                          <li key={idx}>{rule}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Research Thesis: Bull vs Bear Case */}
+                {dossier.ai_thesis && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bull Case */}
+                    <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4" /> Bull Factors
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+                          {dossier.ai_thesis.bull_case.confidence_level}
+                        </span>
+                      </div>
+                      <ul className="text-xs text-slate-300 space-y-1.5 pl-4 list-disc">
+                        {dossier.ai_thesis.bull_case.evidence.map((point, idx) => (
+                          <li key={idx} className="leading-relaxed">{point}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Bear Case */}
+                    <div className="bg-rose-950/20 border border-rose-800/40 rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4" /> Headwinds & Risks
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-900/40 text-rose-300 border border-rose-700/50">
+                          {dossier.ai_thesis.bear_case.confidence_level}
+                        </span>
+                      </div>
+                      <ul className="text-xs text-slate-300 space-y-1.5 pl-4 list-disc">
+                        {dossier.ai_thesis.bear_case.evidence.map((point, idx) => (
+                          <li key={idx} className="leading-relaxed">{point}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sector Momentum & Cohort Information */}
+                {dossier.evidence && (
+                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs space-y-1">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Sector Momentum & Cohort Sample
+                    </span>
+                    <div className="flex items-center justify-between flex-wrap gap-2 text-slate-300 pt-1">
+                      <span>Group: <strong className="text-white">{dossier.evidence.sector_name || 'General'}</strong></span>
+                      <span>
+                        Trend: <strong className={dossier.evidence.sector_trend === 'LEADING' ? 'text-emerald-400' : dossier.evidence.sector_trend === 'LAGGING' ? 'text-rose-400' : 'text-slate-300'}>
+                          {dossier.evidence.sector_trend || 'UNKNOWN'}
+                        </strong>
+                      </span>
+                      {dossier.evidence.sector_rs_rank != null && (
+                        <span>Cohort RS: <strong className="text-indigo-400 font-mono">{(dossier.evidence.sector_rs_rank * 100).toFixed(0)}th pctl</strong></span>
+                      )}
+                      {dossier.evidence.cohort_sample_size != null && (
+                        <span className="text-slate-500">Sample size: n={dossier.evidence.cohort_sample_size}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Verified Catalysts and Citations */}
+                {dossier.evidence && dossier.evidence.catalysts && dossier.evidence.catalysts.length > 0 && (
+                  <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-xs space-y-2">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                      Verified Primary Sources & Disclosures ({dossier.evidence.catalysts.length})
+                    </span>
+                    <div className="space-y-1.5">
+                      {dossier.evidence.catalysts.map((cat) => (
+                        <div key={cat.id} className="flex items-start justify-between gap-2 text-xs bg-slate-900/80 p-2 rounded border border-slate-800">
+                          <div>
+                            <a
+                              href={cat.source_url || '#'}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-indigo-300 hover:underline font-medium flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                              {cat.title}
+                            </a>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              Source: {cat.source} {cat.published_at ? `· ${cat.published_at.slice(0, 10)}` : ''}
+                            </span>
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${cat.severity === 'RED' ? 'bg-rose-950 text-rose-300' : cat.severity === 'AMBER' ? 'bg-amber-950 text-amber-300' : 'bg-emerald-950 text-emerald-300'}`}>
+                            {cat.severity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Unverified Catalysts / Rumors if present */}
+                {dossier.evidence && dossier.evidence.unverified_catalysts && dossier.evidence.unverified_catalysts.length > 0 && (
+                  <div className="bg-amber-950/20 p-3 rounded-lg border border-amber-800/40 text-xs space-y-2">
+                    <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider block">
+                      Unverified Reports & Rumors ({dossier.evidence.unverified_catalysts.length}) — Excluded from Verified Evidence
+                    </span>
+                    <div className="space-y-1">
+                      {dossier.evidence.unverified_catalysts.map((cat) => (
+                        <div key={cat.id} className="text-xs text-slate-400 bg-slate-900/60 p-1.5 rounded">
+                          <span className="italic">"{cat.title}"</span> — {cat.source} (Unconfirmed)
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

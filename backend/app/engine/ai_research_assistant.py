@@ -54,24 +54,38 @@ class AiResearchAssistant:
 
         bull_points: List[str] = []
         bear_points: List[str] = []
+        price_desc = f"{current_price:.2f}" if (current_price is not None and current_price > 0) else "N/A"
         citations: List[str] = [
-            f"Exchange Price Snapshot ({symbol} closing {current_price:.2f})",
+            f"Exchange Price Snapshot ({symbol} closing {price_desc})",
             f"Sector Group ({sector})",
             f"Market Regime Tracker ({regime_status})",
         ]
 
         # 1. Technical & Momentum Structural Evidence
-        if setup_details and setup_details.get("pattern") in ("VCP", "BREAKOUT", "PULLBACK"):
+        has_valid_setup = bool(
+            setup_details
+            and setup_details.get("pattern") in ("VCP", "BREAKOUT", "PULLBACK")
+            and setup_details.get("trigger") is not None
+            and setup_details.get("stop") is not None
+        )
+        if has_valid_setup:
             pat = setup_details["pattern"]
-            trig = setup_details.get("trigger", current_price)
-            risk_pct = setup_details.get("risk_pct", 5.0)
+            trig = setup_details["trigger"]
+            st = setup_details["stop"]
+            risk_pct = setup_details.get("risk_pct", round((trig - st) / trig * 100.0, 1) if trig > st else 5.0)
             bull_points.append(
                 f"Minervini {pat} consolidation structure with defined pivot at {trig:.2f} and tight risk of {risk_pct:.1f}%."
             )
         else:
-            bull_points.append(
-                f"Relative momentum score ({momentum_score:+.2f}) demonstrates persistent institutional price acceptance."
-            )
+            pat = setup_details.get("pattern", "NO_SETUP") if setup_details else "NO_SETUP"
+            if pat in ("MONITORING", "NO_SETUP", "UNAVAILABLE"):
+                bear_points.append(
+                    f"No confirmed technical breakout trigger (pattern: {pat}). Monitoring for constructive base formation."
+                )
+            if momentum_score is not None:
+                bull_points.append(
+                    f"Relative momentum score ({momentum_score:+.2f}) demonstrates persistent price acceptance."
+                )
 
         # 2. Sector Momentum & Group Relative Strength (Phase 3.3)
         trend_label = sector_trend or "NEUTRAL"
@@ -83,6 +97,10 @@ class AiResearchAssistant:
             bear_points.append(
                 f"Sector group drag: {sector} is a lagging industry group, increasing vulnerability to overhead supply on breakouts."
             )
+        elif trend_label in ("INSUFFICIENT_COVERAGE", "UNKNOWN"):
+            bear_points.append(
+                f"Sector cohort limitation: {sector} peer sample size is insufficient for reliable relative strength classification."
+            )
         else:
             bull_points.append(
                 f"Sector peer stability in {sector} trading with neutral market alignment."
@@ -92,6 +110,7 @@ class AiResearchAssistant:
         if fundamental_lights:
             green_cnt = fundamental_lights.get("green_count", 0)
             red_cnt = fundamental_lights.get("red_count", 0)
+            unknown_cnt = fundamental_lights.get("unknown_count", 0)
             lights = fundamental_lights.get("lights", [])
 
             green_names = [l.get("metric", "") for l in lights if l.get("status") == "GREEN"]
@@ -105,25 +124,55 @@ class AiResearchAssistant:
                 bear_points.append(
                     f"Financial quality headwind: {red_cnt} red traffic lights ({', '.join(red_names[:2]) or 'High leverage/pledge'})."
                 )
-            elif fundamental_lights.get("unknown_count", 0) > 4:
+            elif unknown_cnt > 4:
                 bear_points.append(
                     "Disclosure gap: multiple fundamental quality metrics remain unverified."
                 )
 
             citations.append(f"Fundamental Snapshot (as of {fundamental_lights.get('as_of', 'Latest')})")
+        else:
+            bear_points.append("Fundamental coverage unavailable: no verified fundamental snapshot stored.")
 
-        # 4. News Catalysts & Disclosures (Phase 3.1 & 3.4)
+        # 4. News Catalysts & Disclosures (Phase 3.1 & 3.4 & 3.5)
+        # RED: adverse evidence in bear points (NEVER positive).
+        # AMBER: cautionary evidence in bear points.
+        # Unverified: marked explicitly as rumor/unverified.
+        # GREEN: routine disclosures added to citations; HIGH/MEDIUM materiality added to bull points.
         if catalysts and len(catalysts) > 0:
-            for cat in catalysts[:2]:
+            verified_positive_count = 0
+            for cat in catalysts[:5]:
                 c_title = cat.get("title", "")
                 c_src = cat.get("source", "Exchange Disclosure")
-                c_sev = cat.get("severity", "CLEAR")
-                if c_sev == "NEWS_RED":
+                c_sev = (cat.get("severity") or "CLEAR").upper()
+                c_unverified = bool(cat.get("is_unverified", False))
+                c_mat = (cat.get("materiality") or "LOW").upper()
+
+                is_material_pos = (
+                    c_mat in ("HIGH", "MEDIUM")
+                    or cat.get("category") == "MATERIAL_EVENT"
+                    or any(kw in c_title.lower() for kw in ("acquisition", "bonus issue", "dividend", "eir", "approval", "order win", "contract"))
+                )
+
+                if c_unverified:
+                    bear_points.append(f"Unverified report/rumor (unconfirmed): '{c_title}' (Source: {c_src}).")
+                elif c_sev in ("RED", "NEWS_RED"):
                     bear_points.append(f"Adverse corporate disclosure: '{c_title}' (Source: {c_src}).")
-                else:
+                elif c_sev in ("AMBER", "REVIEW"):
+                    bear_points.append(f"Cautionary news disclosure: '{c_title}' (Source: {c_src}).")
+                elif is_material_pos:
                     bull_points.append(f"Recent verified catalyst: '{c_title}' (Source: {c_src}).")
+                    verified_positive_count += 1
+                else:
+                    # Routine disclosure with low materiality - valid context, not claimed as major bull driver
+                    pass
+
                 if cat.get("source_url"):
                     citations.append(f"{c_src}: {c_title}")
+
+            if verified_positive_count == 0:
+                bear_points.append(
+                    "Lack of fresh material news catalyst: setup relies primarily on technical pattern continuation."
+                )
         else:
             bear_points.append(
                 "Lack of fresh material news catalyst: setup relies primarily on technical pattern continuation."
@@ -136,12 +185,14 @@ class AiResearchAssistant:
             bear_points.append("Momentum tail-risk: sharp sector rotation or mean-reversion drawdowns if broader market corrects.")
 
         risks = [
-            "Broader index drawdown risk: market regime transition would invalidate setup.",
+            f"Broader index drawdown risk: market regime transition ({regime_status}) would invalidate setup.",
             "Quarterly earnings volatility: unannounced reports within 3 trading days trigger mandatory exit.",
             "Execution friction: statutory transaction fees and whole-share cash drag at realistic account size.",
         ]
-        if setup_details and setup_details.get("stop"):
+        if has_valid_setup and setup_details.get("stop"):
             risks.append(f"Explicit Invalidation: Intraday break or close below {setup_details['stop']:.2f}.")
+        else:
+            risks.append("Explicit Invalidation: No active hard stop (no confirmed entry setup).")
 
         return {
             "symbol": symbol,

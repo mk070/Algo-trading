@@ -78,10 +78,12 @@ export interface EvidenceProvenance {
   fundamental_as_of?: string | null;
   fundamental_source?: string | null;
   catalysts: NewsCatalystItem[];
+  unverified_catalysts?: NewsCatalystItem[];
   sector_name?: string | null;
   sector_rs_rank?: number | null;
   sector_trend?: string | null;
   sector_peer_rank?: string | null;
+  cohort_sample_size?: number | null;
 }
 
 export interface OpportunityDossier {
@@ -89,13 +91,13 @@ export interface OpportunityDossier {
   market: string;
   sector: string;
   tier: string;
-  last_price: number;
+  last_price?: number | null;
   setup: {
     pattern: string;
-    trigger: number;
-    stop: number;
-    target1: number;
-    risk_reward_ratio: number;
+    trigger?: number | null;
+    stop?: number | null;
+    target1?: number | null;
+    risk_reward_ratio?: number | null;
     invalidation_rules: string[];
   };
   state: string;
@@ -104,7 +106,26 @@ export interface OpportunityDossier {
   decision_stages: DecisionStage[];
   blocked_reason?: BlockedReason | null;
   fundamentals?: any;
-  ai_thesis?: any;
+  ai_thesis?: {
+    symbol: string;
+    sector: string;
+    sector_trend?: string;
+    as_of: string;
+    current_price?: number | null;
+    disclaimer: string;
+    bull_case: {
+      title: string;
+      evidence: string[];
+      confidence_level: string;
+    };
+    bear_case: {
+      title: string;
+      evidence: string[];
+      confidence_level: string;
+    };
+    key_risks: string[];
+    data_sources: string[];
+  } | null;
   disclaimer: string;
 }
 

@@ -22,6 +22,7 @@ from app.models import (
     FundamentalSnapshot,
     Instrument,
     NewsEvent,
+    NewsSourceState,
     Scan,
     Signal,
 )
@@ -57,7 +58,8 @@ def test_factor_score_breakdown_bounds_and_weights():
     assert res_high.technical_score >= 85.0
     assert res_high.sector_score == 92.0
     assert res_high.fundamental_score == 100.0
-    assert res_high.catalyst_score >= 85.0  # CLEAR + 15 bonus for catalysts
+    # Clean news (50.0) + 2 verified catalysts (30.0) = 80.0
+    assert res_high.catalyst_score == 80.0
 
     expected_composite = round(
         0.40 * res_high.technical_score +
@@ -128,7 +130,14 @@ def test_evidence_provenance_linking_in_scan(isolated_db_session):
     )
     db.add(snap)
 
-    # 3. Seed recent verified news catalyst
+    # 3. Seed recent verified news catalyst and healthy news source state
+    src_state = NewsSourceState(
+        source="nse_rss",
+        status="HEALTHY",
+        last_success_at=datetime.datetime.utcnow(),
+    )
+    db.add(src_state)
+
     news = NewsEvent(
         symbol="PROV_SYM",
         source="Exchange Filing",
@@ -172,7 +181,7 @@ def test_evidence_provenance_linking_in_scan(isolated_db_session):
     factors = data["factors"]
     assert factors["composite_score"] > 0
     assert factors["fundamental_score"] > 50.0  # from green lights
-    assert factors["catalyst_score"] >= 80.0    # CLEAR + catalyst bonus
+    assert factors["catalyst_score"] >= 65.0    # CLEAR (50.0) + 1 verified material catalyst (+15.0)
     assert "PROV_SYM" in factors["summary_rationale"] or "Pharmaceuticals" in factors["summary_rationale"]
 
 
@@ -447,5 +456,200 @@ def test_opportunity_dossier_includes_ai_thesis(isolated_db_session):
     assert "data_sources" in ai
     assert "evidence" in data
     assert data["evidence"]["sector_name"] == "Engineering"
-    assert data["evidence"]["sector_trend"] in ("LEADING", "NEUTRAL", "LAGGING")
+    assert data["evidence"]["sector_trend"] in ("LEADING", "NEUTRAL", "LAGGING", "INSUFFICIENT_COVERAGE")
+
+
+def test_news_severity_and_catalyst_scoring_rules():
+    """Verify Section 1A rules:
+    - RED news must never be described as positive; incurs -40 penalty.
+    - AMBER identified as cautionary; incurs -20 penalty.
+    - Missing/UNKNOWN coverage incurs -15 penalty (never awards positive bonus).
+    - CLEAR is neutral baseline 50.0 (absence of negative news != positive catalyst).
+    - Only verified material catalysts award positive points.
+    """
+    # 1. Clean news (CLEAR) with 0 catalysts -> exactly 50.0 baseline
+    res_clear = compute_factor_score_breakdown(
+        symbol="TCS",
+        setup="MONITORING",
+        trigger=0.0,
+        stop=0.0,
+        rs_rank=0.5,
+        news_cov={"status": "CLEAR"},
+        catalyst_count=0,
+    )
+    assert res_clear.catalyst_score == 50.0
+
+    # 2. Unknown / missing coverage -> 35.0 (unverified penalty, no bonus)
+    res_unknown = compute_factor_score_breakdown(
+        symbol="TCS",
+        setup="MONITORING",
+        trigger=0.0,
+        stop=0.0,
+        rs_rank=0.5,
+        news_cov=None,  # Missing coverage
+        catalyst_count=2,  # Should not get catalyst bonus with missing coverage
+    )
+    assert res_unknown.catalyst_score == 35.0
+
+    # 3. AMBER news -> 30.0 (-20 penalty)
+    res_amber = compute_factor_score_breakdown(
+        symbol="TCS",
+        setup="MONITORING",
+        trigger=0.0,
+        stop=0.0,
+        rs_rank=0.5,
+        news_cov={"status": "AMBER"},
+        catalyst_count=0,
+    )
+    assert res_amber.catalyst_score == 30.0
+
+    # 4. RED news -> 10.0 (-40 penalty, never positive)
+    res_red = compute_factor_score_breakdown(
+        symbol="TCS",
+        setup="MONITORING",
+        trigger=0.0,
+        stop=0.0,
+        rs_rank=0.5,
+        news_cov={"status": "NEWS_RED"},
+        catalyst_count=3,  # Severe red news suppresses positive catalyst bonus
+    )
+    assert res_red.catalyst_score == 10.0
+
+
+def test_unverified_and_cross_market_news_exclusion(isolated_db_session):
+    """Verify Section 1B rules:
+    - Unverified news (is_unverified=True) excluded from verified catalysts.
+    - US sources (sec_edgar) excluded from IN market queries.
+    - IN sources (nse_rss) excluded from US market queries.
+    - Ambiguous cross-market symbol collisions excluded.
+    """
+    db = isolated_db_session
+    today = datetime.date.today()
+    now = datetime.datetime.utcnow()
+
+    # Instruments in both markets with colliding symbol "DUAL"
+    inst_in = Instrument(symbol="DUAL", market="IN", sector="Auto", universe_tier="Mid", last_price=500.0)
+    inst_us = Instrument(symbol="DUAL", market="US", sector="Auto", universe_tier="Mid", last_price=25.0)
+    db.add_all([inst_in, inst_us])
+
+    # 1. Native Indian unverified rumor on DUAL
+    n1 = NewsEvent(
+        symbol="DUAL",
+        source="nse_rss",
+        title="Unverified Acquisition Rumor",
+        published_at=now,
+        ingested_at=now,
+        severity="GREEN",
+        materiality="HIGH",
+        is_unverified=True,
+        dedupe_key="rumor_1",
+    )
+    # 2. US SEC Edgar filing on DUAL
+    n2 = NewsEvent(
+        symbol="DUAL",
+        source="sec_edgar",
+        title="Form 8-K US Disclosure",
+        published_at=now,
+        ingested_at=now,
+        severity="GREEN",
+        materiality="HIGH",
+        is_unverified=False,
+        dedupe_key="sec_1",
+    )
+    # 3. Native Indian NSE filing on DUAL
+    n3 = NewsEvent(
+        symbol="DUAL",
+        source="nse_rss",
+        title="Board Approves Dividend",
+        published_at=now,
+        ingested_at=now,
+        severity="GREEN",
+        materiality="HIGH",
+        is_unverified=False,
+        dedupe_key="nse_1",
+    )
+    # 4. Ambiguous non-native source on colliding ticker
+    n4 = NewsEvent(
+        symbol="DUAL",
+        source="gdelt_doc",
+        title="Ambiguous Global Wire Item",
+        published_at=now,
+        ingested_at=now,
+        severity="GREEN",
+        materiality="HIGH",
+        is_unverified=False,
+        dedupe_key="gdelt_ambig_1",
+    )
+    db.add_all([n1, n2, n3, n4])
+    db.commit()
+
+    resp = client.get("/api/opportunities/DUAL/dossier?market=IN")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    verified_titles = [c["title"] for c in data["evidence"]["catalysts"]]
+    # US SEC filing must be excluded from IN
+    assert "Form 8-K US Disclosure" not in verified_titles
+    # Ambiguous generic source on colliding ticker must be excluded
+    assert "Ambiguous Global Wire Item" not in verified_titles
+    # Unverified rumor must be excluded from verified catalysts
+    assert "Unverified Acquisition Rumor" not in verified_titles
+    # Native NSE filing should be verified
+    assert "Board Approves Dividend" in verified_titles
+
+    # Unverified rumor should be separated into unverified_catalysts
+    unverified_titles = [c["title"] for c in data["evidence"]["unverified_catalysts"]]
+    assert "Unverified Acquisition Rumor" in unverified_titles
+
+
+def test_dossier_no_fabrication_when_no_setup(isolated_db_session):
+    """Verify Section 1D rules:
+    - Do NOT invent trigger, stop, or target when no valid stored setup exists.
+    - Do NOT multiply last_price by arbitrary percentages.
+    - Stop, trigger, and target must be None when no setup is confirmed.
+    - Market regime must be retrieved from scan, not hardcoded BULLISH.
+    """
+    db = isolated_db_session
+    today = datetime.date.today()
+
+    inst = Instrument(
+        symbol="NO_SETUP_STOCK",
+        market="IN",
+        sector="Pharma",
+        universe_tier="Mid",
+        last_price=800.0,
+    )
+    db.add(inst)
+
+    scan = Scan(
+        session_date=today,
+        market="IN",
+        regime="CAUTION",  # Test actual regime retrieval
+        run_at=datetime.datetime.utcnow(),
+    )
+    db.add(scan)
+    db.commit()
+
+    # Query dossier with NO Signal stored
+    resp = client.get("/api/opportunities/NO_SETUP_STOCK/dossier?market=IN")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    setup = data["setup"]
+    assert setup["pattern"] == "NO_SETUP"
+    # Strict requirement: trigger, stop, and target1 MUST be None, not fabricated
+    assert setup["trigger"] is None
+    assert setup["stop"] is None
+    assert setup["target1"] is None
+    assert setup["risk_reward_ratio"] is None
+
+    # Invalidation rules must state Hard Stop is None
+    assert any("Hard Stop: None" in rule for rule in setup["invalidation_rules"])
+    assert any("Time Stop: 20 completed exchange sessions" in rule for rule in setup["invalidation_rules"])
+    assert any("Earnings Blackout" in rule for rule in setup["invalidation_rules"])
+
+    # AI thesis must reflect CAUTION regime and no active stop
+    ai = data["ai_thesis"]
+    assert any("CAUTION" in risk for risk in ai["key_risks"])
+    assert any("No active hard stop" in risk for risk in ai["key_risks"])
 

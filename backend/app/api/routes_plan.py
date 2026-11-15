@@ -10,6 +10,7 @@ from app.db import get_db
 from app.engine.ai_research_assistant import ai_research_assistant
 from app.engine.planner import TradePlan, planner, compute_factor_score_breakdown
 from app.engine.fundamentals_engine import fundamentals_engine
+from app.engine.newsfilter import news_engine
 from app.engine.value_radar import value_radar_engine
 from app.models import Position, Scan, Signal, DecisionAudit, DecisionStageResult, Instrument, FundamentalSnapshot, NewsEvent
 from app.providers.manager import provider_manager
@@ -118,32 +119,51 @@ def get_trade_plan(
             for i in inst_rows:
                 inst_sector_map[i.symbol] = i.sector if (i.sector and isinstance(i.sector, str)) else "General"
 
-        # Compute sector averages across current signals to establish group trends
+        # Compute sector averages strictly across current scan's signals to establish group trends
         sector_rs_buckets = collections.defaultdict(list)
         for s in signals:
             sec = inst_sector_map.get(s.symbol, "General")
-            if s.rs_rank is not None:
+            if sec and sec not in ("General", "UNKNOWN", "Unknown", "") and s.rs_rank is not None:
                 sector_rs_buckets[sec].append(s.rs_rank)
 
-        sector_avg_rs_map = {
-            sec: sum(vals) / len(vals) if vals else 0.5
-            for sec, vals in sector_rs_buckets.items()
-        }
+        sector_avg_rs_map: Dict[str, Optional[float]] = {}
+        sector_trend_map: Dict[str, str] = {}
+        for sec, vals in sector_rs_buckets.items():
+            if len(vals) >= 2:
+                avg = sum(vals) / len(vals)
+                sector_avg_rs_map[sec] = avg
+                sector_trend_map[sec] = "LEADING" if avg >= 0.65 else ("LAGGING" if avg <= 0.35 else "NEUTRAL")
+            else:
+                sector_avg_rs_map[sec] = sum(vals) / len(vals) if vals else None
+                sector_trend_map[sec] = "INSUFFICIENT_COVERAGE"
 
         # Query recent verified news events for these symbols (top 2 per symbol)
         recent_news_events = collections.defaultdict(list)
         if symbols:
             cutoff_dt = datetime.datetime.combine(scan_row.session_date - datetime.timedelta(days=14), datetime.time.min)
+            forbidden_sources = ["sec_edgar", "fed_rss"] if market == "IN" else ["nse_rss", "rbi_rss"]
+            market_native_sources = {"nse_rss", "rbi_rss"} if market == "IN" else {"sec_edgar", "fed_rss"}
+            other_market = "US" if market == "IN" else "IN"
+            colliding_syms = set(
+                r[0] for r in db.query(Instrument.symbol)
+                .filter(Instrument.symbol.in_(symbols), Instrument.market == other_market)
+                .all()
+            )
+
             news_rows = (
                 db.query(NewsEvent)
                 .filter(
                     NewsEvent.symbol.in_(symbols),
                     NewsEvent.published_at >= cutoff_dt,
+                    (NewsEvent.is_unverified == False) | (NewsEvent.is_unverified.is_(None)),
+                    NewsEvent.source.notin_(forbidden_sources),
                 )
                 .order_by(NewsEvent.published_at.desc())
                 .all()
             )
             for nr in news_rows:
+                if nr.symbol in colliding_syms and nr.source not in market_native_sources:
+                    continue
                 if len(recent_news_events[nr.symbol]) < 2:
                     recent_news_events[nr.symbol].append({
                         "id": nr.id,
@@ -192,8 +212,8 @@ def get_trade_plan(
             news_cov_dict = json.loads(s.news_flags_json) if s.news_flags_json else {}
 
             sec_name = inst_sector_map.get(s.symbol, "General")
-            sec_avg_rs = sector_avg_rs_map.get(sec_name, s.rs_rank or 0.5)
-            sec_trend = "LEADING" if sec_avg_rs >= 0.65 else ("LAGGING" if sec_avg_rs <= 0.35 else "NEUTRAL")
+            sec_avg_rs = sector_avg_rs_map.get(sec_name)
+            sec_trend = sector_trend_map.get(sec_name, "UNKNOWN" if sec_name in ("General", "UNKNOWN", "Unknown", "") else "INSUFFICIENT_COVERAGE")
             sym_catalysts = recent_news_events.get(s.symbol, [])
 
             factors = compute_factor_score_breakdown(
@@ -215,7 +235,7 @@ def get_trade_plan(
                 "fundamental_source": None,
                 "catalysts": sym_catalysts,
                 "sector_name": sec_name,
-                "sector_rs_rank": round(sec_avg_rs, 2),
+                "sector_rs_rank": round(sec_avg_rs, 2) if sec_avg_rs is not None else None,
                 "sector_trend": sec_trend,
             }
 
@@ -524,18 +544,29 @@ def get_opportunity_dossier(
 
     # 5. News events
     cutoff = datetime.date.today() - datetime.timedelta(days=30)
+    forbidden_sources = ["sec_edgar", "fed_rss"] if market == "IN" else ["nse_rss", "rbi_rss"]
+    market_native_sources = {"nse_rss", "rbi_rss"} if market == "IN" else {"sec_edgar", "fed_rss"}
+    other_market = "US" if market == "IN" else "IN"
+    is_colliding = db.query(Instrument).filter(Instrument.symbol == sym, Instrument.market == other_market).first() is not None
+
     news_rows = (
         db.query(NewsEvent)
         .filter(
             NewsEvent.symbol == sym,
             NewsEvent.published_at >= datetime.datetime.combine(cutoff, datetime.time.min),
+            NewsEvent.source.notin_(forbidden_sources),
         )
         .order_by(NewsEvent.published_at.desc())
         .limit(10)
         .all()
     )
-    catalysts = [
-        {
+    catalysts = []
+    unverified_catalysts = []
+    for nr in news_rows:
+        if is_colliding and nr.source not in market_native_sources:
+            # Ambiguous cross-market attribution
+            continue
+        c_dict = {
             "id": nr.id,
             "title": nr.title,
             "source": nr.source or "Unknown",
@@ -544,37 +575,75 @@ def get_opportunity_dossier(
             "severity": nr.severity or "CLEAR",
             "materiality": nr.materiality,
             "match_confidence": nr.match_confidence,
+            "is_unverified": bool(nr.is_unverified),
         }
-        for nr in news_rows
-    ]
+        if nr.is_unverified:
+            unverified_catalysts.append(c_dict)
+        else:
+            catalysts.append(c_dict)
+
+    # 6. Retrieve Latest Scan for Market Regime & Consistent Scan Cohort
+    latest_scan = (
+        db.query(Scan)
+        .filter(Scan.market == market)
+        .order_by(Scan.session_date.desc(), Scan.run_at.desc())
+        .first()
+    )
+    regime_status = latest_scan.regime if (latest_scan and latest_scan.regime) else "UNKNOWN"
 
     rs_rank = sig.rs_rank if sig else 0.5
-    setup_name = sig.setup if sig else "MONITORING"
-    trigger = sig.trigger if sig else (last_price or 0.0)
-    stop = sig.stop if sig else (last_price * 0.95 if last_price else 0.0)
-    target1 = sig.target1 if sig else (last_price * 1.10 if last_price else 0.0)
-    news_cov = json.loads(sig.news_flags_json) if sig and sig.news_flags_json else {"status": "CLEAR"}
-
-    # Sector Trend & Group Relative Strength Computation (Phase 3.5 fix)
-    sector_signals = (
-        db.query(Signal)
-        .join(Instrument, (Instrument.symbol == Signal.symbol) & (Instrument.market == Signal.market))
-        .filter(Instrument.sector == sector, Signal.market == market)
-        .all()
+    has_valid_setup = bool(
+        sig and sig.setup and sig.setup not in ("MONITORING", "NO_SETUP", "")
+        and sig.trigger is not None and sig.trigger > 0
+        and sig.stop is not None and sig.stop > 0
     )
-    if sector_signals:
-        sec_rs_scores = [s.rs_rank for s in sector_signals if s.rs_rank is not None]
-        sec_avg_rs = sum(sec_rs_scores) / len(sec_rs_scores) if sec_rs_scores else rs_rank
+    setup_name = sig.setup if (sig and sig.setup) else "NO_SETUP"
+    trigger = sig.trigger if has_valid_setup else None
+    stop = sig.stop if has_valid_setup else None
+    target1 = sig.target1 if (has_valid_setup and sig.target1 and sig.target1 > 0) else None
+    rrr = round((target1 - trigger) / (trigger - stop), 2) if (has_valid_setup and trigger and stop and target1 and trigger > stop and target1 > trigger) else None
+    if sig and sig.news_flags_json:
+        news_cov = json.loads(sig.news_flags_json)
     else:
-        sec_avg_rs = rs_rank
+        cov = news_engine.check_symbol_coverage(sym, market=market, db=db)
+        news_cov = {
+            "status": cov.status,
+            "has_earnings_warning": cov.has_earnings_blackout,
+            "red_events_count": cov.red_events_count,
+            "amber_events_count": cov.amber_events_count,
+        }
 
-    sec_trend = "LEADING" if sec_avg_rs >= 0.65 else ("LAGGING" if sec_avg_rs <= 0.35 else "NEUTRAL")
+    # Sector Trend & Group Relative Strength Computation strictly from current scan cohort (Phase 3.5)
+    target_scan_id = sig.scan_id if sig else (latest_scan.id if latest_scan else None)
+    sector_signals = []
+    if target_scan_id and sector and sector not in ("General", "UNKNOWN", "Unknown", ""):
+        sector_signals = (
+            db.query(Signal)
+            .join(Instrument, (Instrument.symbol == Signal.symbol) & (Instrument.market == Signal.market))
+            .filter(
+                Signal.scan_id == target_scan_id,
+                Signal.market == market,
+                Instrument.sector == sector,
+            )
+            .all()
+        )
+
+    sec_rs_scores = [s.rs_rank for s in sector_signals if s.rs_rank is not None]
+    if not sector or sector in ("General", "UNKNOWN", "Unknown", ""):
+        sec_avg_rs = None
+        sec_trend = "UNKNOWN"
+    elif len(sec_rs_scores) < 2:
+        sec_avg_rs = round(sum(sec_rs_scores) / len(sec_rs_scores), 2) if sec_rs_scores else None
+        sec_trend = "INSUFFICIENT_COVERAGE"
+    else:
+        sec_avg_rs = round(sum(sec_rs_scores) / len(sec_rs_scores), 2)
+        sec_trend = "LEADING" if sec_avg_rs >= 0.65 else ("LAGGING" if sec_avg_rs <= 0.35 else "NEUTRAL")
 
     factors = compute_factor_score_breakdown(
         symbol=sym,
         setup=setup_name,
-        trigger=trigger,
-        stop=stop,
+        trigger=trigger or 0.0,
+        stop=stop or 0.0,
         rs_rank=rs_rank,
         sector_name=sector,
         sector_rs_rank=sec_avg_rs,
@@ -586,9 +655,9 @@ def get_opportunity_dossier(
 
     currency = "₹" if market == "IN" else "$"
     invalidation_rules = [
-        f"Hard Stop: Intraday break or close below {currency}{stop:.2f}" if stop > 0 else "Hard Stop: Set upon trigger confirmation",
-        "Time Stop: 20 completed exchange sessions without reaching Target 1",
-        "Earnings Blackout: Mandatory exit if unannounced earnings report is scheduled within 3 trading days",
+        f"Hard Stop: Intraday break or close below {currency}{stop:.2f}" if (stop is not None and stop > 0) else "Hard Stop: None (No active trading setup confirmed)",
+        "Time Stop: 20 completed exchange sessions without reaching Target 1" if (trigger is not None and trigger > 0) else "Time Stop: 20 completed exchange sessions post-entry",
+        f"Earnings Blackout: Mandatory exit if unannounced earnings report is scheduled within 3 trading days ({market} calendar)",
     ]
     if blocked_reason:
         invalidation_rules.append(
@@ -599,16 +668,16 @@ def get_opportunity_dossier(
     ai_thesis = ai_research_assistant.analyze_candidate_thesis(
         symbol=sym,
         sector=sector,
-        current_price=last_price or trigger,
+        current_price=last_price or (trigger or 0.0),
         momentum_score=rs_rank,
-        regime_status="BULLISH",
-        catalysts=catalysts,
+        regime_status=regime_status,
+        catalysts=catalysts + unverified_catalysts,
         fundamental_lights=fund_dict,
         setup_details={
             "pattern": setup_name,
             "trigger": trigger,
             "stop": stop,
-            "risk_pct": round((trigger - stop) / trigger * 100.0, 1) if (trigger > 0 and stop > 0 and trigger > stop) else 5.0,
+            "risk_pct": round((trigger - stop) / trigger * 100.0, 1) if (trigger and stop and trigger > stop) else None,
         },
         sector_trend=sec_trend,
     )
@@ -621,10 +690,10 @@ def get_opportunity_dossier(
         "last_price": last_price or trigger,
         "setup": {
             "pattern": setup_name,
-            "trigger": round(trigger, 2),
-            "stop": round(stop, 2),
-            "target1": round(target1, 2),
-            "risk_reward_ratio": round((target1 - trigger) / (trigger - stop), 2) if (trigger > stop and stop > 0 and target1 > trigger) else 0.0,
+            "trigger": round(trigger, 2) if trigger is not None else None,
+            "stop": round(stop, 2) if stop is not None else None,
+            "target1": round(target1, 2) if target1 is not None else None,
+            "risk_reward_ratio": rrr,
             "invalidation_rules": invalidation_rules,
         },
         "state": sig.state if sig else "MONITORING",
@@ -634,9 +703,11 @@ def get_opportunity_dossier(
             "fundamental_as_of": snap.as_of.isoformat() if snap and snap.as_of else None,
             "fundamental_source": snap.source if snap else None,
             "catalysts": catalysts,
+            "unverified_catalysts": unverified_catalysts,
             "sector_name": sector,
-            "sector_rs_rank": round(sec_avg_rs, 2),
+            "sector_rs_rank": round(sec_avg_rs, 2) if sec_avg_rs is not None else None,
             "sector_trend": sec_trend,
+            "cohort_sample_size": len(sec_rs_scores),
         },
         "decision_stages": stages,
         "blocked_reason": blocked_reason,
