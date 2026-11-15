@@ -201,10 +201,16 @@ class Position(Base):
     entry_date = Column(Date, nullable=False)
     entry_price = Column(Float, nullable=False)
     qty = Column(Integer, nullable=False)
+    initial_qty = Column(Integer, nullable=True)
     initial_stop = Column(Float, nullable=False)
     active_stop = Column(Float, nullable=False)
     target1 = Column(Float, nullable=False)
     status = Column(String(20), default="OPEN")  # OPEN, CLOSED
+    highest_price_since_entry = Column(Float, nullable=True)
+    target_partial_completed = Column(Boolean, default=False, server_default='false', nullable=False)
+    target_partial_qty = Column(Integer, default=0, nullable=False)
+    total_reduced_qty = Column(Integer, default=0, nullable=False)
+    partial_exit_alerted_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
@@ -220,6 +226,8 @@ class Fill(Base):
     qty = Column(Integer, nullable=False)
     fees_total = Column(Float, default=0.0)
     fees_json = Column(Text, nullable=True)
+    fill_reason = Column(String(50), nullable=True, default="MANUAL")
+    idempotency_key = Column(String(100), unique=True, nullable=True, index=True)
 
 
 class Journal(Base):

@@ -143,16 +143,16 @@ class Planner:
             [mkt_cfg.index_symbol], start_date, session_date, market=market, db=db
         )
         index_df = index_bars.get(mkt_cfg.index_symbol)
-        regime = evaluate_market_regime(index_df, market=market)
+        regime = evaluate_market_regime(index_df, market=market, asof_date=session_date)
 
         dist_pct = ((regime.last_close - regime.sma200) / regime.sma200 * 100.0) if regime.sma200 > 0 else 0.0
         dist_str = f", {dist_pct:+.2f}%" if dist_pct != 0 else ""
         index_name = "Nifty" if market == "IN" else "S&P 500"
-        regime_weak_msg = f"Regime WEAK ({index_name} {regime.last_close:,.2f} below SMA200 {regime.sma200:,.2f}{dist_str})"
+        regime_weak_msg = f"Regime {regime.status} ({index_name} {regime.last_close:,.2f} vs SMA200 {regime.sma200:,.2f}{dist_str}): {regime.detail}"
 
         if not regime.allows_entries:
             data_warnings.append(
-                f"Market regime is WEAK ({regime_weak_msg}). All new entries blocked."
+                f"Market regime is {regime.status} ({regime.detail}). All new entries blocked."
             )
 
         # 3. Pull Historical Daily Bars for Universe + Watchlist Candidates
@@ -263,8 +263,9 @@ class Planner:
             fund_has_red = (fund_dict.get("red_count", 0) > 0) if fund_dict else False
             is_fund = is_setup and not fund_has_red
             is_news = is_fund and (news_cov.status == "CLEAR")
-            is_risk = is_news and regime.allows_entries and (decision.stages[-1].status == "PASS")
-            is_pass = is_risk and (decision.final_decision == "ALLOW")
+            risk_stage = next((s for s in decision.stages if s.stage_name == "Risk Validator"), None)
+            is_risk = is_news and regime.allows_entries and (risk_stage is not None and risk_stage.status == "PASS")
+            is_pass = is_risk and (decision.final_decision == "PASS")
 
             if is_scanned: funnel_counts["scanned"] += 1
             if is_trend: funnel_counts["trend_ok"] += 1
@@ -278,13 +279,13 @@ class Planner:
                 trigger = decision.trigger or cand.pivot
                 stop = decision.stop or cand.stop_loss
                 target1 = decision.target1 or round(trigger + 2.0 * max(0.1, trigger - stop), 2)
-                qty = decision.qty if ((decision.final_decision == "ALLOW" or state == "PRE_BREAKOUT_WATCHLIST") and decision.qty and decision.qty > 0) else 0
             else:
                 trigger = 0.0
                 stop = 0.0
                 target1 = 0.0
-                qty = 0
 
+            # Categorize Opportunity State before quantity evaluation
+            state = "WATCHLIST"
             is_already_held = sym in held_symbols
             first_failing = decision.all_rejection_reasons[0] if decision.all_rejection_reasons else None
             blocked_reason = None
@@ -305,7 +306,6 @@ class Planner:
                 if blocked_reason:
                     break
 
-            # Categorize Opportunity State
             if is_already_held:
                 state = "ALREADY_HELD"
             elif cand and cand.classification == "BROKE_OUT_TODAY":
@@ -316,7 +316,7 @@ class Planner:
                 and all(stage.status == "PASS" for stage in decision.stages if stage.stage_name in {"Setup Validator", "Entry Planner", "Exit Planner", "Position Sizer"})
             ):
                 state = "PRE_BREAKOUT_WATCHLIST"
-            elif cand and decision.final_decision == "ALLOW":
+            elif cand and decision.final_decision == "PASS":
                 dist = ((trigger - last_price) / trigger * 100.0) if trigger > 0 else 999.0
                 if 0 <= dist <= 1.5:
                     state = "APPROACHING"
@@ -328,6 +328,12 @@ class Planner:
                 state = "NO_SETUP"
             else:
                 state = "WATCHLIST"
+
+            # Now evaluate quantity safely referencing defined candidate state
+            if cand:
+                qty = decision.qty if ((decision.final_decision == "PASS" or state == "PRE_BREAKOUT_WATCHLIST") and decision.qty and decision.qty > 0) else 0
+            else:
+                qty = 0
 
             # Setup edge validation attribution (Strategy Lab task-9156 caveat)
             setup_edge_status = "VALIDATED"
@@ -406,7 +412,7 @@ class Planner:
 
             # Small / Illiquid Tier Gating: excluded from primary live BUY alerts unless enabled in Settings
             allow_small_caps = getattr(mkt_cfg, "allow_higher_risk_small_caps", False)
-            if decision.final_decision == "ALLOW" and cand and not is_already_held and state not in {"BROKE_OUT_TODAY", "PRE_BREAKOUT_WATCHLIST"}:
+            if decision.final_decision == "PASS" and cand and not is_already_held and state not in {"BROKE_OUT_TODAY", "PRE_BREAKOUT_WATCHLIST"}:
                 if (tier == "Small" or is_higher_risk) and not allow_small_caps:
                     sig.state = "BLOCKED"
                     sig.reasons.append("Higher risk Small-cap tier excluded from live BUY alerts (enable in Settings to allow)")

@@ -466,5 +466,81 @@ class UniverseManager:
             ])
         return output.getvalue()
 
+    def refresh_instrument_master(self, market: str = "IN", db: Optional[Session] = None) -> Dict[str, Any]:
+        """Synchronizes instruments table with Angel One OpenAPI scrip master / universe records."""
+        if db is None:
+            return {"status": "SKIPPED", "reason": "No database session provided"}
+
+        m = market.upper()
+        items = self.parse_master_scrip_list(market=m)
+        if not items and m != "IN":
+            stocks = self.load_universe(market=m)
+            items = [
+                {
+                    "symbol": s.symbol,
+                    "name": s.name,
+                    "sector": s.sector,
+                    "industry": s.industry,
+                    "series": s.series,
+                    "provider_token": s.provider_token,
+                    "tier": s.tier,
+                    "is_higher_risk": s.is_higher_risk,
+                    "status": s.status,
+                    "status_reason": "Universe constituent",
+                }
+                for s in stocks
+            ]
+
+        if not items:
+            return {"status": "EMPTY", "count": 0}
+
+        existing = {
+            inst.symbol: inst
+            for inst in db.query(Instrument).filter(Instrument.market == m).all()
+        }
+
+        inserted = 0
+        updated = 0
+        for it in items:
+            sym = it["symbol"]
+            inst = existing.get(sym)
+            if inst:
+                inst.name = it.get("name") or inst.name
+                inst.sector = it.get("sector") or inst.sector
+                inst.industry = it.get("industry") or inst.industry
+                inst.provider_token = it.get("provider_token") or inst.provider_token
+                inst.series = it.get("series") or inst.series
+                inst.universe_tier = it.get("tier") or inst.universe_tier
+                inst.is_higher_risk = it.get("is_higher_risk", False)
+                inst.status = it.get("status") or inst.status
+                inst.status_reason = it.get("status_reason") or inst.status_reason
+                updated += 1
+            else:
+                new_inst = Instrument(
+                    symbol=sym,
+                    market=m,
+                    name=it.get("name") or sym,
+                    sector=it.get("sector") or "General",
+                    industry=it.get("industry") or "General",
+                    provider_token=it.get("provider_token"),
+                    series=it.get("series") or "EQ",
+                    universe_tier=it.get("tier") or "Small",
+                    is_higher_risk=it.get("is_higher_risk", False),
+                    status=it.get("status") or "SCANNED",
+                    status_reason=it.get("status_reason") or "Scanned scrip master",
+                )
+                db.add(new_inst)
+                inserted += 1
+
+        db.commit()
+        logger.info(f"Instrument master sync completed for {m}: {inserted} inserted, {updated} updated.")
+        return {
+            "status": "SUCCESS",
+            "market": m,
+            "total_processed": len(items),
+            "inserted": inserted,
+            "updated": updated,
+        }
+
 
 universe_manager = UniverseManager()

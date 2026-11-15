@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { apiClient, CandleBar, StrategyOverlay, BarsResponse } from '../api/client';
 import { TradingViewRealtimeChart } from './TradingViewRealtimeChart';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 export interface CandleChartProps {
   symbol: string;
@@ -233,20 +234,23 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     fetchBarsData(false);
   }, [fetchBarsData]);
 
-  // Periodic 15-second bar dataset sync (retains user scroll & zoom range)
+  // Periodic 60-second bar dataset sync (paused when tab hidden or outside market hours)
   useEffect(() => {
     const timer = setInterval(() => {
-      fetchBarsData(true);
-    }, 15000);
+      if (isTabVisible() && isMarketOpenClient(market)) {
+        fetchBarsData(true);
+      }
+    }, 60000);
     return () => clearInterval(timer);
-  }, [fetchBarsData]);
+  }, [fetchBarsData, market]);
 
-  // Ultra-Low Latency 2s Live Quote Streaming Loop (Bloomberg Terminal & Brokerage live ticking mode)
+  // 10s Live Quote Streaming Loop (paused when tab hidden or outside market hours)
   useEffect(() => {
     if (!symbol) return;
 
     let isMounted = true;
     const streamTick = async () => {
+      if (!isTabVisible() || !isMarketOpenClient(market)) return;
       try {
         const quotes = await apiClient.getQuotes([symbol], market);
         const rawSym = symbol.replace('BSE:', '').replace('NSE:', '').trim().toUpperCase();
@@ -291,7 +295,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       }
     };
 
-    const quoteTimer = setInterval(streamTick, 2000);
+    const quoteTimer = setInterval(streamTick, 10000);
     return () => {
       isMounted = false;
       clearInterval(quoteTimer);

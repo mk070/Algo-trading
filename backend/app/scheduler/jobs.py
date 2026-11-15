@@ -1,6 +1,7 @@
 import datetime
 import logging
 import shutil
+from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
@@ -9,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.db import SessionLocal
+from app.engine.calendars import is_market_open, is_exchange_holiday
 from app.engine.newsfilter import news_engine
 from app.engine.planner import planner
 from app.models import JobRun, NewsSourceState
@@ -16,28 +18,53 @@ from app.notify.dispatcher import dispatcher
 from app.providers.manager import provider_manager
 from app.scheduler.monitor import live_monitor
 from app.settings import DATA_DIR
+from app.cache import shared_cache
 
 logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 
+_last_heartbeat: dict[str, datetime.datetime] = {}
 
-def log_job_execution(job_name: str, func):
+
+def log_job_execution(job_name: str, func, is_high_frequency: bool = False, market_guard: Optional[str] = None):
     def wrapper(*args, **kwargs):
+        # 1. Market guard check before touching DB
+        if market_guard and not is_market_open(market_guard):
+            logger.debug(f"{market_guard} market closed. Skipping {job_name} before DB access.")
+            return
+
+        now = datetime.datetime.utcnow()
+        should_log_db = not is_high_frequency
+        if is_high_frequency:
+            last = _last_heartbeat.get(job_name)
+            if last is None or (now - last).total_seconds() >= 3600:
+                should_log_db = True
+                _last_heartbeat[job_name] = now
+
         db = SessionLocal()
-        job_run = JobRun(job=job_name, started_at=datetime.datetime.utcnow(), status="RUNNING")
-        db.add(job_run)
-        db.commit()
+        job_run = None
+        if should_log_db:
+            job_run = JobRun(job=job_name, started_at=now, status="RUNNING")
+            db.add(job_run)
+            db.commit()
         try:
             func(db, *args, **kwargs)
-            job_run.status = "SUCCESS"
-            job_run.finished_at = datetime.datetime.utcnow()
-            db.commit()
+            if job_run:
+                job_run.status = "SUCCESS"
+                job_run.finished_at = datetime.datetime.utcnow()
+                db.commit()
         except Exception as e:
             db.rollback()
-            job_run.status = "FAILED"
-            job_run.finished_at = datetime.datetime.utcnow()
-            job_run.detail = str(e)
-            db.commit()
+            try:
+                if not job_run:
+                    job_run = JobRun(job=job_name, started_at=now)
+                    db.add(job_run)
+                job_run.status = "FAILED"
+                job_run.finished_at = datetime.datetime.utcnow()
+                job_run.detail = str(e)
+                db.commit()
+            except Exception as inner_e:
+                logger.error(f"Failed to record failure for {job_name}: {inner_e}")
             logger.error(f"Job {job_name} failed: {e}")
         finally:
             db.close()
@@ -48,6 +75,11 @@ def log_job_execution(job_name: str, func):
 def job_eod_scan_in(db):
     logger.info("Executing EOD scan for Indian Market (IN)...")
     plan = planner.run_scan(market="IN", db=db)
+    # Invalidate plan/pulse/regime caches upon new EOD scan results
+    shared_cache.invalidate_prefix("plan:IN")
+    shared_cache.invalidate_prefix("pulse:IN")
+    shared_cache.invalidate_prefix("regime:IN")
+
     # Notify EOD plan summary to Telegram
     summary = (
         f"📋 <b>EOD TRADE PLAN (IN) - {plan.session_date}</b>\n\n"
@@ -73,6 +105,9 @@ def job_eod_scan_in(db):
 def job_eod_scan_us(db):
     logger.info("Executing EOD scan for US Market (US)...")
     planner.run_scan(market="US", db=db)
+    shared_cache.invalidate_prefix("plan:US")
+    shared_cache.invalidate_prefix("pulse:US")
+    shared_cache.invalidate_prefix("regime:US")
 
 
 def job_live_monitor_in(db):
@@ -84,7 +119,7 @@ def job_live_monitor_us(db):
 
 
 def job_kite_sync(db):
-    if provider_manager.kite.is_authenticated():
+    if is_market_open("IN") and provider_manager.kite.is_authenticated():
         logger.info("Syncing Kite Personal holdings and positions...")
         provider_manager.kite.holdings()
         provider_manager.kite.positions()
@@ -281,13 +316,13 @@ def start_scheduler():
             replace_existing=True,
         )
         scheduler.add_job(
-            log_job_execution("live_monitor_IN", job_live_monitor_in),
+            log_job_execution("live_monitor_IN", job_live_monitor_in, is_high_frequency=True, market_guard="IN"),
             IntervalTrigger(seconds=60),
             id="live_monitor_IN",
             replace_existing=True,
         )
         scheduler.add_job(
-            log_job_execution("live_monitor_US", job_live_monitor_us),
+            log_job_execution("live_monitor_US", job_live_monitor_us, is_high_frequency=True, market_guard="US"),
             IntervalTrigger(seconds=60),
             id="live_monitor_US",
             replace_existing=True,
@@ -312,7 +347,7 @@ def start_scheduler():
         )
         scheduler.add_job(
             log_job_execution("news_media_poll", job_poll_media_news),
-            IntervalTrigger(minutes=5),
+            IntervalTrigger(minutes=15),
             id="news_media_poll",
             replace_existing=True,
         )

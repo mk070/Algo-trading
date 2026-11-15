@@ -109,6 +109,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    import time
+    from app.telemetry import current_route_ctx, tracker
+
+    route = request.url.path
+    token = current_route_ctx.set(route)
+    start_t = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration = time.perf_counter() - start_t
+
+        content_length = response.headers.get("content-length")
+        bytes_sent = int(content_length) if content_length and content_length.isdigit() else 128
+        tracker.record_http(route, response.status_code, bytes_sent, duration)
+        return response
+    finally:
+        current_route_ctx.reset(token)
+
 # Include all API Routers under /api
 protected_api = [Depends(verify_token)]
 app.include_router(system_router, prefix="/api", tags=["System & Settings"], dependencies=protected_api)

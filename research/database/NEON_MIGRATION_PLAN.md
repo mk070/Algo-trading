@@ -1,9 +1,9 @@
 # Neon Free Database Safe Migration Plan
 
-**Document Version**: 1.0  
+**Document Version**: 1.1 (Corrected & Verified)  
 **Target Environment**: Neon Serverless PostgreSQL (Free Tier)  
 **Status**: DRAFT / PENDING USER APPROVAL  
-*(Do not execute migration or alter production credentials without explicit user confirmation)*  
+*(Do not execute migration, create projects, or alter production credentials without explicit user confirmation)*  
 
 ---
 
@@ -11,12 +11,12 @@
 
 The current Neon database (`swing-trading`, project `crimson-mountain-88821720`) was locked by Neon on November 9, 2026 due to exceeding the 5.0 GB public data egress quota (HTTP status 402: Payment Required). Incoming SQL connections are rejected at the proxy layer until the quota resets on December 1, 2026.
 
-### Recommended Migration Path:
-Rather than waiting for the monthly billing cycle reset or upgrading to a paid tier, we can safely migrate to a **fresh Neon Free project** while:
-1. Re-creating the complete schema deterministically via existing **Alembic migrations**.
-2. Restoring all verified trading, operational, and historical records from the latest verified snapshot:
-   `data/backups/neon_pg_backup_20261106_182900.json` (SHA-256 integrity verified).
-3. Applying optimization rules (auto-suspend = 300s, market-hours scheduler gating, connection pool downsizing) immediately from Day 1 to ensure the new project never breaches free tier quotas.
+### Migration Architecture:
+To regain database connectivity on a Neon Free tier without waiting for the billing cycle reset:
+1. **Schema Recreation**: Re-create the complete 31-table schema deterministically via existing **Alembic migrations** (`alembic upgrade head`).
+2. **Operational Data Restoration**: Restore verified operational records from the verified snapshot (`data/backups/neon_pg_backup_20261106_182900.json`).
+3. **Missing Data Reconstruction**: Explicitly re-ingest market data (`bars_daily`) and universe metadata (`instruments`) through authorized upstream provider pipelines, acknowledging that they are not stored in the JSON backup.
+4. **Day-1 Guardrails**: Enforce endpoint autosuspend (`suspend_timeout_seconds: 300`) and scheduler off-market gating from Day 1 to avoid recurrence of quota exhaustion.
 
 ---
 
@@ -36,111 +36,119 @@ The new project should be configured with the following serverless parameters:
 
 ---
 
-## 3. Data Inventory & Restoration Scope
+## 3. Data Inventory & Completeness Audit
 
-The verified backup snapshot `data/backups/neon_pg_backup_20261106_182900.json` (28.41 MB) contains:
+### 3.1 Backup File Verification
+- **Verified Backup File**: `data/backups/neon_pg_backup_20261106_182900.json` (29,793,823 bytes).
+- **Verified SHA-256 Checksum**: `76fd605b94ed554e7ead7c3949d81f5eab1e6b64d6f54eff539b49457ecae9da` (Calculated checksum matches expected exactly).
 
-| Table | Backup Row Count | Migration Action | Verification Method |
+### 3.2 Table Restoration vs Reconstruction Scope
+
+The backup snapshot contains only **13 operational tables** selected by `tables_to_backup` in `app/db_backup.py`. The remaining 18 tables in the ORM schema must be handled according to their source:
+
+| Table Name | Backup Row Count | Action | Method / Procedure |
 |---|---|---|---|
-| `positions` | 1 | Restore | Exact row match |
-| `fills` | 2 | Restore | Exact row match |
-| `journal` | 1 | Restore | Exact row match |
-| `signals` | 108 | Restore | Count & state verification |
-| `alerts` | 3 | Restore | Exact row match |
-| `settings_kv` | 1 | Restore | Exact row match |
-| `news_source_state` | 4 | Restore | ETag & cursor integrity |
-| `earnings_filings` | 1 | Restore | Exact row match |
-| `decision_audits` | 2,331 | Restore (Optionally prune to last 14 days) | Timestamp boundary check |
-| `decision_stage_results` | 16,317 | Restore (Corresponding to audits) | Foreign key check |
-| `news_events` | 5,200 | Restore (Prune `raw_json` or articles > 30d) | Dedupe key check |
-| `instruments` | 0 in snapshot | Repopulate via `job_universe_master_sync` | Instrument count check |
-| `bars_daily` | 0 in snapshot | Repopulate via daily bar cache / provider chain | Daily bar continuity check |
+| `positions` | 1 | Restore | Direct record insertion from JSON snapshot |
+| `fills` | 2 | Restore | Direct record insertion from JSON snapshot |
+| `journal` | 1 | Restore | Direct record insertion from JSON snapshot |
+| `signals` | 108 | Restore | Direct record insertion from JSON snapshot |
+| `alerts` | 3 | Restore | Direct record insertion from JSON snapshot |
+| `settings_kv` | 1 | Restore | Direct record insertion from JSON snapshot |
+| `news_source_state` | 4 | Restore | Direct record insertion from JSON snapshot |
+| `earnings_filings` | 1 | Restore | Direct record insertion from JSON snapshot |
+| `decision_audits` | 2,331 | Restore | Direct record insertion (parent table) |
+| `decision_stage_results` | 16,317 | Restore | Direct record insertion (child table via `audit_id`) |
+| `news_events` | 5,200 | Restore | Direct record insertion from JSON snapshot |
+| `instruments` | **0 in backup** | **Reconstruct** | Populate via universe sync (`data/universe/research_universe_v1.csv`) |
+| `bars_daily` | **NOT IN BACKUP** | **Reconstruct** | Re-cache from upstream market data providers (Angel One / yfinance) |
+| `job_runs` | **NOT IN BACKUP** | Start Clean | Ephemeral runtime logs; no historical restoration required |
+| `scans` | **NOT IN BACKUP** | Start Clean | Daily EOD scan logs populate on subsequent runs |
+| `custom_price_alerts` | **NOT IN BACKUP** | Re-create | User-configured alerts entered manually or seeded |
+| `watchlists` / `items` | **NOT IN BACKUP** | Re-create | Re-seeded from default watchlist definitions |
+
+> [!IMPORTANT]
+> **Clarification on `restore_database_backup()`**:
+> Code inspection of `backend/app/db_backup.py` reveals that `restore_database_backup()` currently only reads the JSON file, verifies the SHA-256 checksum, tallies record lengths into a dictionary, and calls `sess.commit()`. **It does NOT perform SQL insertions or restore records into the database.**
+> Implementing an authorized restoration script is NOT permitted during this audit phase. When migration execution is explicitly approved by the user, a proper insertion routine (or SQL import script) will need to be authored.
 
 ---
 
-## 4. Step-by-Step Execution Procedure
+## 4. Reconstruction & Validation Plan for Missing Data
+
+1. **`instruments` Master Data**:
+   - Source: `data/universe/research_universe_v1.csv` and Angel One local cache `data/cache/angelone/instrument_master.json`.
+   - Reconstruction: Execute `job_universe_master_sync(db)` to populate the `instruments` table with all active symbols and tokens.
+   - Validation: Confirm row count matches active universe (~176 Indian equities, ~100 US equities).
+2. **`bars_daily` Historical Market Bars**:
+   - Source: Upstream market data providers (Angel One REST API for IN; yfinance for US).
+   - Reconstruction: Trigger daily bar cache backfill via `provider_manager.get_daily_bars(symbols, start, end, market, db=db)`.
+   - Validation: Query `SELECT COUNT(DISTINCT symbol), MIN(date), MAX(date) FROM bars_daily` to confirm unbroken daily series across all active symbols.
+3. **`custom_price_alerts` & `watchlists`**:
+   - Reconstructed from user input or UI seed definitions.
+
+---
+
+## 5. Step-by-Step Execution Workflow (Pending Approval)
 
 ```mermaid
 flowchart TD
-    A[Step 1: User Approval & Neon Provisioning] --> B[Step 2: Apply Alembic Migrations to Target DB]
-    B --> C[Step 3: Restore Verified Snapshot Data]
-    C --> D[Step 4: Verify Schema & Row Counts]
-    D --> E[Step 5: Apply Code Optimizations]
-    E --> F[Step 6: Update Render Environment Variable]
-    F --> G[Step 7: Post-Migration Live Health Check]
+    A[Step 1: User Approval & Target Neon Provisioning] --> B[Step 2: Apply Alembic Migrations to Target DB]
+    B --> C[Step 3: Authorized Data Restoration Script]
+    C --> D[Step 4: Reconstruct Instruments & Market Bars]
+    D --> E[Step 5: Verify Schema & Foreign-Key Integrity]
+    E --> F[Step 6: Deploy Code Optimizations to Repository]
+    F --> G[Step 7: Update Render DATABASE_URL & Health Check]
 ```
 
-### Step 1: Pre-Migration & Target Provisioning
-1. Obtain user approval.
-2. Verify available slots in user's Neon account (Free plan allows 1 project; if existing project is deleted or upgraded, or new organization/account used, create project `swing-trading-v2`).
-3. Obtain new database connection string:
-   `postgresql://[user]:[password]@[endpoint]-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
-4. Set endpoint `suspend_timeout_seconds = 300` immediately via Neon Console or API.
+### Step 1: Target Neon Provisioning & Settings (User Action Required)
+1. User creates or provisions a fresh Neon project in `aws-ap-southeast-1` named `swing-trading-v2`.
+2. Ensure endpoint autosuspend is explicitly set:
+   `suspend_timeout_seconds = 300` (5 minutes).
+3. Obtain connection string for pooled host:
+   `postgresql://[user]:[password]@[endpoint]-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`.
 
 ### Step 2: Apply Alembic Migrations
-Run Alembic against the new connection string to build the pristine schema:
+Run Alembic against the new connection string to build the pristine 31-table schema:
 ```bash
-# Point temporary shell to target database
 $env:DATABASE_URL = "postgresql://[user]:[password]@[new-endpoint]-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
-
-# Execute all migrations up to head
 backend/.venv/Scripts/alembic -c backend/alembic.ini upgrade head
 ```
-*Expected Output*: Revisions `001_initial_neon_pg`, `002_live_data_reliability_and_alerts`, `003_signal_fundamental_snapshot`, `004_historical_ingestion_and_split_adjusted_ohlc` applied successfully.
 
-### Step 3: Restore Snapshot Operational Data
-Execute restoration using `backend/app/db_backup.py:restore_database_backup`:
-```bash
-backend/.venv/Scripts/python -c "from pathlib import Path; from app.db_backup import restore_database_backup; restore_database_backup(Path('data/backups/neon_pg_backup_20261106_182900.json'))"
-```
-*Verification*: Ensure SHA-256 checksum matches and all records populate without foreign key violations.
+### Step 3: Execute Authorized Restoration
+*(Requires authoring an insertion routine, deferred until explicit migration authorization)*:
+- Insert parent tables first: `decision_audits`, `positions`.
+- Insert child tables: `decision_stage_results` (referencing `audit_id`), `fills` (referencing `position_id`).
+- Insert standalone tables: `signals`, `alerts`, `news_events`, `news_source_state`, `settings_kv`, `earnings_filings`.
 
-### Step 4: Schema & Data Integrity Verification
-Execute verification script against the new database:
-1. Check table existence for all 31 ORM models (`Base.metadata.tables`).
-2. Verify row counts:
-   - `positions`: 1
-   - `fills`: 2
-   - `journal`: 1
-   - `signals`: 108
-   - `alerts`: 3
-3. Confirm primary keys and unique constraints are active.
+### Step 4: Reconstruct Universe & Data
+- Run universe sync to populate `instruments`.
+- Ingest required daily bars for active watchlists.
 
-### Step 5: Deploy Code Optimizations Prior to Production Traffic
-Before pointing Render to the new database, ensure the following codebase optimizations are merged:
-1. `backend/app/db.py`: `pool_size=3`, `max_overflow=5`, `pool_recycle=180`.
-2. `backend/app/scheduler/jobs.py`: Add market-hours gating to `live_monitor_IN` and `live_monitor_US`.
-3. `backend/app/scheduler/jobs.py`: Silence routine `JobRun` writes for 60s monitor ticks.
-4. `backend/app/providers/manager.py`: Bulk upsert for daily bar caching.
-5. Add `job_db_cleanup` retention job.
+### Step 5: Integrity Verification
+- Verify row counts against Section 3.2.
+- Verify foreign-key constraints and index presence.
 
-### Step 6: Update Render Environment Variable
-1. In the Render Dashboard (Web Service `algo-trading-backend`):
-   Update `DATABASE_URL` to the new Neon connection string.
-2. Trigger manual deploy or let Render restart with the new variable.
-
-### Step 7: Post-Migration Monitoring
-1. Monitor Render startup logs (`/api/health` should return `200 OK`).
-2. Monitor Neon Console metrics:
-   - Active connections: 1-3.
-   - Autoscaling: Stays at 0.25 CU.
-   - After market close: Compute enters `suspended` state within 5 minutes.
+### Step 6: Deploy Optimizations & Update Render
+- Deploy market-hours scheduler gating, bulk upsert, and connection pool sizing.
+- Update `DATABASE_URL` in Render Dashboard.
+- Verify `/api/health` returns `200 OK`.
 
 ---
 
-## 5. Rollback Strategy
+## 6. Rollback Strategy
 
-If any failure occurs during migration:
-1. **Application Rollback**: Revert `DATABASE_URL` on Render to the previous value.
-2. **Local Data Safety**: Local backups in `data/backups/` are immutable and SHA-256 verified; no historical data can be lost.
-3. **Target Teardown**: If the new Neon project configuration is unsatisfactory, it can be deleted with zero impact on existing local state or legacy locked branch.
+1. **Immutable Backup Safety**: `data/backups/neon_pg_backup_20261106_182900.json` is immutable and stored locally with verified checksum `76fd605b...`.
+2. **Reversible Environment Variable**: If the new database exhibits errors, reverting `DATABASE_URL` on Render immediately restores previous settings.
+3. **No Risk to Legacy Data**: The locked legacy project (`crimson-mountain-88821720`) remains completely untouched in Neon until billing reset on December 1, 2026.
 
 ---
 
-## 6. Pre-Migration Approval Checklist
+## 7. Migration Prerequisites Checklist
 
-Before proceeding to execution, the following decisions require user approval:
+Before migration can proceed to implementation:
 
-- [ ] **Approval to provision new Neon project**: Confirm whether to create a new project in the existing organization or if the user will provide credentials for a fresh Neon project.
-- [ ] **Data retention cutoff**: Confirm whether to restore all 16,317 stage results or prune decision audits older than 14 days during migration.
-- [ ] **Code optimizations**: Confirm authorization to apply the market-hours scheduler gating and connection pool adjustments.
+- [ ] **Target Database Ready**: User must provision new project or provide target connection string.
+- [ ] **Author Restoration Logic**: Author an actual record insertion script (since `db_backup.restore_database_backup` does not insert).
+- [ ] **Market Data Reconstruction Strategy**: User must confirm whether to re-ingest all daily bars or let the system populate them on-demand.
+- [ ] **Decision Audits Pruning Decision**: User must confirm whether to migrate all 16,317 stage results or prune records older than 14/30 days.
+- [ ] **Code Changes Authorization**: Explicit approval to commit scheduler market-hours gating and connection pool adjustments.

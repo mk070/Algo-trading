@@ -27,6 +27,7 @@ import {
 import { apiClient } from '../api/client';
 import { ChartModal } from '../components/ChartModal';
 import { FundamentalReport } from '../components/FundamentalReport';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 interface WatchlistPageProps {
   currentMarket: 'IN' | 'US';
@@ -392,12 +393,27 @@ export const WatchlistPage: React.FC<WatchlistPageProps> = ({ currentMarket }) =
     if (activeListId) fetchItems(activeListId, false);
   }, [activeListId]);
 
-  // Real-time 2.5s polling without reload (Bloomberg Terminal & brokerage app mode)
+  // 15s quote polling (paused when tab hidden or outside market hours)
   useEffect(() => {
     if (!activeListId) return;
-    const interval = setInterval(() => fetchItems(activeListId, true), 2500);
-    return () => clearInterval(interval);
-  }, [activeListId]);
+    const interval = setInterval(() => {
+      if (isTabVisible() && isMarketOpenClient(currentMarket)) {
+        fetchItems(activeListId, true);
+      }
+    }, 15000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isMarketOpenClient(currentMarket)) {
+        fetchItems(activeListId, true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [activeListId, currentMarket]);
 
   const handleCreateList = async () => {
     if (!newListName.trim()) return;

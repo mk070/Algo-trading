@@ -2,6 +2,7 @@ import datetime
 import pytest
 from app.models import Alert
 from app.notify.dispatcher import NotificationDispatcher
+from app.settings import settings
 
 
 def test_full_alert_catalogue_formatters():
@@ -53,14 +54,17 @@ def test_full_alert_catalogue_formatters():
     assert "TIME STOP" in sell_time
 
 
-def test_alert_deduplication(mem_db):
+def test_alert_deduplication(mem_db, monkeypatch):
+    monkeypatch.setattr(settings, "alerts_enabled", True)
     disp = NotificationDispatcher()
-    id1 = disp.dispatch("BUY", "BUY: INFY", "Buy body", symbol="INFY", db=mem_db, max_retries=0)
-    assert id1 is not None
+    res1 = disp.dispatch("BUY", "BUY: INFY", "Buy body", symbol="INFY", db=mem_db, max_retries=0)
+    assert res1.accepted is True
+    assert res1.alert_id is not None
 
     # Immediate duplicate call
-    id2 = disp.dispatch("BUY", "BUY: INFY", "Buy body", symbol="INFY", db=mem_db, max_retries=0)
-    assert id2 is None  # Skipped
+    res2 = disp.dispatch("BUY", "BUY: INFY", "Buy body", symbol="INFY", db=mem_db, max_retries=0)
+    assert res2.accepted is False
+    assert res2.suppression_reason in ("IN_MEMORY_DEDUPLICATED", "DB_DEDUPLICATED")
 
 
 def test_delivery_retry_with_backoff(monkeypatch):
@@ -271,7 +275,8 @@ def test_telegram_api_endpoints(monkeypatch):
     assert "delivered successfully" in post_data["detail"]
 
 
-def test_alert_deduplication_across_backend_restarts(mem_db):
+def test_alert_deduplication_across_backend_restarts(mem_db, monkeypatch):
+    monkeypatch.setattr(settings, "alerts_enabled", True)
     # Simulate an alert recorded earlier before backend restart
     past_time = datetime.datetime.utcnow() - datetime.timedelta(hours=2)
     alert = Alert(
@@ -301,6 +306,7 @@ def test_alert_deduplication_across_backend_restarts(mem_db):
         db=mem_db,
     )
     # Must be deduplicated via database check to prevent re-sending after reboot
-    assert res is None
+    assert res.accepted is False
+    assert res.suppression_reason == "DB_DEDUPLICATED"
 
 

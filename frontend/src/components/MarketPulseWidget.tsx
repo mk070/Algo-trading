@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, ChevronRight, ExternalLink, LayoutGrid, RefreshCw, Table, TrendingUp } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { TradingViewStockHeatmap } from './TradingViewStockHeatmap';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 interface MarketPulseWidgetProps {
   currentMarket: 'IN' | 'US';
@@ -53,8 +54,24 @@ export const MarketPulseWidget: React.FC<MarketPulseWidgetProps> = ({
 
   useEffect(() => {
     fetchLiveMarketData(false);
-    const interval = setInterval(() => fetchLiveMarketData(true), 2500); // 2.5s real-time streaming without loader flicker
-    return () => clearInterval(interval);
+    // 60s polling (paused when tab hidden or outside market hours)
+    const interval = setInterval(() => {
+      if (isTabVisible() && isMarketOpenClient(currentMarket)) {
+        fetchLiveMarketData(true);
+      }
+    }, 60000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isMarketOpenClient(currentMarket)) {
+        fetchLiveMarketData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [currentMarket]);
 
   // Compute live pulse card metrics

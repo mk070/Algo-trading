@@ -19,6 +19,7 @@ import { WatchlistPage } from './pages/WatchlistPage';
 import { HeatmapPage } from './pages/HeatmapPage';
 import { API_BASE, apiClient } from './api/client';
 import { RegimeResult } from './types';
+import { isTabVisible, isMarketOpenClient } from './utils/polling';
 
 export const AppContent: React.FC = () => {
   const [apiToken, setApiToken] = useState(() => sessionStorage.getItem('algo_trading_api_token') || '');
@@ -151,11 +152,24 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     fetchRegime();
-    // 5s periodic background refresh for topbar market index points & regime
+    // 60s periodic refresh for regime (paused when tab hidden or outside market hours)
     const interval = setInterval(() => {
-      fetchRegime();
-    }, 5000);
-    return () => clearInterval(interval);
+      if (isTabVisible() && isMarketOpenClient(currentMarket)) {
+        fetchRegime();
+      }
+    }, 60000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isMarketOpenClient(currentMarket)) {
+        fetchRegime();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [currentMarket]);
 
   // Global keyboard shortcut for Quick Search (Ctrl/Cmd + K)

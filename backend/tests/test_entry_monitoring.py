@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 import pytest
 
 from app.models import Position, Signal
@@ -86,11 +87,14 @@ def test_stale_and_delayed_feeds_never_trigger_alerts(mem_db):
     # Provider WS Manager has no quote yet
     provider = AngelOneProvider()
     ws_mgr = provider.ws_manager
+    from app.providers.manager import provider_manager
+    provider_manager.angelone = provider
 
     # 1. Stale quote (older than 20s)
     stale_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=45)
     ws_mgr.inject_tick("INFY", price=1510.0, volume=1000, timestamp=stale_time)
-    monitor.tick_market("IN", mem_db)
+    with mock.patch.object(provider_manager, "get_quotes", return_value={"INFY": Quote(symbol="INFY", last_price=1510.0, is_stale=True, is_realtime=False)}):
+        monitor.tick_market("IN", mem_db)
 
     # State should remain WATCHLIST because quote is stale
     mem_db.refresh(sig)
@@ -100,7 +104,8 @@ def test_stale_and_delayed_feeds_never_trigger_alerts(mem_db):
     ws_mgr.live_quotes["INFY"].is_realtime = False
     ws_mgr.live_quotes["INFY"].timestamp = datetime.datetime.utcnow()
     ws_mgr.live_quotes["INFY"].is_stale = False
-    monitor.tick_market("IN", mem_db)
+    with mock.patch.object(provider_manager, "get_quotes", return_value={"INFY": Quote(symbol="INFY", last_price=1510.0, is_stale=False, is_realtime=False)}):
+        monitor.tick_market("IN", mem_db)
 
     mem_db.refresh(sig)
     assert sig.state == "WATCHLIST"
@@ -256,9 +261,13 @@ def test_completed_15m_trigger_reevaluates_pipeline_to_buy_confirmed(mem_db, mon
         code_version="2.3",
         data_source="ANGEL_ONE",
     )
+    import pandas as pd
     from app.engine.pipeline import decision_pipeline
+    dates = pd.date_range("2026-03-01", periods=25, freq="B")
+    df_daily = pd.DataFrame({"volume": [100000.0] * 25, "date": dates}, index=dates)
     monkeypatch.setattr(decision_pipeline, "evaluate", lambda **kwargs: mock_decision)
-    monkeypatch.setattr(provider_manager, "get_daily_bars", lambda *args, **kwargs: {"TCS": None})
+    monkeypatch.setattr(provider_manager, "get_daily_bars", lambda *args, **kwargs: {"TCS": df_daily})
+    ws_mgr.live_quotes["TCS"].day_volume = 15000.0
 
     monitor.tick_market("IN", mem_db, current_time=t_9_30)
     mem_db.refresh(sig)

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import dotenv
 import yaml
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,6 +9,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 DATA_DIR = BASE_DIR / "data"
+
+# Ensure local .env file overrides any stale environment variables in running shell sessions
+env_file_path = BASE_DIR / ".env"
+if env_file_path.exists():
+    dotenv.load_dotenv(str(env_file_path), override=True)
 
 
 class MarketConfig(BaseModel):
@@ -176,6 +182,7 @@ class AppSettings(BaseSettings):
         alias="DATABASE_URL"
     )
     database_url_unpooled: Optional[str] = Field(default=None, alias="DATABASE_URL_UNPOOLED")
+    research_data_source: str = Field(default="parquet", alias="RESEARCH_DATA_SOURCE")
 
     # Neon Cloud Services (Auth, Realtime, Branch)
     neon_branch: Optional[str] = Field(default=None, alias="NEON_BRANCH")
@@ -234,6 +241,7 @@ class AppSettings(BaseSettings):
     alpaca_endpoint: str = Field(default="https://paper-api.alpaca.markets", alias="ALPACA_ENDPOINT")
 
     # Notifications
+    alerts_enabled: bool = Field(default=False, alias="ALERTS_ENABLED")
     telegram_bot_token: Optional[str] = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = Field(default=None, alias="TELEGRAM_CHAT_ID")
 

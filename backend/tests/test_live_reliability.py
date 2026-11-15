@@ -165,7 +165,7 @@ def test_request_layer_circuit_breaker_cooldown():
 # 3. Quote Audit Snapshot Persistence in Alerts
 # --------------------------------------------------------------------------
 
-def test_alert_dispatcher_embeds_quote_audit():
+def test_alert_dispatcher_embeds_quote_audit(monkeypatch):
     dispatcher = NotificationDispatcher()
     now = datetime.datetime.utcnow()
 
@@ -189,6 +189,9 @@ def test_alert_dispatcher_embeds_quote_audit():
 
     mock_db.add = capture_add
     mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    from app.settings import settings
+    monkeypatch.setattr(settings, "alerts_enabled", True)
 
     dispatcher.dispatch(
         alert_type="BUY",

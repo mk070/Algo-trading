@@ -527,6 +527,10 @@ class NewsIntelligenceEngine:
                         is_coverage_stale = True
                 else:
                     is_coverage_stale = True
+        else:
+            # Rule 11: Unknown is not Clear. Without database, news health cannot be verified.
+            is_coverage_stale = True
+            source_health_map["db"] = "NO_DATABASE_CONTEXT"
 
         # 2. Check Offline Gaps
         offline_gaps = self.check_offline_gaps(market=market, db=db)

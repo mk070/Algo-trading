@@ -1,5 +1,6 @@
 import datetime
-from typing import List, Set
+from typing import List, Set, Optional
+from zoneinfo import ZoneInfo
 import pandas as pd
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar,
@@ -19,13 +20,19 @@ Juneteenth = Holiday(
 )
 
 
-class USEchangeCalendar(AbstractHolidayCalendar):
-    """NYSE / NASDAQ Trading Holidays (US Federal Holidays + Good Friday + Juneteenth)."""
-    rules = USFederalHolidayCalendar.rules + [GoodFriday, Juneteenth]
+class USExchangeCalendar(AbstractHolidayCalendar):
+    """NYSE / NASDAQ Trading Holidays (US Federal Holidays excluding Columbus Day and Veterans Day, plus Good Friday)."""
+    rules = [
+        r for r in USFederalHolidayCalendar.rules
+        if r.name not in ("Columbus Day", "Veterans Day")
+    ]
+    # Ensure Good Friday is present (not a US federal holiday, but closed on NYSE/NASDAQ)
+    if not any(r.name == "Good Friday" for r in rules):
+        rules.append(GoodFriday)
 
 
 # Precompute US exchange holidays 2020 - 2030
-_us_cal = USEchangeCalendar()
+_us_cal = USExchangeCalendar()
 _us_holidays_series = _us_cal.holidays(start="2020-01-01", end="2030-12-31")
 US_EXCHANGE_HOLIDAYS: Set[datetime.date] = set(_us_holidays_series.date)
 # Special National Days of Mourning (exchanges officially closed)
@@ -122,12 +129,13 @@ NSE_TRADING_HOLIDAYS: Set[datetime.date] = {
     datetime.date(2025, 11, 5),   # Gurunanak Jayanti
     datetime.date(2025, 12, 25),  # Christmas
     # 2026
+    datetime.date(2026, 1, 15),   # Maharashtra Municipal Corporation Election
     datetime.date(2026, 1, 26),   # Republic Day
     datetime.date(2026, 2, 16),   # Mahashivratri
     datetime.date(2026, 3, 3),    # Holi
     datetime.date(2026, 3, 20),   # Id-Ul-Fitr
     datetime.date(2026, 3, 26),   # Ram Navami
-    datetime.date(2026, 3, 31),   # Annual Year-End Closing
+    datetime.date(2026, 3, 31),   # Shri Mahavir Jayanti (Official NSE Holiday)
     datetime.date(2026, 4, 3),    # Good Friday
     datetime.date(2026, 4, 14),   # Dr. Ambedkar Jayanti
     datetime.date(2026, 5, 1),    # Maharashtra Day
@@ -167,6 +175,58 @@ NSE_SPECIAL_TRADING_SESSIONS: Set[datetime.date] = {
     datetime.date(2026, 11, 8),  # Sunday Diwali Muhurat
 }
 
+# Explicit Diwali Muhurat Sessions (60-minute special evening session: 18:15 - 19:15 IST)
+# These sessions must NEVER be treated as normal 375-minute sessions.
+NSE_MUHURAT_SESSIONS: Set[datetime.date] = {
+    datetime.date(2020, 11, 14),
+    datetime.date(2021, 11, 4),
+    datetime.date(2022, 10, 24),
+    datetime.date(2023, 11, 12),
+    datetime.date(2024, 11, 1),
+    datetime.date(2025, 10, 21),
+    datetime.date(2026, 11, 8),
+}
+
+# US Equity Market (NYSE / NASDAQ) Early Close Days (closes at 13:00 ET / 210 session minutes)
+US_EARLY_CLOSE_DAYS: Set[datetime.date] = {
+    datetime.date(2020, 11, 27), # Black Friday
+    datetime.date(2020, 12, 24), # Christmas Eve
+    datetime.date(2021, 11, 26), # Black Friday
+    datetime.date(2022, 11, 25), # Black Friday
+    datetime.date(2023, 7, 3),   # Pre-Independence Day
+    datetime.date(2023, 11, 24), # Black Friday
+    datetime.date(2024, 7, 3),   # Pre-Independence Day
+    datetime.date(2024, 11, 29), # Black Friday
+    datetime.date(2024, 12, 24), # Christmas Eve
+    datetime.date(2025, 7, 3),   # Pre-Independence Day
+    datetime.date(2025, 11, 28), # Black Friday
+    datetime.date(2025, 12, 24), # Christmas Eve
+    datetime.date(2026, 11, 27), # Friday after Thanksgiving
+    datetime.date(2026, 12, 24), # Christmas Eve
+    datetime.date(2027, 11, 26), # Friday after Thanksgiving
+}
+
+
+def get_session_hours(market: str, d: Optional[datetime.date] = None):
+    """Returns (start_time, end_time, total_minutes) for the given market and date.
+    Strictly accounts for:
+    - US Early Closes (13:00 ET / 210 minutes)
+    - NSE Diwali Muhurat Sessions (18:15 - 19:15 IST / 60 minutes)
+    - Normal Indian Equity Market (09:15 - 15:30 IST / 375 minutes)
+    - Normal US Equity Market (09:30 - 16:00 ET / 390 minutes)
+    """
+    m = market.upper()
+    target_d = d or datetime.date.today()
+    if m in ("IN", "NSE"):
+        if target_d in NSE_MUHURAT_SESSIONS:
+            return datetime.time(18, 15), datetime.time(19, 15), 60.0
+        return datetime.time(9, 15), datetime.time(15, 30), 375.0
+    elif m == "US":
+        if target_d in US_EARLY_CLOSE_DAYS:
+            return datetime.time(9, 30), datetime.time(13, 0), 210.0
+        return datetime.time(9, 30), datetime.time(16, 0), 390.0
+    return datetime.time(9, 30), datetime.time(16, 0), 390.0
+
 
 def is_exchange_holiday(market: str, d: datetime.date) -> bool:
     """Returns True if date is a complete exchange closure for the specified market."""
@@ -204,3 +264,87 @@ def get_expected_trading_days(market: str, start_date: datetime.date, end_date: 
 def get_trading_days_count(market: str, start_date: datetime.date, end_date: datetime.date) -> int:
     """Returns the total number of expected open trading sessions between start and end date."""
     return len(get_expected_trading_days(market, start_date, end_date))
+
+
+def is_market_open(market: str, now: Optional[datetime.datetime] = None) -> bool:
+    """Returns True if the specified market is currently in active trading hours.
+    Uses Asia/Kolkata for IN and America/New_York for US,
+    strictly accounting for exchange holidays, early closes, and Muhurat sessions.
+    """
+    m = market.upper()
+    now_utc = now or datetime.datetime.now(datetime.timezone.utc)
+    if m in ("IN", "NSE"):
+        tz = ZoneInfo("Asia/Kolkata")
+        now_local = now_utc.astimezone(tz)
+        today = now_local.date()
+        if is_exchange_holiday("IN", today):
+            return False
+        start_t, end_t, _ = get_session_hours("IN", today)
+        return start_t <= now_local.time() <= end_t
+    elif m == "US":
+        tz = ZoneInfo("America/New_York")
+        now_local = now_utc.astimezone(tz)
+        today = now_local.date()
+        if is_exchange_holiday("US", today):
+            return False
+        start_t, end_t, _ = get_session_hours("US", today)
+        return start_t <= now_local.time() <= end_t
+    return False
+
+
+def is_session_completed(market: str, now: Optional[datetime.datetime] = None) -> bool:
+    """Returns True if the market trading session on now's local date has fully closed.
+    Correctly recognizes early close times (13:00 ET for US, 19:15 IST for Muhurat).
+    """
+    m = market.upper()
+    now_utc = now or datetime.datetime.now(datetime.timezone.utc)
+    if m in ("IN", "NSE"):
+        tz = ZoneInfo("Asia/Kolkata")
+        now_local = now_utc.astimezone(tz)
+        today = now_local.date()
+        if is_exchange_holiday("IN", today):
+            return False
+        _, end_t, _ = get_session_hours("IN", today)
+        return now_local.time() >= end_t
+    elif m == "US":
+        tz = ZoneInfo("America/New_York")
+        now_local = now_utc.astimezone(tz)
+        today = now_local.date()
+        if is_exchange_holiday("US", today):
+            return False
+        _, end_t, _ = get_session_hours("US", today)
+        return now_local.time() >= end_t
+    return False
+
+
+def get_completed_sessions_held_count(
+    market: str,
+    entry_date: datetime.date,
+    asof_dt: Optional[datetime.datetime] = None,
+) -> int:
+    """Counts completed exchange sessions strictly elapsed post-entry.
+    - Entry session (T_entry) is Session 0.
+    - On T_entry + 1 intraday: 0 completed post-entry sessions.
+    - On T_entry + 1 after market close: 1 completed post-entry session.
+    - Weekends, exchange holidays, and in-progress/pre-close sessions are never counted.
+    """
+    now_utc = asof_dt or datetime.datetime.now(datetime.timezone.utc)
+    tz_name = "Asia/Kolkata" if market.upper() in ("IN", "NSE") else "America/New_York"
+    local_now = now_utc.astimezone(ZoneInfo(tz_name))
+    today_local = local_now.date()
+
+    if today_local <= entry_date:
+        return 0
+
+    all_open_days = get_expected_trading_days(market, entry_date, today_local)
+    post_entry_days = [d for d in all_open_days if d > entry_date]
+    if not post_entry_days:
+        return 0
+
+    # If today is in post_entry_days, it only counts as completed AFTER market close
+    if today_local in post_entry_days:
+        if not is_session_completed(market, now_utc):
+            post_entry_days.remove(today_local)
+
+    return len(post_entry_days)
+

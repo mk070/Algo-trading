@@ -33,28 +33,39 @@ class KitePortfolioReader:
         self.base_url = "https://api.kite.trade"
         self.token_expiry: Optional[datetime.datetime] = None
         self.last_sync_time: Optional[datetime.datetime] = None
+        self._next_restore_allowed_at: Optional[datetime.datetime] = None
 
     def is_configured(self) -> bool:
         return bool(self.api_key and self.api_secret)
 
     def _restore_session_from_db_if_needed(self):
-        if not self.access_token:
-            try:
-                from app.db import SessionLocal
-                from app.models import SettingKV
-                with SessionLocal() as db:
-                    row = db.query(SettingKV).filter(SettingKV.key == "kite_session").first()
-                    if row and row.value_json:
-                        data = json.loads(row.value_json)
-                        exp_str = data.get("token_expiry")
-                        if exp_str:
-                            exp_dt = datetime.datetime.fromisoformat(exp_str)
-                            if datetime.datetime.utcnow() < exp_dt:
-                                self.access_token = data.get("access_token")
-                                self.token_expiry = exp_dt
-                                logger.info("Restored Kite session from database.")
-            except Exception as e:
-                logger.warning(f"Failed to restore Kite session from DB: {e}")
+        if self.access_token:
+            return
+
+        now = datetime.datetime.utcnow()
+        if self._next_restore_allowed_at and now < self._next_restore_allowed_at:
+            return  # Cache negative result for 10 minutes to prevent repetitive DB queries
+
+        # Back off subsequent checks by 10 minutes if restore does not succeed
+        self._next_restore_allowed_at = now + datetime.timedelta(minutes=10)
+
+        try:
+            from app.db import SessionLocal
+            from app.models import SettingKV
+            with SessionLocal() as db:
+                row = db.query(SettingKV).filter(SettingKV.key == "kite_session").first()
+                if row and row.value_json:
+                    data = json.loads(row.value_json)
+                    exp_str = data.get("token_expiry")
+                    if exp_str:
+                        exp_dt = datetime.datetime.fromisoformat(exp_str)
+                        if now < exp_dt:
+                            self.access_token = data.get("access_token")
+                            self.token_expiry = exp_dt
+                            self._next_restore_allowed_at = None
+                            logger.info("Restored Kite session from database.")
+        except Exception as e:
+            logger.warning(f"Failed to restore Kite session from DB: {e}")
 
     def is_authenticated(self) -> bool:
         if not self.access_token:

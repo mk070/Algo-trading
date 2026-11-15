@@ -20,6 +20,7 @@ import { MarketPulseWidget } from '../components/MarketPulseWidget';
 import { SignalCard } from '../components/SignalCard';
 import { TakeTradeModal } from '../components/TakeTradeModal';
 import { Signal, TradePlan } from '../types';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 interface DashboardPageProps {
   currentMarket: 'IN' | 'US';
@@ -53,17 +54,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
   const [chartLoading, setChartLoading] = useState(false);
   const [tradeModalSignal, setTradeModalSignal] = useState<Signal | null>(null);
   const [oppFilter, setOppFilter] = useState<'ALL' | 'SETUPS' | 'APPROACHING' | 'BLOCKED' | 'HELD' | 'TREND' | 'FUNDAMENTALS' | 'NEWS' | 'RISK' | 'PASS' | 'PRE_BREAKOUT'>('ALL');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const fetchPlan = async () => {
+  const fetchPlan = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const data = await apiClient.getTradePlan(currentMarket);
       setPlan(data);
+      setLastUpdated(new Date());
       apiClient.getValueRadar(currentMarket).then(updateValueRadar).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error fetching trade plan:', e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -72,6 +75,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
       setScanning(true);
       const data = await apiClient.runScan(currentMarket);
       setPlan(data);
+      setLastUpdated(new Date());
       apiClient.getValueRadar(currentMarket).then(updateValueRadar).catch(() => setValueIdeas([]));
     } catch (e) {
       console.error('Error running scan:', e);
@@ -81,12 +85,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
   };
 
   useEffect(() => {
-    fetchPlan();
-    // 8s auto-refresh for live trade plan setups and trigger breaches without page reload
+    fetchPlan(false);
+    // 60s auto-refresh for trade plan setups (paused when tab hidden or outside market hours)
     const interval = setInterval(() => {
-      fetchPlan();
-    }, 8000);
-    return () => clearInterval(interval);
+      if (isTabVisible() && isMarketOpenClient(currentMarket)) {
+        fetchPlan(true);
+      }
+    }, 60000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isMarketOpenClient(currentMarket)) {
+        fetchPlan(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [currentMarket]);
 
   const handleOpenChart = async (symbol: string) => {
@@ -175,6 +192,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
         </div>
 
         <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-[11px] text-slate-400 font-mono">
+              Updated: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            onClick={() => fetchPlan(false)}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+            title="Refresh Trade Plan"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           <button
             onClick={handleRunScan}
             disabled={scanning}

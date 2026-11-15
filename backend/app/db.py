@@ -20,20 +20,20 @@ Base = declarative_base()
 
 def get_neon_engine():
     """Builds and returns a resilient SQLAlchemy Engine configured specifically for
-    Neon Serverless PostgreSQL.
+    Neon Serverless PostgreSQL behind PgBouncer.
     Key configurations:
     - pool_pre_ping=True: transparently reconnects after Neon autosuspend/idle timeouts.
-    - pool_recycle=300: recycles sockets every 5 minutes to prevent stale PgBouncer/gateway connections.
-    - QueuePool with controlled pool_size and max_overflow.
+    - pool_recycle=180: recycles sockets every 3 minutes to handle serverless timeouts.
+    - QueuePool sized to actual Render single-worker concurrency (pool_size=3, max_overflow=2).
     """
     database_url = settings.normalized_database_url
 
     engine_kwargs = {
         "poolclass": QueuePool,
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_timeout": 30.0,
-        "pool_recycle": 300,  # 5 minutes for serverless compute idle windows
+        "pool_size": 3,
+        "max_overflow": 2,
+        "pool_timeout": 20.0,
+        "pool_recycle": 180,  # 3 minutes for serverless compute idle windows
         "pool_pre_ping": True,  # Ping SELECT 1 before borrowing from pool
         "echo": False,
     }
@@ -42,7 +42,16 @@ def get_neon_engine():
     if "sslmode" not in database_url and not database_url.startswith("sqlite"):
         engine_kwargs["connect_args"] = {"sslmode": "require"}
 
-    return create_engine(database_url, **engine_kwargs)
+    eng = create_engine(database_url, **engine_kwargs)
+
+    # Attach egress and row telemetry hooks
+    try:
+        from app.telemetry import setup_sqlalchemy_telemetry
+        setup_sqlalchemy_telemetry(eng)
+    except Exception as e:
+        logger.warning(f"Could not initialize telemetry hooks: {e}")
+
+    return eng
 
 
 # Initialize singleton engine and sessionmaker

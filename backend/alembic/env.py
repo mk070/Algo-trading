@@ -29,9 +29,29 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """Retrieve normalized PostgreSQL database URL from application settings.
-    Prefers direct unpooled connection for transactional DDL per Neon best practices.
+    """Retrieve normalized PostgreSQL database URL for migrations.
+    Priority:
+    1. MIGRATION_DATABASE_URL environment variable (direct unpooled connection for new project migration).
+    2. settings.normalized_unpooled_database_url (active configuration).
+    3. Fallback to alembic.ini config or placeholder.
     """
+    migration_url = os.environ.get("MIGRATION_DATABASE_URL")
+    if migration_url:
+        # Strip pooler and channel_binding if present for transactional DDL
+        import re
+        clean_url = re.sub(r"[?&]channel_binding=[^&]+", "", migration_url.strip())
+        if "-pooler" in clean_url:
+            clean_url = clean_url.replace("-pooler", "")
+        if clean_url.startswith("postgres://"):
+            clean_url = clean_url.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif clean_url.startswith("postgresql://") and not clean_url.startswith("postgresql+"):
+            clean_url = clean_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return clean_url
+
+    cfg_url = config.get_main_option("sqlalchemy.url")
+    if cfg_url and ("sqlite" in cfg_url or "test" in cfg_url):
+        return cfg_url
+
     try:
         return settings.normalized_unpooled_database_url
     except Exception:
@@ -72,6 +92,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            render_as_batch=(connection.dialect.name == "sqlite"),
         )
 
         with context.begin_transaction():

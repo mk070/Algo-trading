@@ -25,23 +25,25 @@ class FundamentalsEngine:
 
     def get_latest_snapshot(self, symbol: str, market: str = "IN", db: Optional[Session] = None) -> Optional[FundamentalSnapshot]:
         clean_sym = symbol.strip().upper()
-        session = db or SessionLocal()
+        if db is None:
+            return None
         try:
             return (
-                session.query(FundamentalSnapshot)
+                db.query(FundamentalSnapshot)
                 .filter(FundamentalSnapshot.symbol == clean_sym, FundamentalSnapshot.market == market)
                 .order_by(FundamentalSnapshot.as_of.desc(), FundamentalSnapshot.id.desc())
                 .first()
             )
-        finally:
-            if db is None:
-                session.close()
+        except Exception as e:
+            logger.debug(f"Could not load fundamental snapshot for {clean_sym}: {e}")
+            return None
 
     def get_all_latest_snapshots(self, market: str = "IN", db: Optional[Session] = None) -> Dict[str, FundamentalSnapshot]:
-        session = db or SessionLocal()
+        if db is None:
+            return {}
         try:
             rows = (
-                session.query(FundamentalSnapshot)
+                db.query(FundamentalSnapshot)
                 .filter(FundamentalSnapshot.market == market)
                 .order_by(FundamentalSnapshot.symbol, FundamentalSnapshot.as_of.desc())
                 .all()
@@ -51,9 +53,9 @@ class FundamentalsEngine:
                 if r.symbol not in result:
                     result[r.symbol] = r
             return result
-        finally:
-            if db is None:
-                session.close()
+        except Exception as e:
+            logger.debug(f"Could not load all fundamental snapshots: {e}")
+            return {}
 
     def calculate_completeness(self, snap_dict: Dict[str, Any]) -> str:
         """Determines snapshot completeness:

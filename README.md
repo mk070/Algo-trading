@@ -481,3 +481,60 @@ The platform integrates an institutional-grade, high-performance candlestick cha
 - **Cross-Universe Value Radar:** Evaluates entire scanned universe for valuation (Green/Yellow vs sector), quality (ROCE/ROE >= Yellow), growth (YoY revenue/profit not Red), and technical stabilizing conditions (above 200 SMA or valid base).
 - **"Why Zero" Exclusion Reporting:** When zero stocks match, the dashboard provides a transparent diagnostic breakdown showing counts excluded by valuation, quality, growth, or stabilizing technical criteria.
 - **Security Notice:** All Telegram bot tokens and chat IDs have been scrubbed from repo files and rotated; live credentials reside strictly in user-controlled `.env`.
+
+---
+
+## 16. Database Infrastructure, Neon Free-Plan Optimization & Local Fallback
+
+### Neon Free-Plan Guardrails & Egress Controls
+
+Neon's Free tier provides **5 GB/month public data transfer (egress)** and **100 Compute Unit (CU)-hours/month**. Under default web app polling patterns, outbound SQL query results count towards public transfer, and continuous 60s background jobs prevent compute scale-to-zero (which requires 5 minutes of inactivity).
+
+To operate reliably within the free plan without suspension, the platform implements a 5-pillar architectural defense:
+
+1. **SQLAlchemy Wire Egress Telemetry (`app.telemetry`):**
+   - Intercepts cursor executions to measure query count, row count, approximate wire bytes (protocol framing ~16B + 8B/column + field data), and HTTP response size.
+   - Tagged breakdowns by query context and endpoint route.
+   - Exposed live at `/api/system/egress` and visualised on the System Health page.
+   - Automatic warnings emitted at 60% (3.0 GB) and 85% (4.25 GB) of monthly allowance.
+2. **In-Process Single-Flight Cache & ETag 304 Handling (`app.cache`):**
+   - Thread-safe `SharedMemoryCache` with single-flight mutex per key (prevents thundering-herd on cold cache misses).
+   - TTLs applied across high-frequency routes (regime, pulse, plan, health: 60 seconds).
+   - Generates SHA-1 `ETag` headers and returns HTTP `304 Not Modified` with empty bodies when client content is fresh.
+3. **Batch Querying & N+1 Elimination:**
+   - Replaced per-signal `DecisionAudit` and `DecisionStageResult` queries in `/plan` with 2 batch queries using `.in_()`.
+   - Batch query for `/decision-audits` eliminating loop lookups.
+   - Restricts `/market/pulse` bar queries to `DailyBar.symbol, DailyBar.date, DailyBar.close` rather than loading all 15 columns across 18,000 rows.
+4. **Market-Hours Scheduler Gating & Scale-to-Zero (`app.scheduler.jobs`):**
+   - Live monitor jobs (`live_monitor_IN` and `live_monitor_US`) evaluate `is_market_open(market)` using `Asia/Kolkata` (09:15-15:30 IST) and `America/New_York` (09:30-16:00 EST/EDT) along with exchange holiday lists **BEFORE** opening a database session.
+   - Outside market hours and on weekends/holidays, monitor ticks return immediately with 0 database connections, allowing Neon compute to scale to zero.
+   - Routine 60s monitor ticks silence continuous `JobRun` database inserts; heartbeats are written hourly or immediately upon failure.
+5. **Local Parquet Research Loader (`RESEARCH_DATA_SOURCE=parquet`):**
+   - Strategy lab, historical research, and lead-time analysis query local parquet snapshot (`data/research/research_snapshot_20261106.parquet`, 141,040 rows) rather than streaming hundreds of thousands of historical bars over the public Internet.
+
+### Local PostgreSQL Fallback via Docker Compose
+
+If you exceed your free-plan quotas or prefer zero-network local development, you can spin up a local PostgreSQL instance in seconds:
+
+```powershell
+# 1. Start local PostgreSQL container
+docker compose up -d postgres
+
+# 2. Update .env to point to local database
+# Set: DATABASE_URL=postgresql://postgres:postgres@localhost:5432/algo_trading
+
+# 3. Apply schema migrations
+backend\.venv\Scripts\alembic.exe upgrade head
+
+# 4. Restore data from latest verified JSON backup (23,969 records across all 11 tables)
+backend\.venv\Scripts\python.exe -c "from app.db import SessionLocal; from app.db_backup import restore_database_backup; db = SessionLocal(); print(restore_database_backup('data/backups/neon_pg_backup_20261106_182900.json', db=db))"
+```
+
+### NSE MCP (Market Data Protocol) Evaluation & Compliance
+
+- **Endpoint:** `https://mcp.nseindia.in/bhavcopy/cm/mcp`
+- **Architecture:** The National Stock Exchange of India publishes daily end-of-day settlement reports and Bhavcopy summaries.
+- **Access Restrictions:** Protected by Akamai CDN bot detection and WAF rules. In strict compliance with Antigravity policy, automated CAPTCHA or anti-bot challenge bypass is never performed.
+- **Terms of Use:** Exchange terms strictly prohibit automated scraping, commercial reuse, or live trade execution triggers without an official exchange vendor license.
+- **Adapter State:** Implemented in `backend/app/providers/nse_mcp_provider.py` as a read-only architectural adapter, **DISABLED BY DEFAULT** (`enabled: bool = False`). All live market data continues to stream through sanctioned broker APIs (Angel One SmartAPI).
+

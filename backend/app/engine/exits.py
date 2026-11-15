@@ -24,14 +24,14 @@ class ExitManager:
         current_active_stop: float,
         current_price: float,
         highest_price_since_entry: float,
-        current_atr: float,
-        current_sma50: float,
-        days_held: int,
+        current_atr: Optional[float] = None,
+        current_sma50: Optional[float] = None,
+        days_held: int = 0,
         has_taken_partial: bool = False,
     ) -> ExitEvaluation:
         r0 = entry_price - initial_stop
         if r0 <= 0:
-            r0 = current_atr
+            r0 = current_atr if (current_atr is not None and current_atr > 0) else (entry_price * 0.05)
 
         # 1. Hard Stop
         if current_price <= current_active_stop:
@@ -42,8 +42,8 @@ class ExitManager:
                 exit_qty_fraction=1.0,
             )
 
-        # 2. Trend Break: daily close < SMA50
-        if current_price < current_sma50:
+        # 2. Trend Break: daily close < SMA50 (only if verified SMA50 is available)
+        if current_sma50 is not None and current_sma50 > 0 and current_price < current_sma50:
             return ExitEvaluation(
                 action="SELL_ALL",
                 new_active_stop=current_active_stop,
@@ -73,13 +73,19 @@ class ExitManager:
 
         # 5. Breakeven + Chandelier Trail
         if highest_price_since_entry >= (entry_price + self.cfg.breakeven_at_R * r0):
-            chandelier_stop = highest_price_since_entry - (self.cfg.trail_atr_mult * current_atr)
-            new_trail_stop = max(initial_stop, entry_price, chandelier_stop)
+            if current_atr is not None and current_atr > 0:
+                chandelier_stop = highest_price_since_entry - (self.cfg.trail_atr_mult * current_atr)
+                new_trail_stop = max(initial_stop, entry_price, chandelier_stop)
+                reason = f"Trailing stop raised to {new_trail_stop:.2f} based on chandelier trail ({highest_price_since_entry:.2f} - 3*ATR)"
+            else:
+                new_trail_stop = max(initial_stop, entry_price)
+                reason = f"Trailing stop moved to breakeven {new_trail_stop:.2f} (ATR unavailable for chandelier)"
+
             if new_trail_stop > current_active_stop:
                 return ExitEvaluation(
                     action="TRAIL_UPDATE",
                     new_active_stop=round(new_trail_stop, 2),
-                    reason=f"Trailing stop raised to {new_trail_stop:.2f} based on chandelier trail ({highest_price_since_entry:.2f} - 3*ATR)",
+                    reason=reason,
                     exit_qty_fraction=0.0,
                 )
 

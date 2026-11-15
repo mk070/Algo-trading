@@ -1,10 +1,15 @@
 import datetime
+import logging
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 from app.db import get_db
+from app.engine.calendars import get_completed_sessions_held_count
 from app.engine.costs import CostModel
 from app.models import Fill, Journal, Position
 from app.providers.manager import provider_manager
@@ -34,9 +39,11 @@ class UpdatePositionRequest(BaseModel):
 class ClosePositionRequest(BaseModel):
     exit_price: float
     exit_date: Optional[str] = None
-    exit_reason: str
+    exit_reason: str = "MANUAL"
     qty: Optional[int] = None
     note: Optional[str] = None
+    action_type: Optional[str] = None  # "PARTIAL_TARGET" | "MANUAL_REDUCTION" | "FULL_EXIT" | None
+    idempotency_key: Optional[str] = None
 
 
 @router.get("/positions")
@@ -112,6 +119,11 @@ def create_position(req: CreatePositionRequest, db: Session = Depends(get_db)):
         entry_date=entry_d,
         entry_price=req.entry_price,
         qty=req.qty,
+        initial_qty=req.qty,
+        highest_price_since_entry=req.entry_price,
+        target_partial_completed=False,
+        target_partial_qty=0,
+        total_reduced_qty=0,
         initial_stop=req.initial_stop,
         active_stop=req.initial_stop,
         target1=req.target1,
@@ -128,6 +140,7 @@ def create_position(req: CreatePositionRequest, db: Session = Depends(get_db)):
         price=req.entry_price,
         qty=req.qty,
         fees_total=0.0,
+        fill_reason="ENTRY",
     )
     db.add(fill)
     db.commit()
@@ -140,7 +153,7 @@ def update_position(
     position_id: int, req: UpdatePositionRequest, db: Session = Depends(get_db)
 ):
     """Edits active stop loss or notes."""
-    pos = db.query(Position).filter(Position.id == position_id).first()
+    pos = db.query(Position).filter(Position.id == position_id).with_for_update().first()
     if not pos:
         raise HTTPException(status_code=404, detail="Position not found")
 
@@ -159,15 +172,82 @@ def update_position(
 def close_position(
     position_id: int, req: ClosePositionRequest, db: Session = Depends(get_db)
 ):
-    """Owner records exit -> closes position and creates Trade Journal row."""
-    pos = db.query(Position).filter(Position.id == position_id).first()
+    """Owner records exit -> supports atomic partial tranche reductions or full exits with Journal accounting."""
+    pos = db.query(Position).filter(Position.id == position_id).with_for_update().first()
     if not pos:
         raise HTTPException(status_code=404, detail="Position not found")
 
-    exit_d = datetime.date.fromisoformat(req.exit_date) if req.exit_date else datetime.date.today()
-    exit_qty = req.qty or pos.qty
+    # Idempotency protection: prevent duplicate processing on retries
+    if req.idempotency_key:
+        existing_fill = db.query(Fill).filter(Fill.idempotency_key == req.idempotency_key).first()
+        if existing_fill:
+            existing_j = (
+                db.query(Journal)
+                .filter(Journal.position_id == pos.id)
+                .order_by(Journal.id.desc())
+                .first()
+            )
+            return {
+                "status": "IDEMPOTENT_DUPLICATE",
+                "position_id": pos.id,
+                "remaining_qty": pos.qty,
+                "journal_id": getattr(existing_j, "id", None),
+                "action_type": existing_fill.fill_reason,
+                "message": f"Fill with idempotency key '{req.idempotency_key}' already processed.",
+            }
 
-    # Calculate P&L and R-multiple
+    if pos.status != "OPEN":
+        raise HTTPException(status_code=400, detail=f"Cannot exit position in status '{pos.status}'")
+
+    if req.exit_price <= 0:
+        raise HTTPException(status_code=400, detail="Exit price must be positive")
+
+    exit_qty = req.qty if req.qty is not None else pos.qty
+    if exit_qty <= 0:
+        raise HTTPException(status_code=400, detail="Exit quantity must be positive")
+
+    if exit_qty > pos.qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Exit quantity {exit_qty} exceeds remaining position quantity {pos.qty}",
+        )
+
+    # Resolve action explicitly or validate unambiguous reduction
+    if req.action_type is not None:
+        if req.action_type not in ("PARTIAL_TARGET", "MANUAL_REDUCTION", "FULL_EXIT"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid action_type '{req.action_type}'. Must be PARTIAL_TARGET, MANUAL_REDUCTION, or FULL_EXIT.",
+            )
+        if req.action_type == "FULL_EXIT" and exit_qty < pos.qty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot request FULL_EXIT with partial quantity ({exit_qty} < {pos.qty}).",
+            )
+        if req.action_type in ("PARTIAL_TARGET", "MANUAL_REDUCTION") and exit_qty == pos.qty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot request partial action '{req.action_type}' when exiting full remaining quantity {pos.qty}.",
+            )
+        resolved_action = req.action_type
+    else:
+        # Backward compatibility with existing frontend calls: deduce without guessing
+        if exit_qty == pos.qty:
+            resolved_action = "FULL_EXIT"
+        else:
+            if req.exit_reason in ("Target 1 Reached (2R)", "TARGET_1", "PARTIAL_PROFIT"):
+                resolved_action = "PARTIAL_TARGET"
+            elif req.exit_reason in ("Manual Discretionary Exit", "MANUAL_REDUCTION", "TRIM"):
+                resolved_action = "MANUAL_REDUCTION"
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ambiguous exit request: partial quantity {exit_qty} specified for exit reason '{req.exit_reason}' without explicit action_type.",
+                )
+
+    exit_d = datetime.date.fromisoformat(req.exit_date) if req.exit_date else datetime.date.today()
+
+    # Calculate tranche-specific P&L and R-multiple
     cost_model = CostModel(pos.market)
     r_initial = pos.entry_price - pos.initial_stop
     pnl_per_share = req.exit_price - pos.entry_price
@@ -179,47 +259,94 @@ def close_position(
     net_pnl = gross_pnl - cost_breakdown.total_cost
     pnl_pct = (pnl_per_share / pos.entry_price * 100.0) if pos.entry_price > 0 else 0.0
     r_multiple = (net_pnl / (r_initial * exit_qty)) if r_initial > 0 else 0.0
-    holding_days = max(1, (exit_d - pos.entry_date).days)
 
-    # Save Fill
-    fill = Fill(
-        position_id=pos.id,
-        side="SELL",
-        date=exit_d,
-        price=req.exit_price,
-        qty=exit_qty,
-        fees_total=cost_breakdown.total_cost,
-    )
-    db.add(fill)
+    # Holding sessions count
+    exit_dt_approx = datetime.datetime.combine(exit_d, datetime.time(16, 0), tzinfo=datetime.timezone.utc)
+    holding_sessions = get_completed_sessions_held_count(pos.market, pos.entry_date, exit_dt_approx)
 
-    # Save Journal
-    journal_entry = Journal(
-        position_id=pos.id,
-        symbol=pos.symbol,
-        market=pos.market,
-        entry_date=pos.entry_date,
-        entry_price=pos.entry_price,
-        exit_date=exit_d,
-        exit_price=req.exit_price,
-        qty=exit_qty,
-        exit_reason=req.exit_reason,
-        pnl_amount=round(net_pnl, 2),
-        pnl_pct=round(pnl_pct, 2),
-        r_multiple=round(r_multiple, 2),
-        holding_days=holding_days,
-        fees_total=round(cost_breakdown.total_cost, 2),
-        note=req.note,
-    )
-    db.add(journal_entry)
+    # Atomic database transaction
+    try:
+        pos.qty -= exit_qty
+        pos.total_reduced_qty = (pos.total_reduced_qty or 0) + exit_qty
 
-    pos.status = "CLOSED"
-    db.commit()
+        if resolved_action == "PARTIAL_TARGET":
+            pos.target_partial_completed = True
+            pos.target_partial_qty = (pos.target_partial_qty or 0) + exit_qty
+
+        is_fully_closed = (pos.qty == 0)
+        if is_fully_closed:
+            pos.status = "CLOSED"
+
+        # 1. Save Fill
+        fill = Fill(
+            position_id=pos.id,
+            side="SELL",
+            date=exit_d,
+            price=req.exit_price,
+            qty=exit_qty,
+            fees_total=cost_breakdown.total_cost,
+            fill_reason=resolved_action,
+            idempotency_key=req.idempotency_key,
+        )
+        db.add(fill)
+
+        # 2. Save Journal Row for this tranche
+        journal_entry = Journal(
+            position_id=pos.id,
+            symbol=pos.symbol,
+            market=pos.market,
+            entry_date=pos.entry_date,
+            entry_price=pos.entry_price,
+            exit_date=exit_d,
+            exit_price=req.exit_price,
+            qty=exit_qty,
+            exit_reason=req.exit_reason,
+            pnl_amount=round(net_pnl, 2),
+            pnl_pct=round(pnl_pct, 2),
+            r_multiple=round(r_multiple, 2),
+            holding_days=holding_sessions,
+            fees_total=round(cost_breakdown.total_cost, 2),
+            note=req.note,
+        )
+        db.add(journal_entry)
+
+        db.commit()
+    except IntegrityError as ie:
+        db.rollback()
+        if req.idempotency_key:
+            existing_fill = db.query(Fill).filter(Fill.idempotency_key == req.idempotency_key).first()
+            if existing_fill:
+                existing_j = (
+                    db.query(Journal)
+                    .filter(Journal.position_id == pos.id)
+                    .order_by(Journal.id.desc())
+                    .first()
+                )
+                return {
+                    "status": "IDEMPOTENT_DUPLICATE",
+                    "position_id": pos.id,
+                    "remaining_qty": pos.qty,
+                    "journal_id": getattr(existing_j, "id", None),
+                    "action_type": existing_fill.fill_reason,
+                    "message": f"Fill with idempotency key '{req.idempotency_key}' already processed.",
+                }
+        logger.error(f"Integrity error during position exit transaction: {ie}")
+        raise HTTPException(status_code=400, detail=f"Database integrity constraint violated: {ie}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error during position exit transaction: {e}")
+        raise HTTPException(status_code=500, detail=f"Database transaction failed during position exit: {e}")
 
     return {
-        "status": "CLOSED",
+        "status": "CLOSED" if is_fully_closed else "PARTIALLY_CLOSED",
+        "position_id": pos.id,
+        "remaining_qty": pos.qty,
         "journal_id": journal_entry.id,
         "pnl_amount": round(net_pnl, 2),
         "r_multiple": round(r_multiple, 2),
+        "action_type": resolved_action,
+        "target_partial_completed": pos.target_partial_completed,
+        "total_reduced_qty": pos.total_reduced_qty,
     }
 
 

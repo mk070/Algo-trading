@@ -20,14 +20,16 @@ from app.notify.telegram import telegram_notifier
 from app.providers.base import ProviderHealth, Quote, QuoteFreshness
 from app.providers.manager import provider_manager
 from app.settings import settings
+from app.cache import shared_cache, cached_json_response
+from app.telemetry import tracker, current_tag_ctx
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/health")
-def get_health(db: Session = Depends(get_db)):
-    """Health check: provider status, last job runs, database connectivity."""
+def get_health(request: Request, db: Session = Depends(get_db)):
+    """Health check: provider status, last job runs, database connectivity (with 60s job cache)."""
     providers = {}
     try:
         raw_providers = provider_manager.check_health()
@@ -41,27 +43,34 @@ def get_health(db: Session = Depends(get_db)):
         logger.warning(f"Failed to check db health: {e}")
         db_health = {"status": "DEGRADED", "error": str(e)}
 
-    try:
-        last_jobs = (
-            db.query(JobRun)
-            .order_by(JobRun.started_at.desc())
-            .limit(10)
-            .all()
-        )
-    except Exception as e:
-        logger.warning(f"Failed to fetch job runs in health check: {e}")
-        last_jobs = []
+    # Cache job summaries for 60 seconds to avoid querying JobRun table on every probe
+    def _fetch_last_jobs():
+        try:
+            current_tag_ctx.set("health:job_runs")
+            last_jobs = (
+                db.query(JobRun.job, JobRun.status, JobRun.started_at, JobRun.finished_at, JobRun.detail)
+                .order_by(JobRun.started_at.desc())
+                .limit(10)
+                .all()
+            )
+            return [
+                {
+                    "job": j[0],
+                    "status": j[1],
+                    "started_at": j[2].isoformat() if j[2] else None,
+                    "finished_at": j[3].isoformat() if j[3] else None,
+                    "detail": j[4],
+                }
+                for j in last_jobs
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to fetch job runs in health check: {e}")
+            return []
 
-    job_summaries = [
-        {
-            "job": j.job,
-            "status": j.status,
-            "started_at": j.started_at.isoformat() if j.started_at else None,
-            "finished_at": j.finished_at.isoformat() if j.finished_at else None,
-            "detail": j.detail,
-        }
-        for j in last_jobs
-    ]
+    job_summaries, _, _, _ = shared_cache.get_or_compute("health_jobs_summary", _fetch_last_jobs, ttl_sec=60.0)
+
+    # Attach egress quota warning status
+    egress_summary = tracker.get_summary()
 
     return {
         "status": "HEALTHY" if db_health.get("status") == "HEALTHY" else "DEGRADED",
@@ -69,6 +78,8 @@ def get_health(db: Session = Depends(get_db)):
         "database": db_health,
         "providers": providers,
         "last_job_runs": job_summaries,
+        "egress_warning_level": egress_summary["warning_level"],
+        "egress_quota_consumed_pct": egress_summary["quota_consumed_pct"],
     }
 
 
@@ -76,6 +87,19 @@ def get_health(db: Session = Depends(get_db)):
 def get_database_health():
     """Detailed database health monitoring endpoint for Neon PostgreSQL."""
     return check_db_health()
+
+
+@router.get("/system/egress")
+def get_system_egress():
+    """Returns real-time SQL/HTTP egress tracking, quota metrics, and top 10 endpoints by bytes."""
+    summary = tracker.get_summary()
+    top_sql = summary.get("top_10_by_sql_bytes", [])
+    top_route = top_sql[0]["route"] if top_sql else "None"
+    logger.info(
+        f"Egress Audit: {summary['total_estimated_sql_bytes']} bytes SQL, "
+        f"{summary['total_http_bytes_sent']} bytes HTTP. Top route: {top_route}"
+    )
+    return summary
 
 
 @router.get("/neon/services")
@@ -121,15 +145,27 @@ def get_neon_services():
 
 
 @router.get("/regime")
-def get_regime(market: str = Query("IN", pattern="^(IN|US)$"), db: Session = Depends(get_db)):
-    """Returns current market regime status and index indicators."""
-    mkt_cfg = settings.get_market_config(market)
-    today = datetime.date.today()
-    start_date = today - datetime.timedelta(days=400)
-    bars = provider_manager.get_daily_bars([mkt_cfg.index_symbol], start_date, today, market=market, db=db)
-    index_df = bars.get(mkt_cfg.index_symbol)
-    res = evaluate_market_regime(index_df, market=market)
-    return res.model_dump()
+def get_regime(
+    request: Request,
+    market: str = Query("IN", pattern="^(IN|US)$"),
+    db: Session = Depends(get_db),
+):
+    """Returns current market regime status and index indicators (with 60s cache and ETag)."""
+    market = market.upper()
+    if_none_match = request.headers.get("if-none-match")
+
+    def _compute_regime():
+        current_tag_ctx.set(f"regime:{market}")
+        mkt_cfg = settings.get_market_config(market)
+        today = datetime.date.today()
+        start_date = today - datetime.timedelta(days=400)
+        bars = provider_manager.get_daily_bars([mkt_cfg.index_symbol], start_date, today, market=market, db=db)
+        index_df = bars.get(mkt_cfg.index_symbol)
+        res = evaluate_market_regime(index_df, market=market)
+        return res.model_dump()
+
+    data, etag, is_stale, _ = shared_cache.get_or_compute(f"regime:{market}", _compute_regime, ttl_sec=60.0)
+    return cached_json_response(data, etag=etag, if_none_match=if_none_match, max_age_sec=60, is_stale=is_stale)
 
 
 @router.get("/quotes")
@@ -639,180 +675,186 @@ def delete_custom_alert(
 
 @router.get("/market/pulse")
 def get_market_pulse(
+    request: Request,
     market: str = Query("IN", pattern="^(IN|US)$"),
     db: Session = Depends(get_db),
 ):
-    """Computes real-time/EOD Market Breadth and Sector Heatmap from local daily bars."""
+    """Computes real-time/EOD Market Breadth and Sector Heatmap (cached 60s with ETag)."""
     market = market.upper()
-    mkt_cfg = settings.get_market_config(market)
-    universe_stocks = universe_manager.load_universe(market)
-    stock_map = {s.symbol: s for s in universe_stocks}
-    symbols = list(stock_map.keys())
+    if_none_match = request.headers.get("if-none-match")
 
-    # Get index regime
-    today = datetime.date.today()
-    start_date = today - datetime.timedelta(days=400)
-    index_bars = provider_manager.get_daily_bars([mkt_cfg.index_symbol], start_date, today, market=market, db=db)
-    index_df = index_bars.get(mkt_cfg.index_symbol)
-    regime = evaluate_market_regime(index_df, market=market)
+    def _compute_pulse():
+        current_tag_ctx.set(f"pulse:{market}")
+        mkt_cfg = settings.get_market_config(market)
+        universe_stocks = universe_manager.load_universe(market)
+        stock_map = {s.symbol: s for s in universe_stocks}
+        symbols = list(stock_map.keys())
 
-    if not symbols:
+        # Get index regime
+        today = datetime.date.today()
+        start_date = today - datetime.timedelta(days=400)
+        index_bars = provider_manager.get_daily_bars([mkt_cfg.index_symbol], start_date, today, market=market, db=db)
+        index_df = index_bars.get(mkt_cfg.index_symbol)
+        regime = evaluate_market_regime(index_df, market=market)
+
+        if not symbols:
+            return {
+                "market": market,
+                "regime": regime.model_dump(),
+                "breadth": {
+                    "total_tracked": 0,
+                    "pct_above_50_sma": 0.0,
+                    "pct_above_200_sma": 0.0,
+                    "advancers": 0,
+                    "decliners": 0,
+                    "unchanged": 0,
+                    "new_52w_highs": 0,
+                    "new_52w_lows": 0,
+                },
+                "sectors": [],
+            }
+
+        # Fetch ONLY needed columns (symbol, date, close) to minimize network transfer
+        cutoff_date = today - datetime.timedelta(days=380)
+        bars_rows = (
+            db.query(DailyBar.symbol, DailyBar.date, DailyBar.close)
+            .filter(DailyBar.symbol.in_(symbols), DailyBar.date >= cutoff_date)
+            .order_by(DailyBar.symbol, DailyBar.date.asc())
+            .all()
+        )
+
+        by_symbol: Dict[str, list] = {}
+        for b_sym, b_dt, b_close in bars_rows:
+            by_symbol.setdefault(b_sym, []).append(b_close)
+
+        total_tracked = 0
+        count_above_50 = 0
+        count_above_200 = 0
+        advancers = 0
+        decliners = 0
+        unchanged = 0
+        highs_52w = 0
+        lows_52w = 0
+
+        sector_stats: Dict[str, Dict[str, Any]] = {}
+
+        for sym, s_obj in stock_map.items():
+            closes = by_symbol.get(sym, [])
+            if len(closes) < 5:
+                continue
+
+            total_tracked += 1
+            c0 = closes[-1]
+
+            # 1D Return
+            c1 = closes[-2] if len(closes) >= 2 else c0
+            ret_1d = ((c0 - c1) / c1 * 100.0) if c1 > 0 else 0.0
+            if ret_1d > 0.05:
+                advancers += 1
+            elif ret_1d < -0.05:
+                decliners += 1
+            else:
+                unchanged += 1
+
+            # 1W Return (approx 5 bars)
+            c5 = closes[-5] if len(closes) >= 5 else closes[0]
+            ret_1w = ((c0 - c5) / c5 * 100.0) if c5 > 0 else 0.0
+
+            # 1M Return (approx 21 bars)
+            c21 = closes[-21] if len(closes) >= 21 else closes[0]
+            ret_1m = ((c0 - c21) / c21 * 100.0) if c21 > 0 else 0.0
+
+            # SMA 50
+            above_50 = False
+            if len(closes) >= 50:
+                sma50 = sum(closes[-50:]) / 50.0
+                if c0 > sma50:
+                    count_above_50 += 1
+                    above_50 = True
+            elif closes:
+                if c0 > (sum(closes) / len(closes)):
+                    count_above_50 += 1
+                    above_50 = True
+
+            # SMA 200
+            if len(closes) >= 200:
+                sma200 = sum(closes[-200:]) / 200.0
+                if c0 > sma200:
+                    count_above_200 += 1
+            elif closes:
+                if c0 > (sum(closes) / len(closes)):
+                    count_above_200 += 1
+
+            # 52w High / Low (within 2%)
+            max_c = max(closes)
+            min_c = min(closes)
+            if c0 >= (max_c * 0.98):
+                highs_52w += 1
+            if c0 <= (min_c * 1.02):
+                lows_52w += 1
+
+            # Sector grouping
+            sec = s_obj.sector or "General"
+            if sec not in sector_stats:
+                sector_stats[sec] = {
+                    "sector": sec,
+                    "stocks": [],
+                    "returns_1d": [],
+                    "returns_1w": [],
+                    "returns_1m": [],
+                    "above_50_count": 0,
+                }
+            sec_d = sector_stats[sec]
+            sec_d["stocks"].append({"symbol": sym, "return_1d": round(ret_1d, 2), "close": c0})
+            sec_d["returns_1d"].append(ret_1d)
+            sec_d["returns_1w"].append(ret_1w)
+            sec_d["returns_1m"].append(ret_1m)
+            if above_50:
+                sec_d["above_50_count"] += 1
+
+        sectors_list = []
+        for sec, d in sector_stats.items():
+            n = len(d["stocks"])
+            avg_1d = sum(d["returns_1d"]) / n if n > 0 else 0.0
+            avg_1w = sum(d["returns_1w"]) / n if n > 0 else 0.0
+            avg_1m = sum(d["returns_1m"]) / n if n > 0 else 0.0
+            pct_50 = (d["above_50_count"] / n * 100.0) if n > 0 else 0.0
+            sorted_stocks = sorted(d["stocks"], key=lambda x: x["return_1d"], reverse=True)
+            leader = sorted_stocks[0]["symbol"] if sorted_stocks else None
+
+            sectors_list.append({
+                "sector": sec,
+                "stock_count": n,
+                "return_1d": round(avg_1d, 2),
+                "return_1w": round(avg_1w, 2),
+                "return_1m": round(avg_1m, 2),
+                "pct_above_50": round(pct_50, 1),
+                "leader": leader,
+            })
+
+        sectors_list.sort(key=lambda s: s["return_1d"], reverse=True)
+
+        pct_above_50 = round((count_above_50 / total_tracked * 100.0), 1) if total_tracked > 0 else 0.0
+        pct_above_200 = round((count_above_200 / total_tracked * 100.0), 1) if total_tracked > 0 else 0.0
+
         return {
             "market": market,
             "regime": regime.model_dump(),
             "breadth": {
-                "total_tracked": 0,
-                "pct_above_50_sma": 0.0,
-                "pct_above_200_sma": 0.0,
-                "advancers": 0,
-                "decliners": 0,
-                "unchanged": 0,
-                "new_52w_highs": 0,
-                "new_52w_lows": 0,
+                "total_tracked": total_tracked,
+                "pct_above_50_sma": pct_above_50,
+                "pct_above_200_sma": pct_above_200,
+                "advancers": advancers,
+                "decliners": decliners,
+                "unchanged": unchanged,
+                "new_52w_highs": highs_52w,
+                "new_52w_lows": lows_52w,
             },
-            "sectors": [],
+            "sectors": sectors_list,
         }
 
-    # Fetch daily bars from DB for universe
-    cutoff_date = today - datetime.timedelta(days=380)
-    bars_rows = (
-        db.query(DailyBar)
-        .filter(DailyBar.symbol.in_(symbols), DailyBar.date >= cutoff_date)
-        .order_by(DailyBar.symbol, DailyBar.date.asc())
-        .all()
-    )
-
-    by_symbol: Dict[str, List[DailyBar]] = {}
-    for b in bars_rows:
-        by_symbol.setdefault(b.symbol, []).append(b)
-
-    total_tracked = 0
-    count_above_50 = 0
-    count_above_200 = 0
-    advancers = 0
-    decliners = 0
-    unchanged = 0
-    highs_52w = 0
-    lows_52w = 0
-
-    sector_stats: Dict[str, Dict[str, Any]] = {}
-
-    for sym, s_obj in stock_map.items():
-        s_bars = by_symbol.get(sym, [])
-        if len(s_bars) < 5:
-            continue
-
-        total_tracked += 1
-        last_b = s_bars[-1]
-        c0 = last_b.close
-
-        # 1D Return
-        c1 = s_bars[-2].close if len(s_bars) >= 2 else c0
-        ret_1d = ((c0 - c1) / c1 * 100.0) if c1 > 0 else 0.0
-        if ret_1d > 0.05:
-            advancers += 1
-        elif ret_1d < -0.05:
-            decliners += 1
-        else:
-            unchanged += 1
-
-        # 1W Return (approx 5 bars)
-        c5 = s_bars[-5].close if len(s_bars) >= 5 else s_bars[0].close
-        ret_1w = ((c0 - c5) / c5 * 100.0) if c5 > 0 else 0.0
-
-        # 1M Return (approx 21 bars)
-        c21 = s_bars[-21].close if len(s_bars) >= 21 else s_bars[0].close
-        ret_1m = ((c0 - c21) / c21 * 100.0) if c21 > 0 else 0.0
-
-        # SMA 50
-        closes = [b.close for b in s_bars]
-        above_50 = False
-        if len(closes) >= 50:
-            sma50 = sum(closes[-50:]) / 50.0
-            if c0 > sma50:
-                count_above_50 += 1
-                above_50 = True
-        elif closes:
-            if c0 > (sum(closes) / len(closes)):
-                count_above_50 += 1
-                above_50 = True
-
-        # SMA 200
-        if len(closes) >= 200:
-            sma200 = sum(closes[-200:]) / 200.0
-            if c0 > sma200:
-                count_above_200 += 1
-        elif closes:
-            if c0 > (sum(closes) / len(closes)):
-                count_above_200 += 1
-
-        # 52w High / Low (within 2%)
-        max_c = max(closes)
-        min_c = min(closes)
-        if c0 >= (max_c * 0.98):
-            highs_52w += 1
-        if c0 <= (min_c * 1.02):
-            lows_52w += 1
-
-        # Sector grouping
-        sec = s_obj.sector or "General"
-        if sec not in sector_stats:
-            sector_stats[sec] = {
-                "sector": sec,
-                "stocks": [],
-                "returns_1d": [],
-                "returns_1w": [],
-                "returns_1m": [],
-                "above_50_count": 0,
-            }
-        sec_d = sector_stats[sec]
-        sec_d["stocks"].append({"symbol": sym, "return_1d": round(ret_1d, 2), "close": c0})
-        sec_d["returns_1d"].append(ret_1d)
-        sec_d["returns_1w"].append(ret_1w)
-        sec_d["returns_1m"].append(ret_1m)
-        if above_50:
-            sec_d["above_50_count"] += 1
-
-    sectors_list = []
-    for sec, d in sector_stats.items():
-        n = len(d["stocks"])
-        avg_1d = sum(d["returns_1d"]) / n if n > 0 else 0.0
-        avg_1w = sum(d["returns_1w"]) / n if n > 0 else 0.0
-        avg_1m = sum(d["returns_1m"]) / n if n > 0 else 0.0
-        pct_50 = (d["above_50_count"] / n * 100.0) if n > 0 else 0.0
-        sorted_stocks = sorted(d["stocks"], key=lambda x: x["return_1d"], reverse=True)
-        leader = sorted_stocks[0]["symbol"] if sorted_stocks else None
-
-        sectors_list.append({
-            "sector": sec,
-            "stock_count": n,
-            "return_1d": round(avg_1d, 2),
-            "return_1w": round(avg_1w, 2),
-            "return_1m": round(avg_1m, 2),
-            "pct_above_50": round(pct_50, 1),
-            "leader": leader,
-        })
-
-    sectors_list.sort(key=lambda s: s["return_1d"], reverse=True)
-
-    pct_above_50 = round((count_above_50 / total_tracked * 100.0), 1) if total_tracked > 0 else 0.0
-    pct_above_200 = round((count_above_200 / total_tracked * 100.0), 1) if total_tracked > 0 else 0.0
-
-    return {
-        "market": market,
-        "regime": regime.model_dump(),
-        "breadth": {
-            "total_tracked": total_tracked,
-            "pct_above_50_sma": pct_above_50,
-            "pct_above_200_sma": pct_above_200,
-            "advancers": advancers,
-            "decliners": decliners,
-            "unchanged": unchanged,
-            "new_52w_highs": highs_52w,
-            "new_52w_lows": lows_52w,
-        },
-        "sectors": sectors_list,
-    }
+    data, etag, is_stale, _ = shared_cache.get_or_compute(f"pulse:{market}", _compute_pulse, ttl_sec=60.0)
+    return cached_json_response(data, etag=etag, if_none_match=if_none_match, max_age_sec=60, is_stale=is_stale)
 
 
 @router.get("/search")
@@ -1565,26 +1607,27 @@ def get_fundamental_lights(symbol: str, market: str = Query("IN", pattern="^(IN|
 
 @router.get("/research/lead-time")
 def get_lead_time_kpi(market: str = Query("IN", pattern="^(IN|US)$"), sessions: int = Query(60, ge=20, le=250), db: Session = Depends(get_db)):
-    """Reconstruct observed breakout lead time from stored bars and audit history."""
+    """Reconstruct observed breakout lead time from stored bars and audit history (uses local parquet when configured)."""
     import pandas as pd
     from app.engine.research_metrics import lead_time_summary
     from app.models import DecisionAudit, DecisionStageResult
+    from app.engine.research_loader import load_research_bars
 
     from app.engine.universe import universe_manager
 
     market_symbols = [stock.symbol for stock in universe_manager.load_universe(market)]
-    dates_query = db.query(DailyBar.date).filter(DailyBar.symbol.in_(market_symbols)) if market_symbols else db.query(DailyBar.date).filter(DailyBar.symbol == "")
-    dates = [row[0] for row in dates_query.distinct().order_by(DailyBar.date.desc()).limit(sessions + 60).all()]
-    dates = sorted(dates)
-    if len(dates) < 56:
-        return {"market": market, "coverage": "INSUFFICIENT", "coverage_note": "Not enough stored sessions to identify 55-day breakouts.", "sessions_available": len(dates), **lead_time_summary([], [], [])}
+    bars_dict = load_research_bars(market_symbols, db=db)
+    if not bars_dict:
+        return {"market": market, "coverage": "INSUFFICIENT", "coverage_note": "No bars available for universe.", "sessions_available": 0, **lead_time_summary([], [], [])}
+
+    all_dates = sorted(list({d for df in bars_dict.values() for d in df["date"]}))
+    if len(all_dates) < 56:
+        return {"market": market, "coverage": "INSUFFICIENT", "coverage_note": "Not enough stored sessions to identify 55-day breakouts.", "sessions_available": len(all_dates), **lead_time_summary([], [], [])}
+
+    dates = all_dates[-(sessions + 60):]
     start_index = max(0, len(dates) - sessions)
-    warmup_index = max(0, start_index - 55)
     start = dates[start_index]
-    rows = db.query(DailyBar).filter(DailyBar.symbol.in_(market_symbols), DailyBar.date >= dates[warmup_index], DailyBar.date <= dates[-1]).all() if market_symbols else []
-    bars_by_symbol: Dict[str, list] = {}
-    for bar in rows:
-        bars_by_symbol.setdefault(bar.symbol, []).append(bar)
+
     audit_rows = db.query(DecisionAudit.symbol, DecisionAudit.asof_date, DecisionAudit.id).filter(DecisionAudit.market == market, DecisionAudit.symbol.in_(market_symbols), DecisionAudit.asof_date >= start).all() if market_symbols else []
     audit_ids = [row[2] for row in audit_rows]
     stage_rows = db.query(DecisionStageResult).filter(DecisionStageResult.audit_id.in_(audit_ids)).all() if audit_ids else []
@@ -1599,8 +1642,7 @@ def get_lead_time_kpi(market: str = Query("IN", pattern="^(IN|US)$"), sessions: 
     breakout_dates: list[str] = []
     first_flags: list[Optional[str]] = []
     event_symbols: list[str] = []
-    for symbol, bars in bars_by_symbol.items():
-        frame = pd.DataFrame([{"date": b.date, "high": b.high, "close": b.close} for b in bars]).sort_values("date")
+    for symbol, frame in bars_dict.items():
         prior_high = frame["high"].shift(1).rolling(55, min_periods=55).max()
         crossed = (frame["close"] >= prior_high) & prior_high.notna()
         event_mask = crossed & ~crossed.shift(1, fill_value=False)
@@ -1613,7 +1655,7 @@ def get_lead_time_kpi(market: str = Query("IN", pattern="^(IN|US)$"), sessions: 
             event_symbols.append(symbol)
     summary = lead_time_summary([date.isoformat() for date in dates], breakout_dates, first_flags)
     return {"market": market, "lookback_sessions": sessions, "coverage": "OBSERVED_AUDIT_HISTORY",
-            "coverage_note": "Uses stored DecisionAudit stage passes and stored daily bars. Scan/audit retention may be incomplete; never-flagged includes events with no retained qualifying audit.",
+            "coverage_note": "Uses stored DecisionAudit stage passes and local/stored daily bars. Scan/audit retention may be incomplete; never-flagged includes events with no retained qualifying audit.",
             "breakouts": [{"symbol": symbol, "date": date, "first_flag_date": flag,
                            "lead_sessions": (dates.index(datetime.date.fromisoformat(date)) - dates.index(datetime.date.fromisoformat(flag))) if flag and datetime.date.fromisoformat(flag) in dates and datetime.date.fromisoformat(date) in dates else None}
                           for symbol, date, flag in zip(event_symbols, breakout_dates, first_flags)], **summary}
@@ -1621,27 +1663,24 @@ def get_lead_time_kpi(market: str = Query("IN", pattern="^(IN|US)$"), sessions: 
 
 @router.get("/research/pivot-impact")
 def get_pivot_impact(market: str = Query("IN", pattern="^(IN|US)$"), sessions: int = Query(60, ge=20, le=120), db: Session = Depends(get_db)):
-    """Compare the current pivot policy with a signal-day-excluded variant on identical stored data."""
+    """Compare the current pivot policy with a signal-day-excluded variant on identical stored data (uses local parquet when configured)."""
     from app.backtest.simulator import BacktestSimulator
     from app.engine.indicators import add_all_indicators
     from app.engine.setups import SetupEngine
     from app.engine.universe import universe_manager
+    from app.engine.research_loader import load_research_bars
 
     symbols = [stock.symbol for stock in universe_manager.load_universe(market)][:30]
-    if not symbols:
-        symbols = [row[0] for row in db.query(DailyBar.symbol).distinct().limit(30).all()]
-    dates = sorted(row[0] for row in db.query(DailyBar.date).filter(DailyBar.symbol.in_(symbols)).distinct().all())
-    if len(dates) < sessions:
-        return {"status": "INSUFFICIENT_DATA", "sessions_requested": sessions, "sessions_available": len(dates), "reason": "Stored bars do not cover the requested comparison window."}
-    start_date = dates[-sessions]
-    end_date = dates[-1]
-    warmup_index = max(0, len(dates) - sessions - 220)
-    warmup_start = dates[warmup_index]
-    rows = db.query(DailyBar).filter(DailyBar.symbol.in_(symbols), DailyBar.date >= warmup_start, DailyBar.date <= end_date).all()
-    grouped: Dict[str, list] = {}
-    for row in rows:
-        grouped.setdefault(row.symbol, []).append({"date": row.date, "open": row.open, "high": row.high, "low": row.low, "close": row.close, "adj_close": row.adj_close, "volume": row.volume})
-    enriched = {symbol: add_all_indicators(pd.DataFrame(items).sort_values("date")) for symbol, items in grouped.items() if len(items) >= 55}
+    bars_dict = load_research_bars(symbols, db=db)
+    if not bars_dict:
+        return {"status": "INSUFFICIENT_DATA", "sessions_requested": sessions, "sessions_available": 0, "reason": "No bars available for comparison."}
+
+    all_dates = sorted(list({d for df in bars_dict.values() for d in df["date"]}))
+    if len(all_dates) < sessions:
+        return {"status": "INSUFFICIENT_DATA", "sessions_requested": sessions, "sessions_available": len(all_dates), "reason": "Stored bars do not cover the requested comparison window."}
+    start_date = all_dates[-sessions]
+
+    enriched = {symbol: add_all_indicators(df.copy().sort_values("date")) for symbol, df in bars_dict.items() if len(df) >= 55}
     count_results = {}
     backtest_results = {}
     for exclude_signal_day in (False, True):

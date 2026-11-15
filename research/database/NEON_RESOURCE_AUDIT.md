@@ -14,7 +14,7 @@
 The database is currently **OFFLINE / LOCKED** with HTTP status **402 Payment Required** (`NeonDbError: Your account or project has exceeded the quota. Upgrade your plan to increase limits.`). Direct client connections via SQLAlchemy and the Neon Management API fail with this error.
 
 The quota breach was caused primarily by **network egress exhaustion** and **compute misconfiguration**, not database storage:
-1. **Network Transfer (Public Egress)**: Consumed **6.31 GB** (6,313,725,087 bytes) against the monthly Free tier limit of **5.00 GB** (**126.3% of quota**).
+1. **Network Transfer (Public Egress)**: Consumed **6.31 GB** (6,313,725,087 bytes) in approximately 8 days against the monthly Free tier limit of **5.00 GB** (**126.3% of quota**).
 2. **Compute Auto-Suspend Disabled**: The Neon endpoint setting `suspend_timeout_seconds` was configured to `0` (never scale down to zero). Active compute accumulated **92.96 hours** (334,648 seconds) and **25.94 CU-hours** in just 8 days of operation (Nov 1 to Nov 9).
 3. **Continuous Off-Market Polling**: Background scheduler jobs (`live_monitor_IN`, `live_monitor_US`) executed database queries and committed execution records to `job_runs` every 60 seconds (previously 30s) 24/7, even during closed market hours, weekends, and holidays.
 4. **Unbounded Audit & News Ingestion Growth**: Ingestion pipelines continuously appended unpruned records to `decision_stage_results` (16,317 rows), `news_events` (5,200 rows with raw JSON), and `decision_audits` (2,331 rows), increasing backup snapshot size from **9.63 MB to 28.41 MB in 3 days**.
@@ -22,59 +22,84 @@ The quota breach was caused primarily by **network egress exhaustion** and **com
 
 ---
 
-## 1. Measured Neon Resource Consumption
+## 1. Measured Neon Resource Consumption & Extrapolations
 
 Data extracted directly from the Neon Cloud Control Plane API for project `crimson-mountain-88821720` (branch `br-calm-lab-a1yqdtpl`):
 
-| Resource Metric | Measured Value | Neon Free Quota | % of Quota | Status |
-|---|---|---|---|---|
-| **Public Data Egress** | **6.31 GB** (6,313,725,087 bytes) | 5.00 GB / month | **126.3%** | 🔴 **EXCEEDED (Breached)** |
-| **Compute Active Time** | **92.96 hours** (334,648 s) | Dynamic | N/A | ⚠️ **Excessive** |
-| **Compute Consumption** | **25.94 CU-hours** (93,383 s) | 100 CU-hours / month | 25.9% (8 days) | 🟡 **Burn Rate High** |
-| **Branch Logical Storage** | **191.65 MB** (200,957,952 bytes) | 1.00 GB (1,024 MB) | 18.7% | 🟢 **Within Limits** |
-| **Endpoint Suspend Timeout** | **`0 seconds`** (Auto-suspend disabled) | Recommended: 300s | N/A | 🔴 **Misconfigured** |
-| **Endpoint Compute Sizing** | Min: 0.25 CU, Max: 2.0 CU | 0.25 CU default | N/A | 🟢 Scaled appropriately |
-| **Endpoint State** | `suspended` (since 2026-11-09T08:49:47Z) | `ready` / `idle` | N/A | 🔴 **Blocked by Quota** |
+| Resource Metric | Measured Value (8 Days) | 30-Day Extrapolation (At Same Rate) | Neon Free Quota | % of Quota (Measured) | Status |
+|---|---|---|---|---|---|
+| **Public Data Egress** | **6.31 GB** (6,313,725,087 bytes) | **~23.7 GB** | 5.00 GB / month | **126.3%** | 🔴 **EXCEEDED (Breached)** |
+| **Compute Active Time** | **92.96 hours** (334,648 s) | **~348.6 hours** | Dynamic | N/A | ⚠️ **Excessive** |
+| **Compute Consumption** | **25.94 CU-hours** (93,383 s) | **~97.3 CU-hours** | 100 CU-hours / month | 25.9% | 🟡 **Burn Rate High** |
+| **Branch Logical Storage** | **191.65 MB** (200,957,952 bytes) | **~720 MB** (without pruning) | 1.00 GB (1,024 MB) | 18.7% | 🟢 **Within Limits** |
+| **Endpoint Suspend Timeout** | **`0 seconds`** (Auto-suspend disabled) | N/A | Recommended: 300s | N/A | 🔴 **Misconfigured** |
+| **Endpoint Compute Sizing** | Min: 0.25 CU, Max: 2.0 CU | N/A | 0.25 CU default | N/A | 🟢 Scaled appropriately |
+| **Endpoint State** | `suspended` (since 2026-11-09T08:49:47Z) | N/A | `ready` / `idle` | N/A | 🔴 **Blocked by Quota** |
+
+> [!IMPORTANT]
+> **Extrapolation Disclaimer**: The 30-day extrapolated numbers above (~23.7 GB egress, ~97.3 CU-hours compute) are simple linear mathematical extrapolations of past unconstrained 24/7 consumption ($(\text{Value} / 8) \times 30$). They are **not forecasts or guaranteed predictions**.
 
 *Note: The quota reset date for this Neon project is `2026-12-01T00:00:00Z`.*
 
 ---
 
-## 2. Table-by-Table Storage & Row Counts
+## 2. Table-by-Table Storage, Row Counts & Backup Inspection
 
-Based on verified point-in-time snapshots (`data/backups/neon_pg_backup_*.json`) and Alembic schema inspection:
+### 2.1 November 6 Backup File Verification (`data/backups/neon_pg_backup_20261106_182900.json`)
+- **File Existence**: Confirmed (`data/backups/neon_pg_backup_20261106_182900.json`).
+- **File Size**: 29,793,823 bytes (~28.41 MiB).
+- **Recorded SHA-256 Checksum**: `76fd605b94ed554e7ead7c3949d81f5eab1e6b64d6f54eff539b49457ecae9da`.
+- **Calculated SHA-256 Checksum**: `76fd605b94ed554e7ead7c3949d81f5eab1e6b64d6f54eff539b49457ecae9da` (**MATCH CONFIRMED**).
+- **Scope Limit**: The backup contains **only 13 specific tables** selected by `tables_to_backup` in `app/db_backup.py`.
 
-| Table Name | Approx. Row Count (Nov 6) | Growth Trend (3-Day Delta) | Primary Data Carried | Egress / Storage Impact |
+### 2.2 Table Inventory & Completeness
+
+| Table Name | Backup Row Count (Nov 6) | Growth Trend (3-Day Delta) | Primary Data Carried | Egress / Storage Impact |
 |---|---|---|---|---|
 | `decision_stage_results` | **16,317** | +11,151 rows (+215%) | Verbose stage checks JSON, rejection reasons | 🔴 HIGH (Rapid data inflation) |
 | `news_events` | **5,200** | +3,726 rows (+252%) | Raw article JSON (`raw_json`), full summaries | 🔴 HIGH (Heavy JSON payloads) |
 | `decision_audits` | **2,331** | +1,593 rows (+215%) | Trade evaluation parameters, regime state | 🟡 MEDIUM |
-| `job_runs` | **~23,000+** (est.) | ~2,880 rows / day | Cron execution logs, status, error trace | 🔴 HIGH (Continuous write churn) |
-| `bars_daily` | Cached universe | Daily incremental | Split-adjusted & unadjusted OHLCV bars | 🟡 MEDIUM (N+1 query load) |
 | `signals` | **108** | Stable (+2 rows) | VCP/Breakout signal records, setup reasons | 🟢 LOW |
 | `alerts` | **3** | Stable (+2 rows) | System and trigger notifications | 🟢 LOW |
+| `news_source_state` | **4** | Stable | Feed health and ETag checkpoints | 🟢 LOW |
 | `positions` | **1** | Stable | Active paper/manual positions | 🟢 LOW |
 | `fills` | **2** | Stable | Order execution fills | 🟢 LOW |
 | `journal` | **1** | Stable | Trade journal logs and reflections | 🟢 LOW |
-| `news_source_state` | **4** | Stable | Feed health and ETag checkpoints | 🟢 LOW |
 | `earnings_filings` | **1** | Stable | Corporate earnings metadata | 🟢 LOW |
 | `settings_kv` | **1** | Stable | System operational settings | 🟢 LOW |
-| `instruments` | Universe Master | Synced weekly | Instrument tokens and sector tags | 🟢 LOW |
+| `instruments` | **0** | Empty in backup | Master list of tradable stocks | 🟢 Reconstructed via sync |
+| `company_relationships`| **0** | Empty in backup | Corporate entity relationships | 🟢 Low footprint |
+| `bars_daily` | **NOT IN BACKUP** | N/A | Split-adjusted & unadjusted OHLCV bars | ⚠️ **Must be re-ingested** |
+| `job_runs` | **NOT IN BACKUP** | ~2,880 rows / day | Cron execution logs, status, error trace | 🟢 Ephemeral runtime logs |
+| `scans` | **NOT IN BACKUP** | Daily EOD runs | Scan metadata and regime records | 🟢 Operational |
+| `custom_price_alerts` | **NOT IN BACKUP** | Manual entries | User-defined price thresholds | ⚠️ Manual / Seed |
+| `watchlists` / `items` | **NOT IN BACKUP** | Manual entries | Watchlist collections and memberships | ⚠️ Manual / Seed |
 
-### Storage Growth Analysis from Historical Snapshots:
+> [!WARNING]
+> **Missing Historical Market Data (`bars_daily`)**:
+> `bars_daily` is **NOT present** in the JSON backup. Historical price bars cannot be restored from this file. They must be re-ingested from upstream market data providers (Angel One, yfinance) via provider pipelines.
+
+### 2.3 Storage Growth Analysis from Historical Snapshots:
 - **Nov 3, 2026**: `neon_pg_backup_20261103_182900.json` = **9.63 MB**
 - **Nov 4, 2026**: `neon_pg_backup_20261104_182900.json` = **11.49 MB**
 - **Nov 5, 2026**: `neon_pg_backup_20261105_182900.json` = **18.81 MB**
 - **Nov 6, 2026**: `neon_pg_backup_20261106_182900.json` = **28.41 MB**
 - **Nov 9, 2026**: Neon logical branch size reached **191.65 MB**.
 
-Without automated retention pruning, storage growth was approximately **20-30 MB per day**, projecting to reach the 1 GB Free Tier limit in under 30 days.
+Without automated retention pruning, storage grew at approximately **20–30 MB per day**, driven by `decision_stage_results` and `news_events`.
 
 ---
 
-## 3. Database Architecture & Connection Review
+## 3. Database Architecture & Concurrency Review
 
-### 3.1 Connection Configuration (`backend/app/db.py`)
+### 3.1 Render Host & Concurrency Context
+Inspection of `render.yaml` confirms the backend service configuration:
+- Service: `algo-trading-backend` (Render Free Plan, 0.1 vCPU, 512 MB RAM).
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend --timeout-graceful-shutdown 15`.
+- **Worker Concurrency**: Single worker process (`workers=1`), running an asyncio event loop alongside an in-process thread pool for APScheduler (`BackgroundScheduler`).
+- **Actual Concurrency Demand**: Peak concurrent database queries are typically **1 to 2 concurrent operations** (one incoming HTTP request + one background scheduler thread).
+
+### 3.2 SQLAlchemy Connection Configuration (`backend/app/db.py`)
 ```python
 engine_kwargs = {
     "poolclass": QueuePool,
@@ -86,10 +111,10 @@ engine_kwargs = {
 }
 ```
 **Issues identified**:
-- **Oversized Client Pool for Serverless**: `QueuePool(pool_size=10, max_overflow=20)` creates up to 30 persistent connections per backend process. In a single-instance Render setup connecting through Neon PgBouncer (`-pooler`), a client pool this large is unnecessary and holds connection slots open.
-- **PgBouncer Pooling Port**: The application connects to `ep-jolly-dust-a1lsoqu5-pooler.ap-southeast-1.aws.neon.tech` (transaction pooling port 5432). However, maintaining persistent connections with `pool_recycle=300` combined with frequent queries prevents Neon compute from scaling down.
+- **Oversized Client Pool for Serverless**: `QueuePool(pool_size=10, max_overflow=20)` allows up to 30 persistent connections per process. For a single-worker application with 1-2 concurrent query threads, holding 10-30 connection slots open to Neon PgBouncer (`-pooler`) is excessive and wastes connection resources.
+- **PgBouncer Pooling Interaction**: The connection string uses Neon's transaction pooler (`-pooler.ap-southeast-1.aws.neon.tech:5432`). In transaction pooling mode, prepared statements and long-lived session state are restricted, making a lean client pool (`pool_size=2–3, max_overflow=2`) significantly better aligned with actual concurrency.
 
-### 3.2 Neon Compute Configuration (`crimson-mountain-88821720`)
+### 3.3 Neon Compute Configuration (`crimson-mountain-88821720`)
 - **`suspend_timeout_seconds: 0`**: Auto-suspend was completely disabled. Once woken, the compute node ran perpetually, continuously accruing active compute time.
 - Standard Neon Free default is `300 seconds` (5 minutes of inactivity before scale-to-zero).
 
@@ -135,7 +160,6 @@ engine_kwargs = {
    - `WatchlistPage.tsx:398`: Polls `/api/watchlists` items every **2.5 seconds**.
    - `Sidebar.tsx:67`: Polls pinned quotes every **4.0 seconds**.
    - `CandleChart.tsx:294`: Polls intraday quotes every **2.0 seconds**.
-   - While quote fetching relies on in-memory provider caching, any fallback to DB cache (`get_daily_bars`) is multiplied by rapid frontend polling.
 
 ---
 
@@ -146,10 +170,10 @@ engine_kwargs = {
 | 🔴 **CRITICAL** | **Endpoint Auto-Suspend Disabled** (`suspend_timeout_seconds: 0`) | Neon API response on project `crimson-mountain-88821720` | Compute remained continuously active (334,648s), exhausting monthly compute allowances and generating steady egress. |
 | 🔴 **CRITICAL** | **Scheduler Off-Market 24/7 Execution** | `backend/app/scheduler/jobs.py:284-295` | `live_monitor` queries `Signal` and `Position` and writes to `JobRun` every 60s, preventing Neon compute from ever idling down. |
 | 🔴 **CRITICAL** | **Data Transfer Egress Breach** | 6.31 GB measured vs 5.00 GB free limit | Triggered HTTP 402 quota lock from Neon control plane, taking entire database offline. |
-| 🟡 **HIGH** | **Unbounded Table Growth & No Retention Pruning** | `decision_stage_results` (16k rows), `news_events` (5.2k rows), `job_runs` | Grew database size from 9 MB to 200 MB in 8 days; would breach 1 GB storage limit within a month. |
+| 🟡 **HIGH** | **Unbounded Table Growth & No Retention Pruning** | `decision_stage_results` (16k rows), `news_events` (5.2k rows), `job_runs` | Grew database size from 9 MB to 200 MB in 8 days; without retention, would breach 1 GB storage limit within a month. |
 | 🟡 **HIGH** | **N+1 Query Pattern in Daily Bar Ingestion** | `backend/app/providers/manager.py:189` | Row-by-row iteration generates hundreds of queries per ticker during backfill or cache updates. |
 | 🟡 **MEDIUM** | **Heavy `raw_json` Storage in `NewsEvent`** | `backend/app/models.py:284` | Storing uncompressed external JSON payloads bloats table size and backup snapshots. |
-| 🟢 **LOW** | **SQLAlchemy Connection Pool Sizing** | `backend/app/db.py:33` | `pool_size=10, max_overflow=20` is slightly oversized for a single-dyno Render app on serverless Postgres. |
+| 🟢 **LOW** | **SQLAlchemy Connection Pool Sizing** | `backend/app/db.py:33` | `pool_size=10, max_overflow=20` is oversized for a single-worker Render instance (0.1 vCPU) on serverless Postgres. |
 
 ---
 
@@ -159,7 +183,7 @@ The database went down strictly because **data egress (6.31 GB > 5.00 GB)** brea
 
 To restore and guarantee long-term stability within the Neon Free tier:
 1. **Auto-suspend must be set to 300 seconds** (5 minutes).
-2. **Scheduler monitoring must only execute during open market hours** (09:15-15:30 IST for NSE; 09:30-16:00 EST for US).
+2. **Scheduler monitoring must only execute during open market hours** with proper timezone guards.
 3. **`JobRun` writes must be throttled or purged** on a 7-day rolling window.
-4. **`decision_stage_results` and `decision_audits` must have automated retention policies** (e.g. 14-day retention).
+4. **`decision_stage_results` and `decision_audits` require a formal retention/archival policy**.
 5. **A fresh Neon Free project must be provisioned** (or current quota reset) to regain active database connectivity, since the current project is suspended until the next monthly billing cycle.

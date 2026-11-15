@@ -2,17 +2,20 @@
 
 **Target System**: Personal Swing-Trading & Paper-Trading Platform  
 **Target Environment**: Neon Serverless PostgreSQL (Free Tier: 1 GB Storage, 100 CU-Hours/mo, 5 GB Egress/mo)  
-**Status**: Ready for Review (No changes applied without user approval)  
+**Status**: DRAFT / RECOMMENDATION ONLY (No changes applied without user approval)  
 
 ---
 
 ## 1. Objectives & Guardrails
 
 ### 1.1 Objectives
-1. **Prevent Quota Exhaustion**: Ensure compute stays strictly below 100 CU-hours/month, public egress below 5.0 GB/month, and storage below 1.0 GB.
+1. **Prevent Quota Exhaustion**: Target compute consumption strictly below 100 CU-hours/month, public egress below 5.0 GB/month, and storage below 1.0 GB.
 2. **Enable Scale-to-Zero**: Allow the Neon compute endpoint to automatically suspend after 5 minutes of inactivity during market-closed hours (nights, weekends, holidays).
-3. **Eliminate Unnecessary Database Writes & Churn**: Stop storing high-frequency scheduler heartbeats in the database and implement automated retention for ephemeral audits.
+3. **Eliminate Unnecessary Database Writes & Churn**: Stop storing high-frequency scheduler heartbeats in the database and implement retention/archival policies for ephemeral logs.
 4. **Preserve System Integrity**: Zero disruption to trading strategies, indicators, signal calculations, paper-trading logic, historical bars, or user positions.
+
+> [!CAUTION]
+> **No Deletion Authorization**: Per project instructions, **no deletion or modification of existing records is authorized** in this phase. All retention suggestions in this document are design proposals requiring explicit user authorization before implementation.
 
 ---
 
@@ -26,13 +29,32 @@ Neon's autosuspend was configured to `suspend_timeout_seconds: 0`, meaning compu
 #### Proposed Action:
 1. **Configure Neon Suspend Timeout**:
    Set `suspend_timeout_seconds = 300` (5 minutes) on the Neon endpoint settings.
-2. **Implement Market-Hours Gating in Schedulers**:
-   In `backend/app/scheduler/jobs.py`, gate `live_monitor_IN` and `live_monitor_US` so they only execute when their respective exchange is active:
-   - **Indian Market (NSE/BSE)**: Mon-Fri, 09:15 to 15:30 IST. Outside these hours, do not query the database.
-   - **US Market (NYSE/NASDAQ)**: Mon-Fri, 09:30 to 16:00 EST. Outside these hours, do not query the database.
-   - **Exchange Holidays**: Skip execution if `is_exchange_holiday(market, today)` evaluates to `True`.
-
-*Impact*: Eliminates ~18 hours of compute activity per weekday and 48 hours every weekend. Reduces active compute hours by **~75%**.
+2. **Standardized Market-Hours Gating**:
+   In `backend/app/scheduler/jobs.py`, gate intraday monitoring jobs so they execute only during active exchange sessions:
+   - **Indian Market (`live_monitor_IN`)**:
+     - Timezone: `ZoneInfo("Asia/Kolkata")`.
+     - Normal Trading Window: Monday through Friday, 09:15 to 15:30 IST.
+     - Holiday & Special Sessions: Evaluated using `app.engine.calendars.is_exchange_holiday("IN", today)`. Support special trading sessions (e.g., Muhurat trading) via calendar override.
+   - **US Market (`live_monitor_US`)**:
+     - Timezone: `ZoneInfo("America/New_York")`.
+     - Normal Trading Window: Monday through Friday, 09:30 to 16:00 EST/EDT.
+     - Holiday Sessions: Evaluated using US exchange holiday calendar (`is_exchange_holiday("US", today)`).
+3. **Crucial Guard Placement (Before Database Access)**:
+   - The market-hours check **must execute before opening a database session** or entering `log_job_execution`.
+   - If checked inside `job_live_monitor_in(db)`, the database connection and `JobRun` insert have *already occurred*, resetting the idle timer.
+   - The wrapper or trigger check must exit immediately if off-market without creating a `SessionLocal()`:
+     ```python
+     def is_market_open(market: str, dt: datetime.datetime) -> bool:
+         # Pure in-memory time and calendar check; zero DB queries
+         ...
+     ```
+4. **Preservation of Core Research & Batch Jobs**:
+   Post-market and scheduled batch routines are explicitly **exempt** from intraday market-hours gating and must continue on their designated schedules:
+   - `daily_paper_trading`: Monday–Friday 16:00 IST (`Asia/Kolkata`).
+   - `eod_scan_IN`: Monday–Friday 16:30 IST (`Asia/Kolkata`).
+   - `weekly_paper_reporting`: Friday 17:00 IST (`Asia/Kolkata`).
+   - `eod_scan_US`: Monday–Friday 21:45 IST / 16:15 EST (`America/New_York`).
+   - `db_backup`: Daily at 23:59 IST (`Asia/Kolkata`).
 
 ---
 
@@ -42,16 +64,15 @@ Neon's autosuspend was configured to `suspend_timeout_seconds: 0`, meaning compu
 The `log_job_execution` wrapper in `backend/app/scheduler/jobs.py` opens a new database session, inserts a row into `job_runs`, commits, and then updates the row upon completion for every single job execution. For `live_monitor` running every 60 seconds, this creates ~5,700 database transactions per day, churning the database and generating constant network egress.
 
 #### Proposed Action:
-1. **Tiered Job Logging**:
-   - For high-frequency jobs (`live_monitor_IN`, `live_monitor_US`), write to `JobRun` **only on status change or failure**, or maintain their latest execution heartbeat in memory (e.g., Python dictionary / in-process state).
-   - Continue full audit logging for discrete critical workflows: `eod_scan_IN`, `eod_scan_US`, `daily_paper_trading`, `weekly_paper_reporting`, `db_backup`.
-2. **Automated Cleanup Cron**:
-   - Add a lightweight daily maintenance task (`job_db_cleanup`) at 23:45 IST that purges `job_runs` older than 7 days:
+1. **Separation of Operational Heartbeats vs Research Runs**:
+   - For high-frequency monitors (`live_monitor_IN`, `live_monitor_US`), write to `JobRun` **only on failure or state change**, maintaining their latest execution heartbeat in an in-memory dictionary.
+   - Preserve full database audit logging for discrete critical workflows: `eod_scan_IN`, `eod_scan_US`, `daily_paper_trading`, `weekly_paper_reporting`, `db_backup`.
+2. **Automated Operational Log Retention**:
+   - `job_runs` contains ephemeral scheduler runtime logs (no research value).
+   - Propose an automated retention job purging `job_runs` older than 7 days:
      ```sql
      DELETE FROM job_runs WHERE started_at < NOW() - INTERVAL '7 days';
      ```
-
-*Impact*: Eliminates over **80,000 unnecessary row writes and commits per month**, dramatically decreasing write I/O and egress traffic.
 
 ---
 
@@ -116,60 +137,47 @@ if records:
     db.commit()
 ```
 
-*Impact*: Compresses 300 roundtrips per symbol into **1 single batched SQL statement**. Decreases bar ingestion latency by ~95% and cuts network transmission overhead drastically.
-
 ---
 
-### 2.4 Data Retention & Table Pruning Policies (Priority: HIGH)
+### 2.4 Data Retention & Archival Policies (Priority: HIGH)
 
 #### Problem:
 `decision_stage_results` (16,317 rows) and `news_events` (5,200 rows) represent ~90% of the database storage and backup snapshot size. These tables grow without bound because there is no cleanup mechanism.
 
-#### Proposed Action:
-Implement automated retention rules in a scheduled maintenance job:
-1. **`decision_stage_results` & `decision_audits`**:
-   - Detailed per-stage JSON checks are operational telemetry needed only for recent signal verification.
-   - Retention policy: Keep the last 14 days of audits during live trading; purge older records:
-     ```sql
-     DELETE FROM decision_stage_results 
-     WHERE audit_id IN (SELECT id FROM decision_audits WHERE asof_date < NOW() - INTERVAL '14 days');
-     
-     DELETE FROM decision_audits WHERE asof_date < NOW() - INTERVAL '14 days';
-     ```
-2. **`news_events`**:
-   - `raw_json` contains redundant third-party payload dumps.
-   - Nullify `raw_json` after 7 days, and delete news articles older than 30 days:
-     ```sql
-     UPDATE news_events SET raw_json = NULL WHERE ingested_at < NOW() - INTERVAL '7 days' AND raw_json IS NOT NULL;
-     DELETE FROM news_events WHERE published_at < NOW() - INTERVAL '30 days';
-     ```
-3. **`bars_daily`**:
-   - Maintain full history for symbols in active universe (historical indicators depend on 300+ days).
-   - Only remove non-universe stale symbols if storage ever approaches 700 MB.
-
-*Impact*: Caps long-term table storage well below **250 MB** indefinitely, ensuring the project never approaches the 1 GB Free tier ceiling.
+#### Proposed Policy & Architectural Boundaries:
+1. **Foreign-Key Hierarchy Consideration**:
+   - `decision_stage_results.audit_id` is a Foreign Key referencing `decision_audits.id`.
+   - Any archival or pruning must respect referential integrity: child `decision_stage_results` rows must be handled in lockstep with parent `decision_audits` rows.
+2. **Research Evidence Preservation vs Raw Telemetry**:
+   - `decision_audits` records trade decisions, setup classifications, and regime states, serving as quantitative audit evidence. They should **not be deleted outright**.
+   - Instead, propose a dual-tier policy:
+     - Keep active 30-day window in primary PostgreSQL.
+     - For records older than 30 days, export/archive to cold compressed JSON/CSV files in `data/research_archive/` before removal from active Neon storage.
+3. **`news_events` Payload Sanitization**:
+   - `raw_json` contains bulky raw third-party API payloads.
+   - Propose nullifying `raw_json` after 7 days while preserving structured metadata (`title`, `published_at`, `severity`, `summary`, `materiality`, `price_change_day_pct`), which reclaims >80% of storage without losing historical sentiment context.
 
 ---
 
-### 2.5 Connection Pool Tuning for Serverless (`backend/app/db.py`) (Priority: MEDIUM)
+### 2.5 Connection Pool Tuning Based on Actual Concurrency (Priority: MEDIUM)
 
-#### Problem:
-`pool_size=10, max_overflow=20` is sized for traditional persistent servers. On serverless Neon behind PgBouncer (`-pooler`), keeping up to 30 idle connections in a single client process is wasteful and can prevent backend instances from shutting down connections cleanly.
+#### Concurrency Architecture:
+Inspection of `render.yaml` confirms that Render runs a single Uvicorn process (`workers=1`) on a 0.1 vCPU / 512 MB dyno. Fast API processes web requests asynchronously, while APScheduler executes jobs on background threads. Peak concurrent database queries are **1 to 2 concurrent connections**.
 
 #### Proposed Action:
-Optimize SQLAlchemy `engine_kwargs`:
+Tune SQLAlchemy `engine_kwargs` to match actual concurrency rather than arbitrary defaults:
 ```python
 engine_kwargs = {
     "poolclass": QueuePool,
-    "pool_size": 3,           # Reduced from 10
-    "max_overflow": 5,        # Reduced from 20
+    "pool_size": 3,           # Accommodates 1 web worker + 1-2 scheduler threads
+    "max_overflow": 2,        # Small overflow headroom for brief bursts
     "pool_timeout": 20.0,
-    "pool_recycle": 180,      # Recycle every 3 minutes
-    "pool_pre_ping": True,    # Ensure healthy reconnect after suspend
+    "pool_recycle": 180,      # Recycle every 3 minutes to handle serverless timeouts
+    "pool_pre_ping": True,    # Required for graceful reconnect after Neon scale-to-zero
     "echo": False,
 }
 ```
-*Impact*: Reduces peak concurrent connection footprint by ~70%, preventing connection exhaustion errors.
+*Rationale*: Sized precisely to peak concurrency (max 5 simultaneous connections), avoiding connection slot saturation on Neon's PgBouncer transaction pooler (`-pooler`).
 
 ---
 
@@ -179,32 +187,29 @@ engine_kwargs = {
 Frontend components (`MarketPulseWidget`, `WatchlistPage`, `Sidebar`) poll the API at 2.0s to 4.0s intervals via `setInterval`. When browser tabs are left open in the background, requests continue indefinitely.
 
 #### Proposed Action:
-1. **Visibility-Aware Polling**:
-   Add `document.visibilityState === 'visible'` checks to frontend polling timers so polling halts when the user switches tabs or minimizes the browser.
+1. **Tab Visibility Guards**:
+   Wrap polling intervals with `document.visibilityState === 'visible'` checks to pause polling when tabs are minimized or hidden.
 2. **Off-Market Polling Backoff**:
    When markets are closed, back off UI polling intervals from 2.5s to 30s or 60s.
 
-*Impact*: Eliminates millions of unnecessary HTTP requests and downstream database cache queries when the user is not actively watching the screen.
-
 ---
 
-## 3. Projected Resource Reduction Summary
+## 3. Projected Resource Targets & Measurements Needed
 
-| Resource Metric | Current Trajectory (8 Days) | Projected with Optimizations (Monthly) | Free Tier Allowance | Safety Margin |
+### 3.1 Target Models (Engineering Estimates, Not Measured Results)
+
+| Resource Metric | Current Extrapolated Monthly (8-Day Rate) | Proposed Monthly Target Model | Neon Free Allowance | Target Headroom |
 |---|---|---|---|---|
-| **Monthly Compute** | ~95 CU-hours (run-rate ~350 CU-hr) | **~15 - 25 CU-hours** | 100 CU-hours | **75% Headroom** |
-| **Public Data Egress** | 6.31 GB (Breached in 8 days) | **~0.8 - 1.5 GB** | 5.00 GB | **70% Headroom** |
-| **Database Storage** | 191.65 MB (+30 MB/day) | **~120 - 200 MB (Capped)** | 1,024 MB (1 GB) | **80% Headroom** |
-| **Daily DB Transactions** | ~6,500+ writes/day | **< 300 writes/day** | Unlimited | **~95% Reduction** |
+| **Monthly Compute** | ~97.3 CU-hours (unconstrained) | **~15 - 25 CU-hours** | 100 CU-hours | **75% Headroom** |
+| **Public Data Egress** | ~23.7 GB (unconstrained) | **~0.8 - 1.5 GB** | 5.00 GB | **70% Headroom** |
+| **Database Storage** | ~720 MB (unconstrained) | **~120 - 200 MB (Capped)** | 1,024 MB (1 GB) | **80% Headroom** |
 
----
+> [!WARNING]
+> The target numbers above (15–25 CU-hours, 0.8–1.5 GB egress) are **theoretical engineering target models**, NOT measured savings. They assume successful implementation of auto-suspend, off-market gating, and N+1 query elimination.
 
-## 4. Implementation Phasing
-
-1. **Step 1 (Pre-requisite)**: Provision fresh Neon Free project or restore connectivity (Migration Plan).
-2. **Step 2**: Configure Neon compute autosuspend (`suspend_timeout_seconds: 300`).
-3. **Step 3**: Update `app/db.py` connection pool settings.
-4. **Step 4**: Update `app/scheduler/jobs.py` to add market-hours gating and throttle `JobRun` writes.
-5. **Step 5**: Update `app/providers/manager.py` bulk upsert for bars.
-6. **Step 6**: Add daily retention pruning job (`job_db_cleanup`).
-7. **Step 7**: Update frontend components with tab visibility guards.
+### 3.2 Measurements Still Needed to Support Proposed Targets:
+Before these targets can be validated as measured facts, the following empirical measurements must be taken on a live test database:
+1. **Idle Autosuspend Measurement**: Measure time-to-suspend on a fresh Neon endpoint with `suspend_timeout_seconds: 300` when the backend is idle to verify it suspends within 5 minutes.
+2. **Off-Market Egress Profiling**: Measure actual byte transmission over a 24-hour weekend period with scheduler gating enabled vs disabled.
+3. **Bulk Upsert Bandwidth Comparison**: Profile network transfer (in KB) of a 300-bar DataFrame ingestion using the existing N+1 loop vs the PostgreSQL bulk upsert.
+4. **Browser Visibility Impact**: Measure API request count and downstream DB queries generated by an inactive browser tab over a 1-hour window.

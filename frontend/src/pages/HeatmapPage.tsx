@@ -23,6 +23,7 @@ import { API_BASE } from '../api/client';
 import { ChartModal } from '../components/ChartModal';
 import { FundamentalReport } from '../components/FundamentalReport';
 import { TradingViewStockHeatmap } from '../components/TradingViewStockHeatmap';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 interface StockHeatmapItem {
   symbol: string;
@@ -176,14 +177,27 @@ export const HeatmapPage: React.FC<HeatmapPageProps> = ({ currentMarket, onMarke
     fetchHeatmap();
   }, [fetchHeatmap]);
 
-  // Real-time polling every 4 seconds when autoRefresh is active
+  // 60s polling when autoRefresh is active (paused when tab hidden or outside market hours)
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
-      fetchHeatmap(true);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, fetchHeatmap]);
+      if (isTabVisible() && isMarketOpenClient(constituentMarket)) {
+        fetchHeatmap(true);
+      }
+    }, 60000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && autoRefresh && isMarketOpenClient(constituentMarket)) {
+        fetchHeatmap(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [autoRefresh, fetchHeatmap, constituentMarket]);
 
   const currency = constituentMarket === 'IN' ? '₹' : '$';
 

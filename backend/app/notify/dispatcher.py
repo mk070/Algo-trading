@@ -4,12 +4,26 @@ import json
 import logging
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.models import Alert
 from app.notify.telegram import telegram_notifier
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class DispatchResult(BaseModel):
+    accepted: bool
+    delivered_telegram: bool = False
+    persisted_db: bool = False
+    broadcast_sse: bool = False
+    alert_id: Optional[int] = None
+    suppression_reason: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.accepted
 
 
 class NotificationDispatcher:
@@ -139,12 +153,31 @@ class NotificationDispatcher:
         db: Optional[Session] = None,
         max_retries: int = 2,
         quote: Optional[Any] = None,
-    ) -> Optional[int]:
-        """Dispatch alert, enforce deduplication (including persistence across restarts),
+    ) -> DispatchResult:
+        """Dispatch alert, enforce fail-closed kill switch, deduplication (including persistence across restarts),
         deliver to Telegram with retry, persist, and broadcast."""
+        # 1. Fail-closed kill switch: require explicit ALERTS_ENABLED=True
+        if not getattr(settings, "alerts_enabled", False):
+            logger.info(f"[DISPATCH SUPPRESSED - FAIL-CLOSED] {alert_type} for {symbol}: {title}")
+            return DispatchResult(
+                accepted=False,
+                delivered_telegram=False,
+                persisted_db=False,
+                broadcast_sse=False,
+                alert_id=None,
+                suppression_reason="ALERTS_DISABLED_BY_DEFAULT",
+            )
+
         dedupe_key = f"{alert_type}_{symbol or 'GLOBAL'}_{title}"
         if dedupe_key in self.sent_alert_keys:
-            return None
+            return DispatchResult(
+                accepted=False,
+                delivered_telegram=False,
+                persisted_db=False,
+                broadcast_sse=False,
+                alert_id=None,
+                suppression_reason="IN_MEMORY_DEDUPLICATED",
+            )
 
         payload = dict(payload or {})
         if quote is not None:
@@ -184,7 +217,14 @@ class NotificationDispatcher:
                 )
                 if existing:
                     self.sent_alert_keys.add(dedupe_key)
-                    return None
+                    return DispatchResult(
+                        accepted=False,
+                        delivered_telegram=False,
+                        persisted_db=False,
+                        broadcast_sse=False,
+                        alert_id=existing[0],
+                        suppression_reason="DB_DEDUPLICATED",
+                    )
             except Exception as e:
                 logger.warning(f"Error checking DB for duplicate alert: {e}")
 
@@ -201,6 +241,7 @@ class NotificationDispatcher:
 
         # 2. Persist to DB
         alert_id = None
+        persisted = False
         if db is not None:
             try:
                 alert_row = Alert(
@@ -218,7 +259,8 @@ class NotificationDispatcher:
                 )
                 db.add(alert_row)
                 db.commit()
-                alert_id = alert_row.id
+                alert_id = getattr(alert_row, "id", None)
+                persisted = True
             except Exception as e:
                 db.rollback()
                 logger.error(f"Error persisting alert to DB: {e}")
@@ -240,7 +282,14 @@ class NotificationDispatcher:
             except Exception:
                 pass
 
-        return alert_id
+        return DispatchResult(
+            accepted=True,
+            delivered_telegram=delivered,
+            persisted_db=persisted,
+            broadcast_sse=True,
+            alert_id=alert_id,
+            suppression_reason=None,
+        )
 
     def repeat_unacknowledged_critical_alerts(
         self,

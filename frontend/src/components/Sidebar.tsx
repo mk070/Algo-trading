@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { NAV_GROUPS } from './navItems';
 import { apiClient } from '../api/client';
+import { isTabVisible, isMarketOpenClient } from '../utils/polling';
 
 interface SidebarProps {
   currentMarket: 'IN' | 'US';
@@ -48,10 +49,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { symbol: 'AAPL', name: 'Apple Inc', price: 352.44, close: 341.88 },
       ];
 
-  // Fetch live quotes for pinned stocks
+  // Fetch live quotes for pinned stocks (15s polling, paused when tab hidden or outside market hours)
   useEffect(() => {
     let isMounted = true;
     const fetchPinnedQuotes = async () => {
+      if (!isTabVisible() || !isMarketOpenClient(currentMarket)) return;
       try {
         const symbols = defaultPinned.map((s) => s.symbol);
         const data = await apiClient.getQuotes(symbols, currentMarket);
@@ -64,10 +66,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     fetchPinnedQuotes();
-    const interval = setInterval(fetchPinnedQuotes, 4000); // 4s real-time streaming
+    const interval = setInterval(fetchPinnedQuotes, 15000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isMarketOpenClient(currentMarket)) {
+        fetchPinnedQuotes();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [currentMarket]);
 

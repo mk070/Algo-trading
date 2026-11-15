@@ -89,6 +89,11 @@ class TelegramNotifier:
 
     def send_message(self, text: str) -> bool:
         """Sends an HTML formatted message to the configured Telegram chat."""
+        from app.settings import settings
+        if not getattr(settings, "alerts_enabled", False):
+            logger.info(f"[OUTBOUND SUPPRESSED - FAIL-CLOSED] Telegram message blocked by ALERTS_ENABLED=False: {text[:60]}...")
+            return False
+
         if not self.is_configured():
             logger.info(f"Telegram not configured. Alert logged: {text[:80]}...")
             return False

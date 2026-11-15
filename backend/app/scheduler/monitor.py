@@ -2,10 +2,14 @@ import datetime
 import json
 import logging
 from typing import Dict, List, Optional, Set
+import pandas as pd
 from sqlalchemy.orm import Session
 
+from app.engine.calendars import get_completed_sessions_held_count, is_session_completed
 from app.engine.exits import exit_manager
+from app.engine.indicators import add_all_indicators
 from app.engine.pipeline import decision_pipeline
+from app.engine.volume_pace import VolumePaceCalculator
 from app.models import CustomPriceAlert, Position, Signal
 from app.notify.dispatcher import dispatcher
 from app.providers.base import Quote
@@ -128,7 +132,7 @@ class LiveBreakoutMonitor:
             rest_quotes = provider_manager.get_quotes(missing_rest, market=market)
             quotes.update(rest_quotes)
 
-        open_heat = sum(p.risk_amount for p in open_positions if p.risk_amount)
+        open_heat = sum(getattr(p, "risk_amount", None) or max(0.0, (p.entry_price - p.initial_stop) * p.qty) for p in open_positions)
         open_syms = [p.symbol for p in open_positions]
 
         # -------------------------------------------------------------
@@ -218,35 +222,53 @@ class LiveBreakoutMonitor:
                 candle_builder = provider_manager.angelone.ws_manager.candle_builder
                 is_15m_confirmed = candle_builder.is_confirmed_15m(sig.symbol, trigger)
 
-                # Volume pace check
-                vol_pace = candle_builder.calculate_volume_pace(
-                    symbol=sig.symbol,
-                    avg_volume_20d=sig.atr * 100000 if sig.atr else 500000,
-                    current_time=now,
-                    day_volume=q.day_volume,
+                # Fetch daily bars for real 20-day volume baseline
+                fresh_bars = provider_manager.get_daily_bars(
+                    [sig.symbol],
+                    today - datetime.timedelta(days=120),
+                    today,
+                    market=market,
+                    db=db,
+                )
+                df_sym = fresh_bars.get(sig.symbol)
+
+                avg_volume_20d = VolumePaceCalculator.calculate_baseline_avg_volume(
+                    df_daily=df_sym,
+                    market=market,
+                    asof_dt=now,
+                    lookback_bars=20,
                 )
 
-                if not is_15m_confirmed:
-                    # Provisional Trigger (waiting for 15m candle close)
+                vol_pace = VolumePaceCalculator.calculate_volume_pace(
+                    symbol=sig.symbol,
+                    avg_volume_20d=avg_volume_20d,
+                    current_day_volume=q.day_volume,
+                    market=market,
+                    current_time=now,
+                )
+
+                is_volume_confirmed = bool(vol_pace is not None and vol_pace >= self.min_volume_pace)
+
+                if not is_15m_confirmed or not is_volume_confirmed:
+                    # Provisional Trigger (waiting for 15m candle close and/or volume confirmation)
                     if sig.state != "TRIGGERED_PROVISIONAL":
                         sig.state = "TRIGGERED_PROVISIONAL"
                         db.commit()
                         dedupe_key = f"{sig.symbol}:PROVISIONAL:{today}"
                         if self._should_dispatch(dedupe_key):
+                            vol_text = f"volume pace {vol_pace:.2f}x >= {self.min_volume_pace:.1f}x" if is_volume_confirmed else f"volume pace {vol_pace or 0.0:.2f}x < {self.min_volume_pace:.1f}x"
+                            candle_text = "15m candle confirmed" if is_15m_confirmed else "awaiting 15m close"
                             dispatcher.dispatch(
                                 alert_type="SYSTEM",
                                 title=f"PROVISIONAL TRIGGER: {sig.symbol} @ {last_p:.2f}",
-                                body=f"Price crossed trigger ({trigger:.2f}). Awaiting 15-min candle confirmation close and volume pace check.",
+                                body=f"Price crossed trigger ({trigger:.2f}). Status: {candle_text}; {vol_text}.",
                                 symbol=sig.symbol,
                                 market=market,
                                 quote=q,
                                 db=db,
                             )
                 else:
-                    # 15-Minute Candle Confirmed: RE-RUN DECISION PIPELINE with fresh market & risk data
-                    fresh_bars = provider_manager.get_daily_bars([sig.symbol], today - datetime.timedelta(days=120), today, market=market, db=db)
-                    df_sym = fresh_bars.get(sig.symbol)
-
+                    # Both 15-Minute Candle AND Volume Pace Confirmed: RE-RUN DECISION PIPELINE with fresh data
                     pipeline_decision = decision_pipeline.evaluate(
                         symbol=sig.symbol,
                         df=df_sym,
@@ -314,21 +336,79 @@ class LiveBreakoutMonitor:
         # -------------------------------------------------------------
         # Process Open Positions (Trailing stop & exits)
         # -------------------------------------------------------------
+        if open_positions:
+            open_symbols = list({p.symbol for p in open_positions})
+            pos_bars = provider_manager.get_daily_bars(
+                open_symbols,
+                today - datetime.timedelta(days=120),
+                today,
+                market=market,
+                db=db,
+            )
+        else:
+            pos_bars = {}
+
+        is_today_completed = is_session_completed(market, now)
+
         for pos in open_positions:
             q = quotes.get(pos.symbol)
             if not q or q.is_stale:
                 continue
 
             last_p = q.last_price
+            df_pos = pos_bars.get(pos.symbol)
+
+            # 1. Historical High Reconstruction & Persistence
+            hist_high = pos.entry_price
+            if df_pos is not None and not df_pos.empty:
+                bar_dates = df_pos["date"].apply(lambda d: d.date() if isinstance(d, datetime.datetime) else d)
+                mask = bar_dates >= pos.entry_date
+                matching_bars = df_pos[mask]
+                if not matching_bars.empty and "high" in matching_bars.columns:
+                    max_h = matching_bars["high"].max()
+                    if pd.notna(max_h) and max_h > hist_high:
+                        hist_high = float(max_h)
+
+            q_high = getattr(q, "high", None) or getattr(q, "day_high", None)
+            session_high = float(q_high) if (q_high and q_high > 0) else last_p
+            current_highest = max(pos.entry_price, pos.highest_price_since_entry or 0.0, hist_high, session_high, last_p)
+            if current_highest > (pos.highest_price_since_entry or 0.0):
+                pos.highest_price_since_entry = current_highest
+                db.commit()
+
+            # 2. Indicator Calculation from completed daily bars (Zero synthetic fabrication)
+            current_atr: Optional[float] = None
+            current_sma50: Optional[float] = None
+            if df_pos is not None and not df_pos.empty:
+                # Exclude incomplete today's bar if session is still in progress
+                latest_bar_date = df_pos["date"].iloc[-1]
+                if isinstance(latest_bar_date, datetime.datetime):
+                    latest_bar_date = latest_bar_date.date()
+                if not is_today_completed and latest_bar_date == today:
+                    df_pos_eval = df_pos.iloc[:-1]
+                else:
+                    df_pos_eval = df_pos
+
+                if len(df_pos_eval) >= 50:
+                    df_ind = add_all_indicators(df_pos_eval)
+                    if "atr14" in df_ind.columns and not pd.isna(df_ind["atr14"].iloc[-1]):
+                        current_atr = float(df_ind["atr14"].iloc[-1])
+                    if "sma50" in df_ind.columns and not pd.isna(df_ind["sma50"].iloc[-1]):
+                        current_sma50 = float(df_ind["sma50"].iloc[-1])
+
+            # 3. Accurate Completed Sessions Held Count
+            sessions_held = get_completed_sessions_held_count(pos.market, pos.entry_date, now)
+
             eval_res = exit_manager.evaluate_position(
                 entry_price=pos.entry_price,
                 initial_stop=pos.initial_stop,
                 current_active_stop=pos.active_stop,
                 current_price=last_p,
-                highest_price_since_entry=max(pos.entry_price, last_p),
-                current_atr=pos.entry_price * 0.02,
-                current_sma50=pos.entry_price * 0.95,
-                days_held=1,
+                highest_price_since_entry=current_highest,
+                current_atr=current_atr,
+                current_sma50=current_sma50,
+                days_held=sessions_held,
+                has_taken_partial=bool(pos.target_partial_completed),
             )
 
             if eval_res.action == "SELL_ALL":
@@ -342,15 +422,21 @@ class LiveBreakoutMonitor:
                     db=db,
                 )
             elif eval_res.action == "SELL_PARTIAL":
-                dispatcher.dispatch(
-                    alert_type="SELL_HALF",
-                    title=f"TAKE PARTIAL PROFIT: {pos.symbol}",
-                    body=eval_res.reason,
-                    symbol=pos.symbol,
-                    market=market,
-                    quote=q,
-                    db=db,
-                )
+                # Durable deduplication across restarts and beyond 24h
+                if not pos.target_partial_completed and pos.partial_exit_alerted_at is None:
+                    res = dispatcher.dispatch(
+                        alert_type="SELL_HALF",
+                        title=f"TAKE PARTIAL PROFIT: {pos.symbol}",
+                        body=eval_res.reason,
+                        symbol=pos.symbol,
+                        market=market,
+                        quote=q,
+                        db=db,
+                    )
+                    # Persist timestamp ONLY when dispatch was accepted (not suppressed)
+                    if res.accepted:
+                        pos.partial_exit_alerted_at = datetime.datetime.now(datetime.timezone.utc)
+                        db.commit()
             elif eval_res.action == "TRAIL_UPDATE" and eval_res.new_active_stop:
                 if eval_res.new_active_stop > pos.active_stop:
                     pos.active_stop = eval_res.new_active_stop

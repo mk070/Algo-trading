@@ -96,7 +96,13 @@ class DecisionPipeline:
         earnings_date: Optional[datetime.date] = None,
         db: Optional[Session] = None,
     ) -> PipelineDecision:
-        asof_date = asof or datetime.date.today()
+        if asof is not None:
+            asof_date = asof
+        elif df is not None and not df.empty and "date" in df.columns:
+            last_d = df["date"].iloc[-1]
+            asof_date = last_d.date() if isinstance(last_d, (datetime.datetime, pd.Timestamp)) else (datetime.date.fromisoformat(str(last_d)[:10]) if isinstance(last_d, str) else last_d)
+        else:
+            asof_date = datetime.date.today()
         mkt_cfg = settings.get_market_config(market)
         capital = capital_override or mkt_cfg.capital
         config_hash = compute_config_hash()
@@ -117,7 +123,7 @@ class DecisionPipeline:
         s1_rejections: List[str] = []
 
         # Market Regime Check
-        regime = evaluate_market_regime(index_df, market=market)
+        regime = evaluate_market_regime(index_df, market=market, asof_date=asof_date)
         dist_pct = ((regime.last_close - regime.sma200) / regime.sma200 * 100.0) if regime.sma200 > 0 else 0.0
         dist_str = f", {dist_pct:+.2f}%" if dist_pct != 0 else ""
         index_name = "Nifty" if market == "IN" else "S&P 500"
@@ -295,8 +301,24 @@ class DecisionPipeline:
                 note="Fund-raise, board meetings, litigation",
             )
         )
+        s3_checks.append(
+            StageCheck(
+                name="News Coverage Health",
+                value=news_cov.status,
+                threshold="CLEAR",
+                passed=(news_cov.status == "CLEAR"),
+                note="Rule 11: Unknown is not Clear. Complete fresh source health required.",
+            )
+        )
 
-        s3_status = "BLOCK" if s3_rejections else ("WAIT" if news_cov.status == "REVIEW" else "PASS")
+        if s3_rejections or news_cov.status == "BLOCKED":
+            s3_status = "BLOCK"
+        elif news_cov.status in ("REVIEW", "UNKNOWN"):
+            s3_status = "WAIT"
+        elif news_cov.status == "CLEAR":
+            s3_status = "PASS"
+        else:
+            s3_status = "WAIT"
         stages.append(
             StageResult(
                 stage_name="News/Event Analyst",
