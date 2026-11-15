@@ -41,53 +41,127 @@ class AiResearchAssistant:
         current_price: float,
         momentum_score: float,
         regime_status: str,
+        catalysts: Optional[List[Dict[str, Any]]] = None,
+        fundamental_lights: Optional[Dict[str, Any]] = None,
+        setup_details: Optional[Dict[str, Any]] = None,
+        sector_trend: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Generates balanced Bullish vs Bearish theses with structural evidence and risk factors.
-        Does NOT produce buy/sell directives.
+        """Generates balanced Bullish vs Bearish theses with dynamic primary evidence citations,
+        fundamental factor checks, news catalysts, and explicit invalidation thresholds.
+        STRICT FIREWALL: Informational analysis only — zero control over deterministic execution.
         """
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M IST")
 
-        bull_points = [
-            f"Strong 12-1 relative momentum score ({momentum_score:+.2f}) demonstrates persistent institutional price acceptance.",
-            f"Trading above key moving averages in an active {regime_status} environment.",
-            f"Sector peer leadership in {sector} showing relative outperformance against broader NSE indices.",
+        bull_points: List[str] = []
+        bear_points: List[str] = []
+        citations: List[str] = [
+            f"Exchange Price Snapshot ({symbol} closing {current_price:.2f})",
+            f"Sector Group ({sector})",
+            f"Market Regime Tracker ({regime_status})",
         ]
 
-        bear_points = [
-            f"Momentum tail-risk: sharp sector rotations can trigger high drawdowns if {sector} falls out of favor.",
-            f"Execution slippage and whole-share cash drag at practical scale (INR 20,000) reduce net capture.",
-            f"Mean-reversion vulnerability if broader market index breaks below its 200-day moving average.",
-        ]
+        # 1. Technical & Momentum Structural Evidence
+        if setup_details and setup_details.get("pattern") in ("VCP", "BREAKOUT", "PULLBACK"):
+            pat = setup_details["pattern"]
+            trig = setup_details.get("trigger", current_price)
+            risk_pct = setup_details.get("risk_pct", 5.0)
+            bull_points.append(
+                f"Minervini {pat} consolidation structure with defined pivot at {trig:.2f} and tight risk of {risk_pct:.1f}%."
+            )
+        else:
+            bull_points.append(
+                f"Relative momentum score ({momentum_score:+.2f}) demonstrates persistent institutional price acceptance."
+            )
+
+        # 2. Sector Momentum & Group Relative Strength (Phase 3.3)
+        trend_label = sector_trend or "NEUTRAL"
+        if trend_label == "LEADING":
+            bull_points.append(
+                f"Sector leadership tailwind: {sector} is a top-tier leading industry group outperforming broader benchmark indices."
+            )
+        elif trend_label == "LAGGING":
+            bear_points.append(
+                f"Sector group drag: {sector} is a lagging industry group, increasing vulnerability to overhead supply on breakouts."
+            )
+        else:
+            bull_points.append(
+                f"Sector peer stability in {sector} trading with neutral market alignment."
+            )
+
+        # 3. Fundamental Factor Checklist
+        if fundamental_lights:
+            green_cnt = fundamental_lights.get("green_count", 0)
+            red_cnt = fundamental_lights.get("red_count", 0)
+            lights = fundamental_lights.get("lights", [])
+
+            green_names = [l.get("metric", "") for l in lights if l.get("status") == "GREEN"]
+            red_names = [l.get("metric", "") for l in lights if l.get("status") == "RED"]
+
+            if green_cnt > 0:
+                bull_points.append(
+                    f"Fundamental backing: {green_cnt} verified green checks ({', '.join(green_names[:2]) or 'Quality metrics pass'})."
+                )
+            if red_cnt > 0:
+                bear_points.append(
+                    f"Financial quality headwind: {red_cnt} red traffic lights ({', '.join(red_names[:2]) or 'High leverage/pledge'})."
+                )
+            elif fundamental_lights.get("unknown_count", 0) > 4:
+                bear_points.append(
+                    "Disclosure gap: multiple fundamental quality metrics remain unverified."
+                )
+
+            citations.append(f"Fundamental Snapshot (as of {fundamental_lights.get('as_of', 'Latest')})")
+
+        # 4. News Catalysts & Disclosures (Phase 3.1 & 3.4)
+        if catalysts and len(catalysts) > 0:
+            for cat in catalysts[:2]:
+                c_title = cat.get("title", "")
+                c_src = cat.get("source", "Exchange Disclosure")
+                c_sev = cat.get("severity", "CLEAR")
+                if c_sev == "NEWS_RED":
+                    bear_points.append(f"Adverse corporate disclosure: '{c_title}' (Source: {c_src}).")
+                else:
+                    bull_points.append(f"Recent verified catalyst: '{c_title}' (Source: {c_src}).")
+                if cat.get("source_url"):
+                    citations.append(f"{c_src}: {c_title}")
+        else:
+            bear_points.append(
+                "Lack of fresh material news catalyst: setup relies primarily on technical pattern continuation."
+            )
+
+        # Fallback defaults if empty
+        if not bull_points:
+            bull_points.append(f"Trading above key moving averages in an active {regime_status} environment.")
+        if not bear_points:
+            bear_points.append("Momentum tail-risk: sharp sector rotation or mean-reversion drawdowns if broader market corrects.")
 
         risks = [
-            "Earnings season volatility and guidance downgrades.",
-            "Broader macroeconomic liquidity contractions affecting Indian equities.",
-            "DP charge friction (INR 15.93 per completed scrip liquidation) impacting lower-turnover trades.",
+            "Broader index drawdown risk: market regime transition would invalidate setup.",
+            "Quarterly earnings volatility: unannounced reports within 3 trading days trigger mandatory exit.",
+            "Execution friction: statutory transaction fees and whole-share cash drag at realistic account size.",
         ]
+        if setup_details and setup_details.get("stop"):
+            risks.append(f"Explicit Invalidation: Intraday break or close below {setup_details['stop']:.2f}.")
 
         return {
             "symbol": symbol,
             "sector": sector,
+            "sector_trend": trend_label,
             "as_of": now_str,
             "current_price": current_price,
-            "disclaimer": "AI Informational Research Only — Not a Trading Directive. Deterministic signals govern all paper-broker execution.",
+            "disclaimer": "AI Informational Research Only — Not a Trading Directive. Deterministic signals govern all trade recommendations for manual execution.",
             "bull_case": {
                 "title": f"Structural Bull Factors for {symbol}",
                 "evidence": bull_points,
-                "confidence_level": "MODERATE_EVIDENCE",
+                "confidence_level": "HIGH_EVIDENCE" if len(bull_points) >= 3 else "MODERATE_EVIDENCE",
             },
             "bear_case": {
                 "title": f"Key Headwinds & Opposing Evidence for {symbol}",
                 "evidence": bear_points,
-                "confidence_level": "ELEVATED_VULNERABILITY",
+                "confidence_level": "ELEVATED_VULNERABILITY" if len(bear_points) >= 3 else "MONITORED_RISK",
             },
             "key_risks": risks,
-            "data_sources": [
-                f"NSE EOD Price Snapshot (Closing {current_price:.2f})",
-                f"Sector Index Aggregate ({sector})",
-                "^NSEI 200-day Moving Average Regime Tracker",
-            ],
+            "data_sources": citations,
         }
 
     def post_trade_evaluation(

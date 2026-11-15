@@ -136,6 +136,25 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           <span className={`px-2 py-0.5 rounded border font-semibold ${getNewsBadge(signal.news_coverage?.status)}`} title="News & Corporate Announcement Verification">
             News: {signal.news_coverage?.status || 'UNKNOWN'}
           </span>
+          {/* Sector Group Momentum (Phase 3.3) */}
+          {signal.evidence?.sector_trend && (
+            <span
+              className={`px-2 py-0.5 rounded border font-semibold ${
+                signal.evidence.sector_trend === 'LEADING'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                  : signal.evidence.sector_trend === 'LAGGING'
+                  ? 'bg-rose-950 text-rose-300 border-rose-800'
+                  : 'bg-slate-800 text-slate-300 border-slate-700/60'
+              }`}
+              title={`Sector: ${signal.evidence.sector_name || 'General'}${signal.evidence.sector_peer_rank ? ` · ${signal.evidence.sector_peer_rank}` : ''}`}
+            >
+              {signal.evidence.sector_trend === 'LEADING'
+                ? '▲ Leading Group'
+                : signal.evidence.sector_trend === 'LAGGING'
+                ? '▼ Lagging Group'
+                : 'Group Neutral'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -184,6 +203,71 @@ export const SignalCard: React.FC<SignalCardProps> = ({
           </span>
         </div>
       </div>
+
+      {/* 4-Factor Explainable Scoring Breakdown (Phase 3.1 & 3.2) */}
+      {signal.factors && (
+        <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-300 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              Factor Breakdown
+            </span>
+            <span className="text-[11px] font-mono font-bold text-indigo-300">
+              Score: {signal.factors.composite_score.toFixed(1)}/100
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1 text-[10px] text-center font-mono">
+            <div className="bg-slate-900 p-1 rounded border border-slate-800" title="Technical base contraction & pivot tightness">
+              <span className="text-slate-400 block text-[9px]">Tech (40%)</span>
+              <span className="font-bold text-emerald-400">{signal.factors.technical_score.toFixed(0)}</span>
+            </div>
+            <div className="bg-slate-900 p-1 rounded border border-slate-800" title="Sector relative strength percentile">
+              <span className="text-slate-400 block text-[9px]">Sector (25%)</span>
+              <span className="font-bold text-cyan-400">{signal.factors.sector_score.toFixed(0)}</span>
+            </div>
+            <div className="bg-slate-900 p-1 rounded border border-slate-800" title="Fundamental health checklist green/red ratio">
+              <span className="text-slate-400 block text-[9px]">Fund (20%)</span>
+              <span className="font-bold text-amber-400">{signal.factors.fundamental_score.toFixed(0)}</span>
+            </div>
+            <div className="bg-slate-900 p-1 rounded border border-slate-800" title="Catalyst recency & earnings clearance">
+              <span className="text-slate-400 block text-[9px]">Catalyst (15%)</span>
+              <span className="font-bold text-purple-400">{signal.factors.catalyst_score.toFixed(0)}</span>
+            </div>
+          </div>
+          {signal.factors.summary_rationale && (
+            <p className="text-[11px] text-slate-400 italic pt-0.5 leading-snug">
+              "{signal.factors.summary_rationale}"
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Linked Primary Evidence & News Catalysts (Provenance) */}
+      {signal.evidence && signal.evidence.catalysts && signal.evidence.catalysts.length > 0 && (
+        <div className="bg-slate-950/40 p-2 rounded border border-slate-800/60 text-xs">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">
+            Linked Catalysts & Primary Sources ({signal.evidence.catalysts.length})
+          </span>
+          <div className="space-y-1">
+            {signal.evidence.catalysts.slice(0, 2).map((cat) => (
+              <div key={cat.id} className="flex items-start justify-between gap-1 text-[11px]">
+                <a
+                  href={cat.source_url || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-300 hover:underline truncate max-w-[240px] flex items-center gap-1"
+                >
+                  <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                  {cat.title}
+                </a>
+                <span className="text-[10px] text-slate-500 flex-shrink-0">
+                  {cat.source}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Expandable Why section */}
       <div>

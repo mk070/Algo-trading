@@ -1,4 +1,4 @@
-import { BacktestMetrics, JournalEntry, Position, Signal, TradePlan } from '../types';
+import { BacktestMetrics, JournalEntry, OpportunityDossier, Position, Signal, TradePlan } from '../types';
 
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '');
 export const API_BASE = (configuredApiBase && !configuredApiBase.includes('127.0.0.1') && !configuredApiBase.includes('localhost'))
@@ -120,6 +120,10 @@ export const apiClient = {
 
   async getSignalDetail(id: number): Promise<Signal> {
     return fetchJson<Signal>(`${API_BASE}/signals/${id}`);
+  },
+
+  async getOpportunityDossier(symbol: string, market: string = 'IN'): Promise<OpportunityDossier> {
+    return fetchJson<OpportunityDossier>(`${API_BASE}/opportunities/${encodeURIComponent(symbol)}/dossier?market=${market}`);
   },
 
   async getWatchlist(market: string = 'IN') {

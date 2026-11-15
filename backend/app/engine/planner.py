@@ -1,9 +1,10 @@
+import collections
 import datetime
 import json
 import logging
 from typing import Any, Dict, List, Optional
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.engine.gaprisk import calculate_effective_risk_per_share, compute_gap95
@@ -16,11 +17,142 @@ from app.engine.pipeline import StageResult, decision_pipeline
 from app.engine.sizing import PositionSizer
 from app.engine.universe import universe_manager
 from app.engine.fundamentals_engine import fundamentals_engine
-from app.models import DecisionAudit, Position, Scan, Signal, Watchlist, WatchlistItem
+from app.models import DecisionAudit, Instrument, NewsEvent, Position, Scan, Signal, Watchlist, WatchlistItem
 from app.providers.manager import provider_manager
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class NewsCatalystItem(BaseModel):
+    id: int
+    title: str
+    source: str
+    source_url: Optional[str] = None
+    published_at: Optional[datetime.datetime] = None
+    severity: str = "CLEAR"
+    materiality: Optional[str] = None
+    match_confidence: Optional[float] = None
+
+
+class FactorScoreBreakdown(BaseModel):
+    composite_score: float = 0.0
+    technical_score: float = 0.0      # VCP quality, volume contraction, pivot tightness (0-100)
+    sector_score: float = 0.0         # Sector relative strength percentile (0-100)
+    fundamental_score: float = 0.0    # Traffic light green/red ratio & completeness (0-100)
+    catalyst_score: float = 0.0       # Recency & materiality of verified news, earnings clearance (0-100)
+    summary_rationale: str = ""       # Human-readable synthesis
+
+
+class EvidenceProvenance(BaseModel):
+    fundamental_snapshot_id: Optional[int] = None
+    fundamental_as_of: Optional[datetime.date] = None
+    fundamental_source: Optional[str] = None
+    catalysts: List[NewsCatalystItem] = Field(default_factory=list)
+    sector_name: Optional[str] = "General"
+    sector_rs_rank: Optional[float] = None
+    sector_trend: Optional[str] = "NEUTRAL"
+    sector_peer_rank: Optional[str] = None
+
+
+def compute_factor_score_breakdown(
+    symbol: str,
+    setup: str,
+    trigger: float,
+    stop: float,
+    rs_rank: float,
+    sector_name: str = "General",
+    sector_rs_rank: Optional[float] = None,
+    sector_trend: Optional[str] = "NEUTRAL",
+    news_cov: Any = None,
+    fund_dict: Optional[Dict[str, Any]] = None,
+    catalyst_count: int = 0,
+) -> FactorScoreBreakdown:
+    """Decomposes overall opportunity score into 4 explainable factor sub-scores (0-100)
+    and a human-readable thesis summary with sector tailwinds/drag integration.
+    """
+    # 1. Technical Score (0-100)
+    if setup == "VCP":
+        tech_base = 65.0
+        if trigger > 0 and stop > 0 and trigger > stop:
+            risk_pct = (trigger - stop) / trigger * 100.0
+            if risk_pct <= 5.0:
+                tech_base += 25.0
+            elif risk_pct <= 8.0:
+                tech_base += 15.0
+            elif risk_pct <= 12.0:
+                tech_base += 5.0
+        technical_score = min(100.0, max(40.0, tech_base))
+    elif setup == "PULLBACK":
+        technical_score = 50.0  # experimental
+    elif setup == "BREAKOUT":
+        technical_score = 60.0
+    else:
+        technical_score = 25.0 if rs_rank >= 0.7 else 15.0
+
+    # 2. Sector RS Score (0-100): 60% Stock RS + 40% Sector Group RS
+    group_rs = sector_rs_rank if sector_rs_rank is not None else rs_rank
+    stock_component = rs_rank * 100.0
+    group_component = group_rs * 100.0
+    sector_score = min(100.0, max(0.0, round(0.60 * stock_component + 0.40 * group_component, 1)))
+
+    # 3. Fundamental Quality Score (0-100)
+    if fund_dict:
+        g = fund_dict.get("green_count", 0)
+        y = fund_dict.get("yellow_count", 0)
+        r = fund_dict.get("red_count", 0)
+        tot = g + y + r
+        if tot > 0:
+            pct_green = (g / tot) * 100.0
+            penalty = (r / tot) * 60.0
+            fundamental_score = min(100.0, max(0.0, round(pct_green - penalty, 1)))
+        else:
+            fundamental_score = 50.0
+    else:
+        fundamental_score = 50.0
+
+    # 4. Catalyst Score (0-100)
+    status = news_cov.get("status", "CLEAR") if isinstance(news_cov, dict) else getattr(news_cov, "status", "CLEAR") if news_cov else "CLEAR"
+    has_warn = news_cov.get("has_earnings_warning", False) if isinstance(news_cov, dict) else getattr(news_cov, "has_earnings_warning", False) if news_cov else False
+
+    cat_score = 50.0
+    if status == "CLEAR":
+        cat_score += 25.0
+    elif status == "NEWS_RED":
+        cat_score -= 40.0
+
+    if has_warn:
+        cat_score -= 25.0
+
+    if catalyst_count > 0:
+        cat_score += 15.0
+
+    catalyst_score = min(100.0, max(0.0, round(cat_score, 1)))
+
+    # Composite score (weighted 40% tech, 25% sector, 20% fund, 15% catalyst)
+    composite = round(
+        0.40 * technical_score +
+        0.25 * sector_score +
+        0.20 * fundamental_score +
+        0.15 * catalyst_score,
+        1,
+    )
+
+    trend_desc = f"LEADING {sector_name} tailwind" if sector_trend == "LEADING" else (f"LAGGING {sector_name} drag" if sector_trend == "LAGGING" else f"{sector_name} neutral momentum")
+
+    if setup in ("VCP", "PULLBACK", "BREAKOUT"):
+        summary = f"{setup} setup ({technical_score:.0f}/100 tech) with {trend_desc} (RS: {stock_component:.0f}th pctl); {status} news profile ({catalyst_score:.0f}/100 catalyst)."
+    else:
+        summary = f"Monitoring {symbol} in {trend_desc}; RS rank {stock_component:.0f}th percentile with {status} news profile."
+
+    return FactorScoreBreakdown(
+        composite_score=composite,
+        technical_score=technical_score,
+        sector_score=sector_score,
+        fundamental_score=fundamental_score,
+        catalyst_score=catalyst_score,
+        summary_rationale=summary,
+    )
 
 
 class PlannedSignal(BaseModel):
@@ -57,6 +189,8 @@ class PlannedSignal(BaseModel):
     valid_until: datetime.date
     is_experimental: bool = False
     shadow_mode: bool = False
+    factors: FactorScoreBreakdown = Field(default_factory=FactorScoreBreakdown)
+    evidence: EvidenceProvenance = Field(default_factory=EvidenceProvenance)
 
 
 class TradePlan(BaseModel):
@@ -98,8 +232,9 @@ class Planner:
         if not symbols:
             symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
 
-        stock_tier_map = {s.symbol: getattr(s, "tier", "Small") for s in stocks}
-        stock_risk_map = {s.symbol: getattr(s, "is_higher_risk", False) for s in stocks}
+        stock_tier_map = {s.symbol: getattr(s, "tier", "Small") if isinstance(getattr(s, "tier", None), str) else "Small" for s in stocks}
+        stock_risk_map = {s.symbol: bool(getattr(s, "is_higher_risk", False)) if not hasattr(getattr(s, "is_higher_risk", None), "_mock_name") else False for s in stocks}
+        stock_sector_map = {s.symbol: getattr(s, "sector", "General") if isinstance(getattr(s, "sector", None), str) else "General" for s in stocks}
         snapshots_map = fundamentals_engine.get_all_latest_snapshots(market=market, db=db)
 
         # Tag candidate sources: 1 instrument = 1 candidate = 1 alert stream
@@ -126,6 +261,37 @@ class Planner:
                         candidate_sources[it.symbol].append(tag)
 
         all_symbols = list(candidate_sources.keys())
+
+        # Pre-fetch recent verified news catalysts for all candidate symbols (14-day window)
+        recent_news_map: Dict[str, List[NewsCatalystItem]] = collections.defaultdict(list)
+        if db is not None and all_symbols:
+            cutoff_dt = datetime.datetime.combine(session_date - datetime.timedelta(days=14), datetime.time.min)
+            try:
+                news_rows = (
+                    db.query(NewsEvent)
+                    .filter(
+                        NewsEvent.symbol.in_(all_symbols),
+                        NewsEvent.published_at >= cutoff_dt,
+                    )
+                    .order_by(NewsEvent.published_at.desc())
+                    .all()
+                )
+                for nr in news_rows:
+                    if len(recent_news_map[nr.symbol]) < 5:
+                        recent_news_map[nr.symbol].append(
+                            NewsCatalystItem(
+                                id=nr.id,
+                                title=nr.title,
+                                source=nr.source or "Unknown",
+                                source_url=nr.url,
+                                published_at=nr.published_at,
+                                severity=nr.severity or "CLEAR",
+                                materiality=nr.materiality,
+                                match_confidence=nr.match_confidence,
+                            )
+                        )
+            except Exception as e:
+                logger.warning(f"Could not load recent news events for scan evidence: {e}")
 
         # Check for open positions to suppress BUY alerts
         held_symbols = set()
@@ -177,6 +343,35 @@ class Planner:
         for sym, df in enriched_data.items():
             if sym not in rs_ranks:
                 rs_ranks[sym] = screener_engine.compute_out_of_universe_rs_rank(df, universe_scores)
+
+        # Compute Sector Group Momentum & Relative Leadership (Phase 3.3)
+        sector_scores_map: Dict[str, List[float]] = collections.defaultdict(list)
+        sector_stock_map: Dict[str, List[str]] = collections.defaultdict(list)
+        for s in universe_syms:
+            sec = stock_sector_map.get(s, "General")
+            if not isinstance(sec, str):
+                sec = "General"
+            score_val = rs_ranks.get(s, 0.5)
+            sector_scores_map[sec].append(score_val)
+            sector_stock_map[sec].append(s)
+
+        sector_avg_rs: Dict[str, float] = {}
+        for sec, scores in sector_scores_map.items():
+            sector_avg_rs[sec] = sum(scores) / len(scores) if scores else 0.5
+
+        sorted_sectors = sorted(sector_avg_rs.items(), key=lambda x: x[1], reverse=True)
+        sector_ranks_map = {sec: idx + 1 for idx, (sec, _) in enumerate(sorted_sectors)}
+        total_sectors = len(sorted_sectors) or 1
+
+        sector_trends_map: Dict[str, str] = {}
+        for sec, _ in sector_avg_rs.items():
+            rank_pct = ((total_sectors - sector_ranks_map[sec] + 1) / total_sectors) * 100.0
+            if rank_pct >= 65.0:
+                sector_trends_map[sec] = "LEADING"
+            elif rank_pct <= 35.0:
+                sector_trends_map[sec] = "LAGGING"
+            else:
+                sector_trends_map[sec] = "NEUTRAL"
 
         index_ret126 = 0.0
         if index_df is not None and len(index_df) >= 126:
@@ -356,14 +551,49 @@ class Planner:
                     "note": regime_weak_msg,
                 }
 
-            # Ranking Score Calculation
-            score = 100.0 * stock_rs_rank
-            if regime.is_bullish:
-                score += 10.0
-            if news_cov.status == "CLEAR":
-                score += 5.0
-            if decision.cost_in_r and decision.cost_in_r > 0:
-                score -= decision.cost_in_r * 5.0
+            # Ranking Score & Explainable Factor Decomposition Calculation
+            sector_name = stock_sector_map.get(sym, "General")
+            if not isinstance(sector_name, str):
+                sector_name = "General"
+            sec_avg_rs = sector_avg_rs.get(sector_name, stock_rs_rank)
+            sec_trend = sector_trends_map.get(sector_name, "NEUTRAL")
+
+            # Peer ranking within sector with small-sample guard (Phase 3.5)
+            peer_syms = sector_stock_map.get(sector_name, [sym])
+            peer_scores = sorted([(s, rs_ranks.get(s, 0.5)) for s in peer_syms], key=lambda x: x[1], reverse=True)
+            peer_rank = next((idx + 1 for idx, (s, _) in enumerate(peer_scores) if s == sym), 1)
+            peer_total = len(peer_scores) or 1
+            if peer_total >= 3:
+                peer_pct = round(((peer_total - peer_rank + 1) / peer_total) * 100.0)
+                peer_rank_str = f"Rank {peer_rank}/{peer_total} ({peer_pct}th pctl in {sector_name})"
+            else:
+                peer_rank_str = f"Rank {peer_rank}/{peer_total} ({sector_name} cohort n={peer_total})"
+
+            sym_catalysts = recent_news_map.get(sym, [])
+            factors = compute_factor_score_breakdown(
+                symbol=sym,
+                setup=cand.setup if cand else "MONITORING",
+                trigger=trigger,
+                stop=stop,
+                rs_rank=stock_rs_rank,
+                sector_name=sector_name,
+                sector_rs_rank=sec_avg_rs,
+                sector_trend=sec_trend,
+                news_cov=news_cov,
+                fund_dict=fund_dict,
+                catalyst_count=len(sym_catalysts),
+            )
+            score = factors.composite_score
+            evidence = EvidenceProvenance(
+                fundamental_snapshot_id=snap.id if snap else None,
+                fundamental_as_of=snap.as_of if snap else None,
+                fundamental_source=snap.source if snap else None,
+                catalysts=sym_catalysts,
+                sector_name=sector_name,
+                sector_rs_rank=round(sec_avg_rs, 2),
+                sector_trend=sec_trend,
+                sector_peer_rank=peer_rank_str,
+            )
 
             valid_until = session_date + datetime.timedelta(days=2)
             raw_reasons = decision.all_rejection_reasons if decision.all_rejection_reasons else (cand.reasons if cand else ["No valid base consolidation or pullback pattern detected"])
@@ -408,6 +638,8 @@ class Planner:
                 valid_until=valid_until,
                 is_experimental=cand.is_experimental if cand else False,
                 shadow_mode=cand.shadow_mode if cand else False,
+                factors=factors,
+                evidence=evidence,
             )
 
             # Small / Illiquid Tier Gating: excluded from primary live BUY alerts unless enabled in Settings

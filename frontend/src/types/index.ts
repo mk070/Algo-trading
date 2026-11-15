@@ -49,6 +49,63 @@ export interface Signal {
   is_higher_risk?: boolean;
   setup_edge_status?: string;
   setup_note?: string;
+  factors?: FactorScoreBreakdown;
+  evidence?: EvidenceProvenance;
+}
+
+export interface NewsCatalystItem {
+  id: number;
+  title: string;
+  source: string;
+  source_url?: string | null;
+  published_at?: string | null;
+  severity: string;
+  materiality?: string | null;
+  match_confidence?: number | null;
+}
+
+export interface FactorScoreBreakdown {
+  composite_score: number;
+  technical_score: number;
+  sector_score: number;
+  fundamental_score: number;
+  catalyst_score: number;
+  summary_rationale: string;
+}
+
+export interface EvidenceProvenance {
+  fundamental_snapshot_id?: number | null;
+  fundamental_as_of?: string | null;
+  fundamental_source?: string | null;
+  catalysts: NewsCatalystItem[];
+  sector_name?: string | null;
+  sector_rs_rank?: number | null;
+  sector_trend?: string | null;
+  sector_peer_rank?: string | null;
+}
+
+export interface OpportunityDossier {
+  symbol: string;
+  market: string;
+  sector: string;
+  tier: string;
+  last_price: number;
+  setup: {
+    pattern: string;
+    trigger: number;
+    stop: number;
+    target1: number;
+    risk_reward_ratio: number;
+    invalidation_rules: string[];
+  };
+  state: string;
+  factors: FactorScoreBreakdown;
+  evidence: EvidenceProvenance;
+  decision_stages: DecisionStage[];
+  blocked_reason?: BlockedReason | null;
+  fundamentals?: any;
+  ai_thesis?: any;
+  disclaimer: string;
 }
 
 export interface FunnelStage {

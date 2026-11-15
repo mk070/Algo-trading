@@ -7,9 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.engine.planner import TradePlan, planner
+from app.engine.ai_research_assistant import ai_research_assistant
+from app.engine.planner import TradePlan, planner, compute_factor_score_breakdown
+from app.engine.fundamentals_engine import fundamentals_engine
 from app.engine.value_radar import value_radar_engine
-from app.models import Position, Scan, Signal, DecisionAudit, DecisionStageResult
+from app.models import Position, Scan, Signal, DecisionAudit, DecisionStageResult, Instrument, FundamentalSnapshot, NewsEvent
 from app.providers.manager import provider_manager
 from app.cache import shared_cache, cached_json_response
 from app.telemetry import current_tag_ctx
@@ -109,6 +111,51 @@ def get_trade_plan(
         latest_audits = {}
         stage_results_by_audit = collections.defaultdict(list)
 
+        # Batch-fetch Instruments for sector mapping (Phase 3.5 fix)
+        inst_sector_map = {}
+        if symbols:
+            inst_rows = db.query(Instrument).filter(Instrument.symbol.in_(symbols), Instrument.market == market).all()
+            for i in inst_rows:
+                inst_sector_map[i.symbol] = i.sector if (i.sector and isinstance(i.sector, str)) else "General"
+
+        # Compute sector averages across current signals to establish group trends
+        sector_rs_buckets = collections.defaultdict(list)
+        for s in signals:
+            sec = inst_sector_map.get(s.symbol, "General")
+            if s.rs_rank is not None:
+                sector_rs_buckets[sec].append(s.rs_rank)
+
+        sector_avg_rs_map = {
+            sec: sum(vals) / len(vals) if vals else 0.5
+            for sec, vals in sector_rs_buckets.items()
+        }
+
+        # Query recent verified news events for these symbols (top 2 per symbol)
+        recent_news_events = collections.defaultdict(list)
+        if symbols:
+            cutoff_dt = datetime.datetime.combine(scan_row.session_date - datetime.timedelta(days=14), datetime.time.min)
+            news_rows = (
+                db.query(NewsEvent)
+                .filter(
+                    NewsEvent.symbol.in_(symbols),
+                    NewsEvent.published_at >= cutoff_dt,
+                )
+                .order_by(NewsEvent.published_at.desc())
+                .all()
+            )
+            for nr in news_rows:
+                if len(recent_news_events[nr.symbol]) < 2:
+                    recent_news_events[nr.symbol].append({
+                        "id": nr.id,
+                        "title": nr.title,
+                        "source": nr.source or "Unknown",
+                        "source_url": nr.url,
+                        "published_at": nr.published_at.isoformat() if nr.published_at else None,
+                        "severity": nr.severity or "CLEAR",
+                        "materiality": nr.materiality,
+                        "match_confidence": nr.match_confidence,
+                    })
+
         if symbols:
             audits = (
                 db.query(DecisionAudit)
@@ -141,6 +188,37 @@ def get_trade_plan(
             else:
                 decision_stages, blocked_reason = [], None
 
+            fund_dict = json.loads(s.fundamentals_json) if s.fundamentals_json else None
+            news_cov_dict = json.loads(s.news_flags_json) if s.news_flags_json else {}
+
+            sec_name = inst_sector_map.get(s.symbol, "General")
+            sec_avg_rs = sector_avg_rs_map.get(sec_name, s.rs_rank or 0.5)
+            sec_trend = "LEADING" if sec_avg_rs >= 0.65 else ("LAGGING" if sec_avg_rs <= 0.35 else "NEUTRAL")
+            sym_catalysts = recent_news_events.get(s.symbol, [])
+
+            factors = compute_factor_score_breakdown(
+                symbol=s.symbol,
+                setup=s.setup or "MONITORING",
+                trigger=s.trigger or 0.0,
+                stop=s.stop or 0.0,
+                rs_rank=s.rs_rank or 0.5,
+                sector_name=sec_name,
+                sector_rs_rank=sec_avg_rs,
+                sector_trend=sec_trend,
+                news_cov=news_cov_dict,
+                fund_dict=fund_dict,
+                catalyst_count=len(sym_catalysts),
+            )
+            evidence = {
+                "fundamental_snapshot_id": None,
+                "fundamental_as_of": None,
+                "fundamental_source": None,
+                "catalysts": sym_catalysts,
+                "sector_name": sec_name,
+                "sector_rs_rank": round(sec_avg_rs, 2),
+                "sector_trend": sec_trend,
+            }
+
             item = {
                 "id": s.id,
                 "symbol": s.symbol,
@@ -160,11 +238,13 @@ def get_trade_plan(
                 "gap95": s.gap95,
                 "state": s.state,
                 "reasons": clean_reasons,
-                "news_coverage": json.loads(s.news_flags_json) if s.news_flags_json else {},
+                "news_coverage": news_cov_dict,
                 "valid_until": s.valid_until.isoformat() if s.valid_until else None,
                 "decision_stages": decision_stages,
                 "blocked_reason": blocked_reason,
-                "fundamentals": json.loads(s.fundamentals_json) if s.fundamentals_json else None,
+                "fundamentals": fund_dict,
+                "factors": factors.model_dump(),
+                "evidence": evidence,
             }
 
             # ONLY actionable, verified setups belong in Trade Plan signals!
@@ -388,4 +468,180 @@ def get_value_radar(
         return res["ideas"]
     # Return full object with ideas, summary and explanation
     return res
+
+
+@router.get("/opportunities/{symbol}/dossier")
+def get_opportunity_dossier(
+    symbol: str,
+    market: str = Query("IN", pattern="^(IN|US)$"),
+    db: Session = Depends(get_db),
+):
+    """Comprehensive Research Dossier endpoint for an opportunity candidate.
+    Aggregates technical setup details, invalidation rules, fundamental traffic lights,
+    verified news catalysts, sector relative momentum, and 4-factor scoring breakdown.
+    Strictly informational — zero control over deterministic order execution.
+    """
+    sym = symbol.upper().strip()
+
+    # 1. Instrument metadata
+    inst = db.query(Instrument).filter(Instrument.symbol == sym, Instrument.market == market).first()
+    sector = getattr(inst, "sector", "General") if inst else "General"
+    tier = getattr(inst, "universe_tier", "Small") if inst else "Small"
+    last_price = inst.last_price if inst and inst.last_price else 0.0
+
+    # 2. Latest Signal (if any)
+    sig = db.query(Signal).filter(Signal.symbol == sym, Signal.market == market).order_by(Signal.created_at.desc()).first()
+
+    # 3. DecisionAudit and stages (if any)
+    audit = db.query(DecisionAudit).filter(DecisionAudit.symbol == sym, DecisionAudit.market == market).order_by(DecisionAudit.created_at.desc()).first()
+    stages, blocked_reason = [], None
+    if audit:
+        stage_rows = db.query(DecisionStageResult).filter(DecisionStageResult.audit_id == audit.id).all()
+        stages, blocked_reason = _format_audit_stages(stage_rows)
+
+    # 4. FundamentalSnapshot
+    snap = db.query(FundamentalSnapshot).filter(FundamentalSnapshot.symbol == sym, FundamentalSnapshot.market == market).order_by(FundamentalSnapshot.as_of.desc()).first()
+    fund_dict = None
+    if snap and snap.lights_json:
+        try:
+            fund_dict = json.loads(snap.lights_json)
+        except Exception:
+            fund_dict = None
+    if not fund_dict and snap:
+        fund_dict = fundamentals_engine.evaluate_traffic_lights(sym, {
+            "revenue_yoy": snap.revenue_yoy,
+            "profit_yoy": snap.profit_yoy,
+            "op_margin": snap.op_margin,
+            "roce": snap.roce,
+            "roe": snap.roe,
+            "debt_equity": snap.debt_equity,
+            "interest_coverage": snap.interest_coverage,
+            "pe": snap.pe,
+            "sector_median_pe": snap.sector_median_pe,
+            "promoter_holding": snap.promoter_holding,
+            "pledge_pct": snap.pledge_pct,
+        }, market=market)
+
+    # 5. News events
+    cutoff = datetime.date.today() - datetime.timedelta(days=30)
+    news_rows = (
+        db.query(NewsEvent)
+        .filter(
+            NewsEvent.symbol == sym,
+            NewsEvent.published_at >= datetime.datetime.combine(cutoff, datetime.time.min),
+        )
+        .order_by(NewsEvent.published_at.desc())
+        .limit(10)
+        .all()
+    )
+    catalysts = [
+        {
+            "id": nr.id,
+            "title": nr.title,
+            "source": nr.source or "Unknown",
+            "source_url": nr.url,
+            "published_at": nr.published_at.isoformat() if nr.published_at else None,
+            "severity": nr.severity or "CLEAR",
+            "materiality": nr.materiality,
+            "match_confidence": nr.match_confidence,
+        }
+        for nr in news_rows
+    ]
+
+    rs_rank = sig.rs_rank if sig else 0.5
+    setup_name = sig.setup if sig else "MONITORING"
+    trigger = sig.trigger if sig else (last_price or 0.0)
+    stop = sig.stop if sig else (last_price * 0.95 if last_price else 0.0)
+    target1 = sig.target1 if sig else (last_price * 1.10 if last_price else 0.0)
+    news_cov = json.loads(sig.news_flags_json) if sig and sig.news_flags_json else {"status": "CLEAR"}
+
+    # Sector Trend & Group Relative Strength Computation (Phase 3.5 fix)
+    sector_signals = (
+        db.query(Signal)
+        .join(Instrument, (Instrument.symbol == Signal.symbol) & (Instrument.market == Signal.market))
+        .filter(Instrument.sector == sector, Signal.market == market)
+        .all()
+    )
+    if sector_signals:
+        sec_rs_scores = [s.rs_rank for s in sector_signals if s.rs_rank is not None]
+        sec_avg_rs = sum(sec_rs_scores) / len(sec_rs_scores) if sec_rs_scores else rs_rank
+    else:
+        sec_avg_rs = rs_rank
+
+    sec_trend = "LEADING" if sec_avg_rs >= 0.65 else ("LAGGING" if sec_avg_rs <= 0.35 else "NEUTRAL")
+
+    factors = compute_factor_score_breakdown(
+        symbol=sym,
+        setup=setup_name,
+        trigger=trigger,
+        stop=stop,
+        rs_rank=rs_rank,
+        sector_name=sector,
+        sector_rs_rank=sec_avg_rs,
+        sector_trend=sec_trend,
+        news_cov=news_cov,
+        fund_dict=fund_dict,
+        catalyst_count=len(catalysts),
+    )
+
+    currency = "₹" if market == "IN" else "$"
+    invalidation_rules = [
+        f"Hard Stop: Intraday break or close below {currency}{stop:.2f}" if stop > 0 else "Hard Stop: Set upon trigger confirmation",
+        "Time Stop: 20 completed exchange sessions without reaching Target 1",
+        "Earnings Blackout: Mandatory exit if unannounced earnings report is scheduled within 3 trading days",
+    ]
+    if blocked_reason:
+        invalidation_rules.append(
+            f"Active Invalidation Gate: {blocked_reason.get('check', 'Gate')} blocked setup ({blocked_reason.get('value')})"
+        )
+
+    # Dynamic AI Research Dossier Synthesis (Phase 3.4 & 3.5)
+    ai_thesis = ai_research_assistant.analyze_candidate_thesis(
+        symbol=sym,
+        sector=sector,
+        current_price=last_price or trigger,
+        momentum_score=rs_rank,
+        regime_status="BULLISH",
+        catalysts=catalysts,
+        fundamental_lights=fund_dict,
+        setup_details={
+            "pattern": setup_name,
+            "trigger": trigger,
+            "stop": stop,
+            "risk_pct": round((trigger - stop) / trigger * 100.0, 1) if (trigger > 0 and stop > 0 and trigger > stop) else 5.0,
+        },
+        sector_trend=sec_trend,
+    )
+
+    return {
+        "symbol": sym,
+        "market": market,
+        "sector": sector,
+        "tier": tier,
+        "last_price": last_price or trigger,
+        "setup": {
+            "pattern": setup_name,
+            "trigger": round(trigger, 2),
+            "stop": round(stop, 2),
+            "target1": round(target1, 2),
+            "risk_reward_ratio": round((target1 - trigger) / (trigger - stop), 2) if (trigger > stop and stop > 0 and target1 > trigger) else 0.0,
+            "invalidation_rules": invalidation_rules,
+        },
+        "state": sig.state if sig else "MONITORING",
+        "factors": factors.model_dump(),
+        "evidence": {
+            "fundamental_snapshot_id": snap.id if snap else None,
+            "fundamental_as_of": snap.as_of.isoformat() if snap and snap.as_of else None,
+            "fundamental_source": snap.source if snap else None,
+            "catalysts": catalysts,
+            "sector_name": sector,
+            "sector_rs_rank": round(sec_avg_rs, 2),
+            "sector_trend": sec_trend,
+        },
+        "decision_stages": stages,
+        "blocked_reason": blocked_reason,
+        "fundamentals": fund_dict,
+        "ai_thesis": ai_thesis,
+        "disclaimer": "AI Informational Research Dossier Only — Not a Trading Directive. Deterministic trading logic governs all orders.",
+    }
 

@@ -57,10 +57,10 @@ export const ResearchDesk: React.FC<{ signal: Signal }> = ({ signal }) => {
     return 'NOT EVALUATED';
   };
   const roleWhy = (role: string) => {
-    if (role === 'Scout') return `${stage('Scanner')?.checks.filter((item) => item.passed).length || 0} scanner checks passed`;
-    if (role === 'Technician') return `${stage('Setup Validator')?.checks.filter((item) => item.passed).length || 0} technical checks passed`;
-    if (role === 'Fundamentalist') return fundamentals ? `${fundamentals.unknown_count} UNKNOWN · ${fundamentals.red_count} RED` : 'Unofficial data not available';
-    if (role === 'Newsdesk') return `${signal.news_coverage?.red_events_count || 0} RED · ${signal.news_coverage?.amber_events_count || 0} AMBER items`;
+    if (role === 'Scout') return `${stage('Scanner')?.checks.filter((item) => item.passed).length || 0} scanner checks passed${signal.factors ? ` · Sector RS ${signal.factors.sector_score.toFixed(0)}th percentile` : ''}`;
+    if (role === 'Technician') return `${stage('Setup Validator')?.checks.filter((item) => item.passed).length || 0} technical checks passed${signal.factors ? ` · Tech ${signal.factors.technical_score.toFixed(0)}/100` : ''}`;
+    if (role === 'Fundamentalist') return fundamentals ? `${fundamentals.unknown_count} UNKNOWN · ${fundamentals.red_count} RED${signal.factors ? ` · Fund ${signal.factors.fundamental_score.toFixed(0)}/100` : ''}` : 'Unofficial data not available';
+    if (role === 'Newsdesk') return `${signal.news_coverage?.red_events_count || 0} RED · ${signal.news_coverage?.amber_events_count || 0} AMBER items${signal.evidence?.catalysts?.length ? ` · ${signal.evidence.catalysts.length} linked catalysts` : ''}`;
     if (role === 'Planner') return signal.trigger ? `Trigger ${signal.trigger} · Stop ${signal.stop} · Qty ${signal.qty}` : 'Entry and exit plan pending';
     if (role === 'Risk Manager') return stage('Risk Validator')?.rejection_reasons?.[0] || 'Risk checks from decision pipeline';
     if (role === 'Bull') return allChecks.filter((item) => item.passed).slice(0, 2).map((item) => item.name).join(' · ') || 'No passed checks to cite';
