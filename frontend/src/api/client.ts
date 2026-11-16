@@ -476,6 +476,7 @@ export const apiClient = {
   },
 
   // Paper Trading & Research Extension (Cycle 4)
+  // NOTE: replay/run POST endpoint removed — Phase 4 validation freeze in effect.
   async getPaperTradingOverview() {
     return fetchJson(`${API_BASE}/paper-trading/overview`);
   },
@@ -486,12 +487,6 @@ export const apiClient = {
 
   async getPaperTradingReplay(stress: boolean = false) {
     return fetchJson(`${API_BASE}/paper-trading/replay?stress=${stress ? 'true' : 'false'}`);
-  },
-
-  async runPaperTradingReplay(stress: boolean = false) {
-    return fetchJson(`${API_BASE}/paper-trading/replay/run?stress=${stress ? 'true' : 'false'}`, {
-      method: 'POST',
-    });
   },
 
   async getPaperTradingAiNotes(symbol?: string) {
