@@ -245,6 +245,9 @@ class AppSettings(BaseSettings):
     telegram_bot_token: Optional[str] = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: Optional[str] = Field(default=None, alias="TELEGRAM_CHAT_ID")
 
+    # Paper Trading Scheduler Gate (Phase 5: Default Disabled until explicitly approved by owner)
+    forward_paper_trading_enabled: bool = Field(default=False, alias="FORWARD_PAPER_TRADING_ENABLED")
+
     # News & Regulatory Disclosures
     sec_user_agent: str = Field(
         default="AlgoTrading Research research@example.com",

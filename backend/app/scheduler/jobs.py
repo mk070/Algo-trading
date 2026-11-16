@@ -17,7 +17,7 @@ from app.models import JobRun, NewsSourceState
 from app.notify.dispatcher import dispatcher
 from app.providers.manager import provider_manager
 from app.scheduler.monitor import live_monitor
-from app.settings import DATA_DIR
+from app.settings import DATA_DIR, settings
 from app.cache import shared_cache
 
 logger = logging.getLogger(__name__)
@@ -235,6 +235,10 @@ def job_refresh_fundamentals_weekly(db):
 
 def job_daily_paper_trading(db):
     """Executes daily paper-trading step at 16:00 IST post-market close."""
+    if not settings.forward_paper_trading_enabled:
+        logger.info("Daily paper trading skipped: forward_paper_trading_enabled is False (Phase 5 gate).")
+        return
+
     from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step
     from app.engine.calendars import is_exchange_holiday
     import sys
@@ -277,6 +281,10 @@ def job_daily_paper_trading(db):
 
 def job_weekly_paper_reporting(db):
     """Executes Friday weekly paper-trading audit and report generation at 17:00 IST."""
+    if not settings.forward_paper_trading_enabled:
+        logger.info("Weekly paper reporting skipped: forward_paper_trading_enabled is False (Phase 5 gate).")
+        return
+
     import sys
     proj_root = Path(__file__).resolve().parent.parent.parent.parent
     if str(proj_root) not in sys.path:
@@ -291,18 +299,21 @@ def job_weekly_paper_reporting(db):
 def start_scheduler():
     if not scheduler.running:
         kolkata_tz = ZoneInfo("Asia/Kolkata")
-        scheduler.add_job(
-            log_job_execution("daily_paper_trading", job_daily_paper_trading),
-            CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone=kolkata_tz),
-            id="daily_paper_trading",
-            replace_existing=True,
-        )
-        scheduler.add_job(
-            log_job_execution("weekly_paper_reporting", job_weekly_paper_reporting),
-            CronTrigger(day_of_week="fri", hour=17, minute=0, timezone=kolkata_tz),
-            id="weekly_paper_reporting",
-            replace_existing=True,
-        )
+        if settings.forward_paper_trading_enabled:
+            scheduler.add_job(
+                log_job_execution("daily_paper_trading", job_daily_paper_trading),
+                CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone=kolkata_tz),
+                id="daily_paper_trading",
+                replace_existing=True,
+            )
+            scheduler.add_job(
+                log_job_execution("weekly_paper_reporting", job_weekly_paper_reporting),
+                CronTrigger(day_of_week="fri", hour=17, minute=0, timezone=kolkata_tz),
+                id="weekly_paper_reporting",
+                replace_existing=True,
+            )
+        else:
+            logger.info("Forward paper-trading scheduler jobs (daily_paper_trading, weekly_paper_reporting) are DISABLED (FORWARD_PAPER_TRADING_ENABLED=False).")
         scheduler.add_job(
             log_job_execution("eod_scan_IN", job_eod_scan_in),
             CronTrigger(hour=16, minute=30, timezone=ZoneInfo("Asia/Kolkata")),

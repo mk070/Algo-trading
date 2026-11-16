@@ -386,8 +386,10 @@ class TestPositionLifecycleAndAccountingInvariants:
 
 class TestSchedulerJobRegistration:
     def test_scheduler_jobs_and_timezone(self):
+        from unittest.mock import patch
         from app.scheduler.jobs import scheduler, start_scheduler, stop_scheduler
-        start_scheduler()
+        with patch("app.settings.settings.forward_paper_trading_enabled", True):
+            start_scheduler()
         try:
             job_ids = [j.id for j in scheduler.get_jobs()]
             assert "daily_paper_trading" in job_ids, "daily_paper_trading must be registered in scheduler"
