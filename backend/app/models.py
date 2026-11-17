@@ -610,6 +610,7 @@ class PaperDailyHistory(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     strategy_id = Column(String(50), nullable=False, index=True)
+    run_type = Column(String(20), nullable=False, default="FORWARD", server_default="FORWARD", index=True)
     session_date = Column(Date, nullable=False, index=True)
     cash = Column(Float, nullable=False)
     invested_value = Column(Float, nullable=False)
@@ -644,6 +645,7 @@ class PaperOrder(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     order_id = Column(String(100), nullable=False, unique=True, index=True)
     strategy_id = Column(String(50), nullable=False, index=True)
+    run_type = Column(String(20), nullable=False, default="FORWARD", server_default="FORWARD", index=True)
     symbol = Column(String(50), nullable=False, index=True)
     side = Column(String(10), nullable=False)
     order_type = Column(String(20), nullable=False, default="MARKET")
@@ -663,6 +665,7 @@ class PaperTrade(Base):
     trade_id = Column(String(100), nullable=False, unique=True, index=True)
     order_id = Column(String(100), nullable=True, index=True)
     strategy_id = Column(String(50), nullable=False, index=True)
+    run_type = Column(String(20), nullable=False, default="FORWARD", server_default="FORWARD", index=True)
     symbol = Column(String(50), nullable=False, index=True)
     side = Column(String(10), nullable=False)
     action = Column(String(50), nullable=False)  # LIQUIDATE_EXIT, ENTER_NEW, ADD_SLOT, TRIM_SLOT
@@ -685,6 +688,7 @@ class PaperHolding(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     strategy_id = Column(String(50), nullable=False, index=True)
+    run_type = Column(String(20), nullable=False, default="FORWARD", server_default="FORWARD", index=True)
     symbol = Column(String(50), nullable=False, index=True)
     shares = Column(Integer, nullable=False)
     avg_cost = Column(Float, nullable=False)

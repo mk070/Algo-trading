@@ -233,50 +233,155 @@ def job_refresh_fundamentals_weekly(db):
 
 
 
-def job_daily_paper_trading(db):
-    """Executes daily paper-trading step at 16:00 IST post-market close."""
+def get_last_successful_paper_run(db) -> Optional[datetime.date]:
+    """Retrieves the most recent session date successfully recorded for forward paper trading."""
+    from app.models import PaperDailyHistory
+    try:
+        row = (
+            db.query(PaperDailyHistory.session_date)
+            .filter(
+                PaperDailyHistory.strategy_id == "candidate_reg_alpha_buf30",
+                PaperDailyHistory.run_type == "FORWARD",
+            )
+            .order_by(PaperDailyHistory.session_date.desc())
+            .first()
+        )
+        return row[0] if row else None
+    except Exception as e:
+        logger.warning(f"Failed to query last successful paper run: {e}")
+        return None
+
+
+def detect_missed_paper_runs(db, max_lookback_days: int = 7) -> list[datetime.date]:
+    """Detects any official exchange trading sessions that were missed without an evaluation.
+    Logs warnings and audits them in JobRun without fabricating synthetic fills.
+    """
+    from app.engine.calendars import is_exchange_holiday
+    from app.models import PaperDailyHistory, JobRun
+
+    today = datetime.date.today()
+    last_date = get_last_successful_paper_run(db)
+    if not last_date:
+        return []
+
+    missed_dates = []
+    check_date = last_date + datetime.timedelta(days=1)
+    cutoff_date = today - datetime.timedelta(days=max_lookback_days)
+    if check_date < cutoff_date:
+        check_date = cutoff_date
+
+    while check_date < today:
+        if check_date.weekday() < 5 and not is_exchange_holiday("IN", check_date):
+            exists = (
+                db.query(PaperDailyHistory)
+                .filter(
+                    PaperDailyHistory.strategy_id == "candidate_reg_alpha_buf30",
+                    PaperDailyHistory.session_date == check_date,
+                    PaperDailyHistory.run_type == "FORWARD",
+                )
+                .first()
+            )
+            if not exists:
+                missed_dates.append(check_date)
+                logger.warning(
+                    f"MISSED RUN DETECTED: Trading session {check_date} was not evaluated. "
+                    "Safety rule: fills are NEVER fabricated for past uninspected market events."
+                )
+                try:
+                    jr = JobRun(
+                        job="daily_paper_trading",
+                        started_at=datetime.datetime.utcnow(),
+                        finished_at=datetime.datetime.utcnow(),
+                        status="MISSED_RUN",
+                        detail=f"Session {check_date} was missed. No synthetic fill fabricated.",
+                    )
+                    db.add(jr)
+                    db.commit()
+                except Exception as ex:
+                    logger.warning(f"Could not log MISSED_RUN audit: {ex}")
+                    db.rollback()
+        check_date += datetime.timedelta(days=1)
+
+    return missed_dates
+
+
+def run_paper_evaluation_once(target_date: Optional[datetime.date] = None) -> dict:
+    """Executes a single forward paper-trading daily evaluation step with DB-backed idempotency.
+    Can be invoked via Render Cron Job, external trigger, or CLI runner.
+    """
     if not settings.forward_paper_trading_enabled:
-        logger.info("Daily paper trading skipped: forward_paper_trading_enabled is False (Phase 5 gate).")
-        return
+        msg = "Daily paper trading skipped: forward_paper_trading_enabled is False (Phase 5 gate)."
+        logger.info(msg)
+        return {"status": "SKIPPED", "reason": msg}
 
     from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step
     from app.engine.calendars import is_exchange_holiday
+    from app.models import PaperDailyHistory
     import sys
     proj_root = Path(__file__).resolve().parent.parent.parent.parent
     if str(proj_root) not in sys.path:
         sys.path.insert(0, str(proj_root))
     from research.cycle4.daily_paper_runner import load_market_data
 
-    today = datetime.date.today()
+    today = target_date or datetime.date.today()
     if is_exchange_holiday("IN", today):
-        logger.info(f"Daily paper trading skipped: {today} is an official exchange holiday or weekend.")
-        return
+        msg = f"Daily paper trading skipped: {today} is an official exchange holiday or weekend."
+        logger.info(msg)
+        return {"status": "SKIPPED", "reason": msg}
 
+    db = SessionLocal()
     try:
-        snap_df, bench_df = load_market_data(today)
+        detect_missed_paper_runs(db)
+
+        # DB-level idempotency check
+        already_evaluated = (
+            db.query(PaperDailyHistory)
+            .filter(
+                PaperDailyHistory.strategy_id == "candidate_reg_alpha_buf30",
+                PaperDailyHistory.session_date == today,
+                PaperDailyHistory.run_type == "FORWARD",
+            )
+            .first()
+        )
+        if already_evaluated:
+            msg = f"Session {today} already marked to market in Neon DB. Skipping duplicate execution."
+            logger.info(msg)
+            return {"status": "ALREADY_COMPLETED", "reason": msg, "date": str(today)}
+
+        try:
+            snap_df, bench_df = load_market_data(today)
+        except Exception as e:
+            logger.error(f"Paper trading market data loading failed: {e}")
+            return {"status": "FAILED", "error": str(e), "date": str(today)}
+
+        engine = Cycle4PaperEngine(
+            universe_path="data/universe/research_universe_v1.csv",
+            state_dir="research/cycle4/state",
+            initial_capital=17500.0,
+            run_type="FORWARD",
+        )
+
+        res = run_cycle4_daily_step(
+            engine=engine,
+            session_date=today,
+            historical_bars=snap_df,
+            benchmark_df=bench_df,
+            force_rebalance=False,
+        )
+        logger.info(f"Daily paper trading completed: {res.get('status')}")
+        return {"status": "SUCCESS", "date": str(today), "result": res}
     except Exception as e:
-        logger.error(f"Paper trading market data loading failed: {e}")
-        return
+        logger.error(f"Paper trading evaluation error: {e}")
+        return {"status": "FAILED", "error": str(e), "date": str(today)}
+    finally:
+        db.close()
 
-    engine = Cycle4PaperEngine(
-        universe_path="data/universe/research_universe_v1.csv",
-        state_dir="research/cycle4/state",
-        initial_capital=17500.0,
-    )
 
-    past_dates = [r["date"] for r in engine.candidate_state.daily_history]
-    if str(today) in past_dates:
-        logger.info(f"Session {today} already marked to market. Skipping duplicate execution.")
-        return
-
-    res = run_cycle4_daily_step(
-        engine=engine,
-        session_date=today,
-        historical_bars=snap_df,
-        benchmark_df=bench_df,
-        force_rebalance=False,
-    )
-    logger.info(f"Daily paper trading completed: {res.get('status')}")
+def job_daily_paper_trading(db):
+    """Executes daily paper-trading step at 16:00 IST post-market close."""
+    res = run_paper_evaluation_once()
+    if res.get("status") == "FAILED":
+        raise RuntimeError(res.get("error", "Unknown error in paper evaluation"))
 
 
 def job_weekly_paper_reporting(db):

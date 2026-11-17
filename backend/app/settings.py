@@ -268,13 +268,22 @@ class AppSettings(BaseSettings):
         extra="ignore",
     )
 
+    @property
+    def is_production(self) -> bool:
+        env_val = (self.env or "").strip().lower()
+        if env_val in ("production", "prod"):
+            return True
+        if os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") or os.getenv("RENDER_INSTANCE_ID") or os.getenv("VERCEL"):
+            return True
+        return False
+
     @model_validator(mode="after")
     def require_real_production_token(self):
         """A public deployment must never silently fall back to a demo credential."""
-        if self.env.strip().lower() == "production":
+        if self.is_production:
             token = (self.app_token or "").strip()
             if not token or token == "demo-token-change-in-prod":
-                raise ValueError("APP_TOKEN must be set to a non-placeholder value when ENV=production")
+                raise ValueError("APP_TOKEN must be set to a non-placeholder value when in production or deployed on cloud hosts")
         return self
 
     def load_yaml_configs(self):

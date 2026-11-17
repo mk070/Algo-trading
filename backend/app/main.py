@@ -32,25 +32,46 @@ def verify_token(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Security(security),
 ):
-    """Require the configured bearer token on every non-health API route in production."""
-    if settings.env.strip().lower() == "production":
-        path = request.url.path.lower().rstrip("/")
-        # Fast bypass for probes, health checks, root, and ping endpoints
-        if path in (
-            "",
-            "/health",
-            "/healthz",
-            "/ping",
-            "/api",
-            "/api/health",
-            "/api/healthz",
-            "/api/ping",
-            "/api/health/db",
-        ) or path.endswith(("/health", "/healthz", "/ping")):
-            return True
+    """Require the configured bearer token on every non-health API route in production.
+    Fails closed: if in production (or deployed on cloud hosts like Render), ANY non-whitelisted
+    path MUST provide a valid Bearer token matching settings.app_token. If app_token is empty or
+    invalid, all protected endpoints are rejected with 401.
+    """
+    path = request.url.path.lower().rstrip("/")
+    # Whitelist of genuinely public health and liveness endpoints for orchestration / uptime probes
+    public_paths = {
+        "",
+        "/",
+        "/health",
+        "/healthz",
+        "/ping",
+        "/api",
+        "/api/health",
+        "/api/healthz",
+        "/api/ping",
+        "/api/health/db",
+    }
+    if path in public_paths or path.endswith(("/health", "/healthz", "/ping")):
+        return True
 
-        if not credentials or credentials.credentials != settings.app_token:
+    if settings.is_production:
+        token = (settings.app_token or "").strip()
+        if not token or token == "demo-token-change-in-prod":
+            raise HTTPException(
+                status_code=401,
+                detail="Production authentication is not configured. APP_TOKEN must be set.",
+            )
+        if not credentials or not credentials.credentials or credentials.credentials.strip() != token:
             raise HTTPException(status_code=401, detail="Invalid or missing API Bearer token")
+        return True
+
+    # In development / testing:
+    # If a custom APP_TOKEN is configured and credentials are supplied, validate them
+    token = (settings.app_token or "").strip()
+    if token and token != "demo-token-change-in-prod" and credentials:
+        if credentials.credentials.strip() != token:
+            raise HTTPException(status_code=401, detail="Invalid API Bearer token")
+
     return True
 
 

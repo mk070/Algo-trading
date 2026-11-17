@@ -81,3 +81,36 @@ def test_cli_runner_blocked_when_disabled():
                 assert exc_info.value.code == 1
                 mock_load.assert_not_called()
                 mock_engine.assert_not_called()
+
+
+def test_run_paper_evaluation_once_skipped_when_disabled():
+    with patch("app.settings.settings.forward_paper_trading_enabled", False):
+        res = jobs.run_paper_evaluation_once()
+        assert res["status"] == "SKIPPED"
+        assert "forward_paper_trading_enabled is False" in res["reason"]
+
+
+def test_run_paper_evaluation_once_holiday_skipped():
+    import datetime
+    with patch("app.settings.settings.forward_paper_trading_enabled", True):
+        with patch("app.engine.calendars.is_exchange_holiday", return_value=True):
+            res = jobs.run_paper_evaluation_once()
+            assert res["status"] == "SKIPPED"
+            assert "holiday or weekend" in res["reason"]
+
+
+def test_detect_missed_paper_runs_logs_warning_and_audits():
+    import datetime
+    mock_db = MagicMock()
+    past_date = datetime.date.today() - datetime.timedelta(days=4)
+    with patch("app.scheduler.jobs.get_last_successful_paper_run", return_value=past_date):
+        with patch("app.engine.calendars.is_exchange_holiday", return_value=False):
+            mock_query = MagicMock()
+            mock_filter = MagicMock()
+            mock_filter.first.return_value = None
+            mock_query.filter.return_value = mock_filter
+            mock_db.query.return_value = mock_query
+
+            missed = jobs.detect_missed_paper_runs(mock_db, max_lookback_days=7)
+            assert len(missed) > 0
+            assert mock_db.add.called

@@ -321,7 +321,7 @@ def _load_prospective_state_db(name: str) -> Optional[Dict[str, Any]]:
             acc = session.query(PaperAccount).filter(PaperAccount.strategy_id == name).first()
             if not acc:
                 return None
-            holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name).all()
+            holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name, PaperHolding.run_type == "FORWARD").all()
             holdings_dict = {
                 h.symbol: {
                     "shares": h.shares,
@@ -330,8 +330,8 @@ def _load_prospective_state_db(name: str) -> Optional[Dict[str, Any]]:
                 }
                 for h in holdings
             }
-            trades_count = session.query(PaperTrade).filter(PaperTrade.strategy_id == name).count()
-            sessions_count = session.query(PaperDailyHistory).filter(PaperDailyHistory.strategy_id == name).count()
+            trades_count = session.query(PaperTrade).filter(PaperTrade.strategy_id == name, PaperTrade.run_type == "FORWARD").count()
+            sessions_count = session.query(PaperDailyHistory).filter(PaperDailyHistory.strategy_id == name, PaperDailyHistory.run_type == "FORWARD").count()
             return {
                 "name": acc.strategy_id,
                 "initial_capital": round(acc.initial_capital, 2),
@@ -403,7 +403,7 @@ def _load_prospective_daily(name: str) -> List[Dict[str, Any]]:
             with transaction_context() as session:
                 rows = (
                     session.query(PaperDailyHistory)
-                    .filter(PaperDailyHistory.strategy_id == name)
+                    .filter(PaperDailyHistory.strategy_id == name, PaperDailyHistory.run_type == "FORWARD")
                     .order_by(PaperDailyHistory.session_date.asc())
                     .all()
                 )
@@ -448,7 +448,7 @@ def _load_prospective_trades(name: str) -> List[Dict[str, Any]]:
             with transaction_context() as session:
                 rows = (
                     session.query(PaperTrade)
-                    .filter(PaperTrade.strategy_id == name)
+                    .filter(PaperTrade.strategy_id == name, PaperTrade.run_type == "FORWARD")
                     .order_by(PaperTrade.exec_date.asc(), PaperTrade.id.asc())
                     .all()
                 )

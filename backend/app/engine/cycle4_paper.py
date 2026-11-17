@@ -164,12 +164,14 @@ class Cycle4PaperEngine:
         state_dir: str = "research/cycle4/state",
         initial_capital: float = 17500.0,
         use_db: bool = True,
+        run_type: str = "FORWARD",
     ):
         self.universe_path = Path(universe_path)
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.initial_capital = initial_capital
         self.use_db = use_db
+        self.run_type = run_type
 
         if not self.universe_path.exists():
             raise FileNotFoundError(f"Universe file {self.universe_path} missing.")
@@ -219,7 +221,7 @@ class Cycle4PaperEngine:
                 state.last_processed_date = str(acc.last_processed_date) if acc.last_processed_date else None
 
                 # Load holdings
-                holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name).all()
+                holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name, PaperHolding.run_type == self.run_type).all()
                 state.holdings = {
                     h.symbol: {
                         "shares": int(h.shares),
@@ -232,7 +234,7 @@ class Cycle4PaperEngine:
                 # Load trade history
                 trades = (
                     session.query(PaperTrade)
-                    .filter(PaperTrade.strategy_id == name)
+                    .filter(PaperTrade.strategy_id == name, PaperTrade.run_type == self.run_type)
                     .order_by(PaperTrade.exec_date.asc(), PaperTrade.id.asc())
                     .all()
                 )
@@ -258,7 +260,7 @@ class Cycle4PaperEngine:
                 # Load daily history
                 daily = (
                     session.query(PaperDailyHistory)
-                    .filter(PaperDailyHistory.strategy_id == name)
+                    .filter(PaperDailyHistory.strategy_id == name, PaperDailyHistory.run_type == self.run_type)
                     .order_by(PaperDailyHistory.session_date.asc())
                     .all()
                 )
@@ -330,7 +332,7 @@ class Cycle4PaperEngine:
                 # Sync holdings table
                 existing_holdings = {
                     h.symbol: h
-                    for h in session.query(PaperHolding).filter(PaperHolding.strategy_id == state.name).all()
+                    for h in session.query(PaperHolding).filter(PaperHolding.strategy_id == state.name, PaperHolding.run_type == self.run_type).all()
                 }
                 for sym, pos in state.holdings.items():
                     if sym in existing_holdings:
@@ -341,6 +343,7 @@ class Cycle4PaperEngine:
                     else:
                         h = PaperHolding(
                             strategy_id=state.name,
+                            run_type=self.run_type,
                             symbol=sym,
                             shares=pos["shares"],
                             avg_cost=pos["avg_cost"],
@@ -364,6 +367,7 @@ class Cycle4PaperEngine:
                     .filter(
                         PaperDailyHistory.strategy_id == state.name,
                         PaperDailyHistory.session_date == s_date,
+                        PaperDailyHistory.run_type == self.run_type,
                     )
                     .first()
                 )
@@ -373,6 +377,7 @@ class Cycle4PaperEngine:
                 if not rec:
                     rec = PaperDailyHistory(
                         strategy_id=state.name,
+                        run_type=self.run_type,
                         session_date=s_date,
                         cash=float(daily_record["cash"]),
                         invested_value=float(daily_record["invested_value"]),
@@ -436,6 +441,7 @@ class Cycle4PaperEngine:
                         trade_id=trade_id,
                         order_id=trade_record.get("order_id"),
                         strategy_id=t_strat,
+                        run_type=self.run_type,
                         symbol=t_sym,
                         side=t_side,
                         action=trade_record["action"],
@@ -468,6 +474,7 @@ class Cycle4PaperEngine:
                     row = PaperOrder(
                         order_id=order_id,
                         strategy_id=order_dict["strategy_id"],
+                        run_type=self.run_type,
                         symbol=order_dict["symbol"],
                         side=order_dict["side"],
                         order_type=order_dict.get("order_type", "MARKET"),

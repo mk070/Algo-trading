@@ -18,3 +18,19 @@ services:
       - key: PORT
         value: 10000
 
+  - type: cron
+    name: algo-paper-daily
+    env: python
+    region: oregon
+    plan: free
+    schedule: "30 10 * * 1-5"  # 16:00 IST (UTC 10:30) Mon-Fri
+    buildCommand: pip install uv && uv pip install --python .venv/bin/python -r backend/pyproject.toml
+    startCommand: python -c "import sys; sys.path.insert(0, 'backend'); from app.scheduler.jobs import run_paper_evaluation_once; run_paper_evaluation_once()"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: ENV
+        value: production
+      - key: FORWARD_PAPER_TRADING_ENABLED
+        value: false
+
