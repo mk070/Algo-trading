@@ -198,7 +198,7 @@ class PlannedSignal(BaseModel):
     state: str
     tier: str = "Small"
     is_higher_risk: bool = False
-    setup_edge_status: str = "VALIDATED"
+    setup_edge_status: str = "UNVALIDATED_INCONCLUSIVE"
     setup_note: Optional[str] = None
     sources: List[str] = ["AUTO"]
     first_failing_check: Optional[str] = None
@@ -569,16 +569,19 @@ class Planner:
             else:
                 qty = 0
 
-            # Setup edge validation attribution (Strategy Lab task-9156 caveat)
-            setup_edge_status = "VALIDATED"
+            # Setup edge validation attribution (Phase 2 Governance & Strategy Lab task-9156 caveat)
+            setup_edge_status = "UNVALIDATED_INCONCLUSIVE"
             setup_note = None
             if cand:
                 if cand.setup == "PULLBACK":
                     setup_edge_status = "NO_VALIDATED_EDGE"
                     setup_note = "Strategy Lab (task-9156) found no validated edge for Setup P (EMA pullback). Research only."
+                elif cand.setup == "VCP":
+                    setup_edge_status = "UNVALIDATED_INCONCLUSIVE"
+                    setup_note = "Phase 2 verdict: INCONCLUSIVE (sample size n=7 < 150 required; net expectancy -0.64R). Discretionary pattern search only, not a statistically validated trading edge."
                 else:
-                    setup_edge_status = "VALIDATED"
-                    setup_note = "Minervini Stage 2 VCP consolidation structure"
+                    setup_edge_status = "UNVALIDATED_INCONCLUSIVE"
+                    setup_note = "Discretionary pattern search only, not a statistically validated trading edge."
 
             # If blocked by Market Regime, override blocked reason with exact distance
             if not regime.allows_entries and state == "BLOCKED":

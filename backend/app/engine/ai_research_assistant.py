@@ -200,7 +200,7 @@ class AiResearchAssistant:
             "sector_trend": trend_label,
             "as_of": now_str,
             "current_price": current_price,
-            "disclaimer": "AI Informational Research Only — Not a Trading Directive. Deterministic signals govern all trade recommendations for manual execution.",
+            "disclaimer": "AI Informational Research Only — Not a Trading Directive. Deterministic signals govern all trade recommendations for manual execution. Setup V (VCP) and Setup P (Pullback) are unvalidated heuristics under Phase 2 pre-registration governance and do not constitute a statistically proven edge.",
             "bull_case": {
                 "title": f"Structural Bull Factors for {symbol}",
                 "evidence": bull_points,

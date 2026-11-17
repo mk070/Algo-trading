@@ -532,6 +532,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
                                 ⚠️ No validated edge
                               </span>
                             )}
+                            {cand.setup === 'VCP' && (
+                              <span className="text-[9px] text-amber-400/90 font-sans" title="Phase 2 verdict: INCONCLUSIVE (sample size n=7 < 150 required; net expectancy -0.64R). Discretionary pattern search only, not a statistically validated trading edge.">
+                                ⚠️ Unvalidated heuristic
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 font-sans">
