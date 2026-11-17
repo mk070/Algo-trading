@@ -493,4 +493,13 @@ export const apiClient = {
     const qs = symbol ? `?symbol=${encodeURIComponent(symbol)}` : '';
     return fetchJson(`${API_BASE}/paper-trading/ai-notes${qs}`);
   },
+
+  // Prospective Paper Trading (Cycle 4 Live Telemetry)
+  async getProspectivePaperOverview() {
+    return fetchJson(`${API_BASE}/paper-trading/prospective/overview`);
+  },
+
+  async getProspectivePaperStrategy(strategyId: string) {
+    return fetchJson(`${API_BASE}/paper-trading/prospective/strategy/${encodeURIComponent(strategyId)}`);
+  },
 };

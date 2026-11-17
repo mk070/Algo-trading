@@ -13,6 +13,7 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     ForeignKey,
     Index,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -575,4 +576,138 @@ class WatchlistItem(Base):
     is_deleted = Column(Boolean, default=False)
     added_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
     removed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+# ===========================================================================
+# Cycle 4 Prospective Paper-Trading Persistence Models
+# Strictly Paper / Offline Observation — No Live Broker Execution
+# ===========================================================================
+
+
+class PaperAccount(Base):
+    """Account state and valuation for prospective paper portfolios."""
+    __tablename__ = "paper_accounts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_id = Column(String(50), nullable=False, unique=True, index=True)
+    initial_capital = Column(Float, nullable=False, default=17500.0)
+    cash = Column(Float, nullable=False, default=17500.0)
+    total_equity = Column(Float, nullable=False, default=17500.0)
+    peak_equity = Column(Float, nullable=False, default=17500.0)
+    realized_pnl = Column(Float, nullable=False, default=0.0)
+    unrealized_pnl = Column(Float, nullable=False, default=0.0)
+    cumulative_costs_paid = Column(Float, nullable=False, default=0.0)
+    last_processed_date = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class PaperDailyHistory(Base):
+    """Daily mark-to-market ledger for paper portfolios.
+    Enforces idempotency via unique constraint on (strategy_id, session_date).
+    """
+    __tablename__ = "paper_daily_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_id = Column(String(50), nullable=False, index=True)
+    session_date = Column(Date, nullable=False, index=True)
+    cash = Column(Float, nullable=False)
+    invested_value = Column(Float, nullable=False)
+    total_equity = Column(Float, nullable=False)
+    peak_equity = Column(Float, nullable=False)
+    drawdown_pct = Column(Float, nullable=False)
+    cumulative_return_pct = Column(Float, nullable=False)
+    cumulative_costs = Column(Float, nullable=False)
+    cost_pct_of_capital = Column(Float, nullable=False)
+    realized_pnl = Column(Float, nullable=False)
+    unrealized_pnl = Column(Float, nullable=False)
+    holdings_count = Column(Integer, nullable=False)
+    benchmark_close = Column(Float, nullable=True)
+    benchmark_daily_return = Column(Float, nullable=True)
+    regime_status = Column(String(100), nullable=True)
+    valuation_status = Column(String(100), nullable=True)
+    is_complete_valuation = Column(Boolean, nullable=False, default=True)
+    missing_price_symbols = Column(Text, nullable=True)
+    stale_price_carry_forwards = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("strategy_id", "session_date", name="uq_paper_daily_strategy_date"),
+        Index("idx_paper_daily_strat_date", "strategy_id", "session_date"),
+    )
+
+
+class PaperOrder(Base):
+    """Audit journal of generated paper rebalance orders and rejections."""
+    __tablename__ = "paper_orders"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(String(100), nullable=False, unique=True, index=True)
+    strategy_id = Column(String(50), nullable=False, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    side = Column(String(10), nullable=False)
+    order_type = Column(String(20), nullable=False, default="MARKET")
+    requested_shares = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False)  # PENDING, FILLED, REJECTED, CANCELLED
+    rejection_reason = Column(String(255), nullable=True)
+    signal_date = Column(Date, nullable=False)
+    exec_date = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+
+class PaperTrade(Base):
+    """Execution fills and statutory delivery costs for paper portfolios."""
+    __tablename__ = "paper_trades"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    trade_id = Column(String(100), nullable=False, unique=True, index=True)
+    order_id = Column(String(100), nullable=True, index=True)
+    strategy_id = Column(String(50), nullable=False, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    side = Column(String(10), nullable=False)
+    action = Column(String(50), nullable=False)  # LIQUIDATE_EXIT, ENTER_NEW, ADD_SLOT, TRIM_SLOT
+    exec_date = Column(Date, nullable=False, index=True)
+    shares = Column(Integer, nullable=False)
+    ref_open = Column(Float, nullable=False)
+    fill_price = Column(Float, nullable=False)
+    gross_turnover = Column(Float, nullable=False)
+    costs_json = Column(Text, nullable=False)
+    total_cost = Column(Float, nullable=False)
+    net_cash_delta = Column(Float, nullable=False)
+    realized_pnl = Column(Float, nullable=False, default=0.0)
+    regime_pass = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
+
+
+class PaperHolding(Base):
+    """Current open whole-share positions per paper strategy."""
+    __tablename__ = "paper_holdings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    strategy_id = Column(String(50), nullable=False, index=True)
+    symbol = Column(String(50), nullable=False, index=True)
+    shares = Column(Integer, nullable=False)
+    avg_cost = Column(Float, nullable=False)
+    invested_cost = Column(Float, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now(), onupdate=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("strategy_id", "symbol", name="uq_paper_holding_strat_symbol"),
+    )
+
+
+class PaperRebalanceAudit(Base):
+    """Audit log of rebalance signals, market regime status, and ranked candidate snapshots."""
+    __tablename__ = "paper_rebalance_audits"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    signal_date = Column(Date, nullable=False, index=True)
+    is_bull_regime = Column(Boolean, nullable=False)
+    nsei_close = Column(Float, nullable=False)
+    nsei_sma200 = Column(Float, nullable=False)
+    candidate_targets_json = Column(Text, nullable=False)
+    control_targets_json = Column(Text, nullable=False)
+    candidate_top5_json = Column(Text, nullable=True)
+    control_top5_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 

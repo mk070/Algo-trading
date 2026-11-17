@@ -59,3 +59,25 @@ def test_scheduler_does_not_register_paper_trading_jobs_when_disabled():
         # Clean up
         if jobs.scheduler.running:
             jobs.scheduler.shutdown(wait=False)
+
+
+def test_cli_runner_blocked_when_disabled():
+    """Verify daily_paper_runner.main() exits immediately when forward_paper_trading_enabled is False."""
+    import pytest
+    import sys
+    from pathlib import Path
+
+    proj_root = Path(__file__).resolve().parent.parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+
+    from research.cycle4 import daily_paper_runner
+
+    with patch("app.settings.settings.forward_paper_trading_enabled", False):
+        with patch.object(daily_paper_runner, "load_market_data") as mock_load:
+            with patch("app.engine.cycle4_paper.Cycle4PaperEngine") as mock_engine:
+                with pytest.raises(SystemExit) as exc_info:
+                    daily_paper_runner.main()
+                assert exc_info.value.code == 1
+                mock_load.assert_not_called()
+                mock_engine.assert_not_called()

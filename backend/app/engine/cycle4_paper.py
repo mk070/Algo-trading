@@ -29,6 +29,15 @@ import numpy as np
 import pandas as pd
 
 from app.engine.calendars import is_exchange_holiday, get_expected_trading_days
+from app.db import transaction_context
+from app.models import (
+    PaperAccount,
+    PaperDailyHistory,
+    PaperOrder,
+    PaperTrade,
+    PaperHolding,
+    PaperRebalanceAudit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,11 +163,13 @@ class Cycle4PaperEngine:
         universe_path: str = "data/universe/research_universe_v1.csv",
         state_dir: str = "research/cycle4/state",
         initial_capital: float = 17500.0,
+        use_db: bool = True,
     ):
         self.universe_path = Path(universe_path)
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.initial_capital = initial_capital
+        self.use_db = use_db
 
         if not self.universe_path.exists():
             raise FileNotFoundError(f"Universe file {self.universe_path} missing.")
@@ -191,14 +202,328 @@ class Cycle4PaperEngine:
         with open(self.pending_rebalances_file, "w", encoding="utf-8") as f:
             json.dump(self.pending_rebalances, f, indent=2)
 
+    def _load_state_from_db(self, name: str) -> Optional[PortfolioState]:
+        """Loads portfolio state, holdings, trades, and daily history from PostgreSQL."""
+        try:
+            with transaction_context() as session:
+                acc = session.query(PaperAccount).filter(PaperAccount.strategy_id == name).first()
+                if not acc:
+                    return None
+                state = PortfolioState(name=acc.strategy_id, initial_capital=acc.initial_capital)
+                state.cash = float(acc.cash)
+                state.total_equity = float(acc.total_equity)
+                state.peak_equity = float(acc.peak_equity)
+                state.realized_pnl = float(acc.realized_pnl)
+                state.unrealized_pnl = float(acc.unrealized_pnl)
+                state.cumulative_costs_paid = float(acc.cumulative_costs_paid)
+                state.last_processed_date = str(acc.last_processed_date) if acc.last_processed_date else None
+
+                # Load holdings
+                holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name).all()
+                state.holdings = {
+                    h.symbol: {
+                        "shares": int(h.shares),
+                        "avg_cost": float(h.avg_cost),
+                        "invested_cost": float(h.invested_cost),
+                    }
+                    for h in holdings
+                }
+
+                # Load trade history
+                trades = (
+                    session.query(PaperTrade)
+                    .filter(PaperTrade.strategy_id == name)
+                    .order_by(PaperTrade.exec_date.asc(), PaperTrade.id.asc())
+                    .all()
+                )
+                state.trade_history = [
+                    {
+                        "exec_date": str(t.exec_date),
+                        "portfolio": t.strategy_id,
+                        "symbol": t.symbol,
+                        "side": t.side,
+                        "action": t.action,
+                        "shares": int(t.shares),
+                        "ref_open": float(t.ref_open),
+                        "fill_price": float(t.fill_price),
+                        "gross_turnover": float(t.gross_turnover),
+                        "costs": json.loads(t.costs_json) if t.costs_json else {},
+                        "net_cash_delta": float(t.net_cash_delta),
+                        "realized_pnl": float(t.realized_pnl),
+                        "regime_pass": bool(t.regime_pass),
+                    }
+                    for t in trades
+                ]
+
+                # Load daily history
+                daily = (
+                    session.query(PaperDailyHistory)
+                    .filter(PaperDailyHistory.strategy_id == name)
+                    .order_by(PaperDailyHistory.session_date.asc())
+                    .all()
+                )
+                state.daily_history = [
+                    {
+                        "date": str(d.session_date),
+                        "portfolio": d.strategy_id,
+                        "cash": float(d.cash),
+                        "invested_value": float(d.invested_value),
+                        "total_equity": float(d.total_equity),
+                        "peak_equity": float(d.peak_equity),
+                        "drawdown_pct": float(d.drawdown_pct),
+                        "cumulative_return_pct": float(d.cumulative_return_pct),
+                        "cumulative_costs": float(d.cumulative_costs),
+                        "cost_pct_of_capital": float(d.cost_pct_of_capital),
+                        "realized_pnl": float(d.realized_pnl),
+                        "unrealized_pnl": float(d.unrealized_pnl),
+                        "holdings_count": int(d.holdings_count),
+                        "benchmark_close": float(d.benchmark_close) if d.benchmark_close is not None else None,
+                        "benchmark_daily_return": float(d.benchmark_daily_return) if d.benchmark_daily_return is not None else None,
+                        "regime_status": d.regime_status,
+                        "valuation_status": d.valuation_status,
+                        "is_complete_valuation": bool(d.is_complete_valuation),
+                        "missing_price_symbols": json.loads(d.missing_price_symbols) if d.missing_price_symbols else [],
+                        "stale_price_carry_forwards": json.loads(d.stale_price_carry_forwards) if d.stale_price_carry_forwards else {},
+                    }
+                    for d in daily
+                ]
+                return state
+        except Exception as e:
+            logger.warning(f"Failed to load paper state from DB for {name}: {e}")
+            return None
+
+    def _persist_state_to_db(self, state: PortfolioState):
+        """Persists account snapshot and current holdings into PostgreSQL."""
+        try:
+            with transaction_context() as session:
+                acc = session.query(PaperAccount).filter(PaperAccount.strategy_id == state.name).first()
+                p_date = None
+                if state.last_processed_date:
+                    if isinstance(state.last_processed_date, str):
+                        p_date = datetime.date.fromisoformat(state.last_processed_date)
+                    elif isinstance(state.last_processed_date, datetime.date):
+                        p_date = state.last_processed_date
+
+                if not acc:
+                    acc = PaperAccount(
+                        strategy_id=state.name,
+                        initial_capital=state.initial_capital,
+                        cash=state.cash,
+                        total_equity=state.total_equity,
+                        peak_equity=state.peak_equity,
+                        realized_pnl=state.realized_pnl,
+                        unrealized_pnl=state.unrealized_pnl,
+                        cumulative_costs_paid=state.cumulative_costs_paid,
+                        last_processed_date=p_date,
+                    )
+                    session.add(acc)
+                else:
+                    acc.cash = state.cash
+                    acc.total_equity = state.total_equity
+                    acc.peak_equity = state.peak_equity
+                    acc.realized_pnl = state.realized_pnl
+                    acc.unrealized_pnl = state.unrealized_pnl
+                    acc.cumulative_costs_paid = state.cumulative_costs_paid
+                    if p_date:
+                        acc.last_processed_date = p_date
+
+                # Sync holdings table
+                existing_holdings = {
+                    h.symbol: h
+                    for h in session.query(PaperHolding).filter(PaperHolding.strategy_id == state.name).all()
+                }
+                for sym, pos in state.holdings.items():
+                    if sym in existing_holdings:
+                        h = existing_holdings[sym]
+                        h.shares = pos["shares"]
+                        h.avg_cost = pos["avg_cost"]
+                        h.invested_cost = pos["invested_cost"]
+                    else:
+                        h = PaperHolding(
+                            strategy_id=state.name,
+                            symbol=sym,
+                            shares=pos["shares"],
+                            avg_cost=pos["avg_cost"],
+                            invested_cost=pos["invested_cost"],
+                        )
+                        session.add(h)
+                for sym, h in existing_holdings.items():
+                    if sym not in state.holdings:
+                        session.delete(h)
+        except Exception as e:
+            logger.warning(f"Failed to persist paper state to DB for {state.name}: {e}")
+
+    def _persist_daily_to_db(self, state: PortfolioState, daily_record: Dict[str, Any]):
+        """Persists daily mark-to-market ledger row into PostgreSQL idempotently."""
+        try:
+            with transaction_context() as session:
+                raw_d = daily_record["date"]
+                s_date = datetime.date.fromisoformat(raw_d) if isinstance(raw_d, str) else raw_d
+                rec = (
+                    session.query(PaperDailyHistory)
+                    .filter(
+                        PaperDailyHistory.strategy_id == state.name,
+                        PaperDailyHistory.session_date == s_date,
+                    )
+                    .first()
+                )
+                missing_str = json.dumps(daily_record.get("missing_price_symbols", []))
+                stale_str = json.dumps(daily_record.get("stale_price_carry_forwards", {}))
+
+                if not rec:
+                    rec = PaperDailyHistory(
+                        strategy_id=state.name,
+                        session_date=s_date,
+                        cash=float(daily_record["cash"]),
+                        invested_value=float(daily_record["invested_value"]),
+                        total_equity=float(daily_record["total_equity"]),
+                        peak_equity=float(daily_record["peak_equity"]),
+                        drawdown_pct=float(daily_record["drawdown_pct"]),
+                        cumulative_return_pct=float(daily_record["cumulative_return_pct"]),
+                        cumulative_costs=float(daily_record["cumulative_costs"]),
+                        cost_pct_of_capital=float(daily_record["cost_pct_of_capital"]),
+                        realized_pnl=float(daily_record["realized_pnl"]),
+                        unrealized_pnl=float(daily_record["unrealized_pnl"]),
+                        holdings_count=int(daily_record["holdings_count"]),
+                        benchmark_close=float(daily_record["benchmark_close"]) if daily_record.get("benchmark_close") is not None else None,
+                        benchmark_daily_return=float(daily_record["benchmark_daily_return"]) if daily_record.get("benchmark_daily_return") is not None else None,
+                        regime_status=daily_record.get("regime_status"),
+                        valuation_status=daily_record.get("valuation_status"),
+                        is_complete_valuation=bool(daily_record.get("is_complete_valuation", True)),
+                        missing_price_symbols=missing_str,
+                        stale_price_carry_forwards=stale_str,
+                    )
+                    session.add(rec)
+                else:
+                    rec.cash = float(daily_record["cash"])
+                    rec.invested_value = float(daily_record["invested_value"])
+                    rec.total_equity = float(daily_record["total_equity"])
+                    rec.peak_equity = float(daily_record["peak_equity"])
+                    rec.drawdown_pct = float(daily_record["drawdown_pct"])
+                    rec.cumulative_return_pct = float(daily_record["cumulative_return_pct"])
+                    rec.cumulative_costs = float(daily_record["cumulative_costs"])
+                    rec.cost_pct_of_capital = float(daily_record["cost_pct_of_capital"])
+                    rec.realized_pnl = float(daily_record["realized_pnl"])
+                    rec.unrealized_pnl = float(daily_record["unrealized_pnl"])
+                    rec.holdings_count = int(daily_record["holdings_count"])
+                    rec.benchmark_close = float(daily_record["benchmark_close"]) if daily_record.get("benchmark_close") is not None else None
+                    rec.benchmark_daily_return = float(daily_record["benchmark_daily_return"]) if daily_record.get("benchmark_daily_return") is not None else None
+                    rec.regime_status = daily_record.get("regime_status")
+                    rec.valuation_status = daily_record.get("valuation_status")
+                    rec.is_complete_valuation = bool(daily_record.get("is_complete_valuation", True))
+                    rec.missing_price_symbols = missing_str
+                    rec.stale_price_carry_forwards = stale_str
+        except Exception as e:
+            logger.warning(f"Failed to persist daily record to DB for {state.name}: {e}")
+
+    def _persist_trade_to_db(self, trade_record: Dict[str, Any]):
+        """Persists executed trade into PostgreSQL."""
+        try:
+            with transaction_context() as session:
+                t_date = trade_record["exec_date"]
+                t_strat = trade_record["portfolio"]
+                t_sym = trade_record["symbol"]
+                t_side = trade_record["side"]
+                t_shares = trade_record["shares"]
+                raw_key = f"{t_strat}_{t_date}_{t_sym}_{t_side}_{t_shares}_{trade_record.get('action')}"
+                trade_id = f"T_{hashlib.sha256(raw_key.encode('utf-8')).hexdigest()[:16]}"
+
+                existing = session.query(PaperTrade).filter(PaperTrade.trade_id == trade_id).first()
+                if not existing:
+                    e_date = datetime.date.fromisoformat(t_date) if isinstance(t_date, str) else t_date
+                    costs = trade_record.get("costs", {})
+                    t_row = PaperTrade(
+                        trade_id=trade_id,
+                        order_id=trade_record.get("order_id"),
+                        strategy_id=t_strat,
+                        symbol=t_sym,
+                        side=t_side,
+                        action=trade_record["action"],
+                        exec_date=e_date,
+                        shares=int(t_shares),
+                        ref_open=float(trade_record["ref_open"]),
+                        fill_price=float(trade_record["fill_price"]),
+                        gross_turnover=float(trade_record["gross_turnover"]),
+                        costs_json=json.dumps(costs),
+                        total_cost=float(costs.get("total_cost", 0.0)),
+                        net_cash_delta=float(trade_record["net_cash_delta"]),
+                        realized_pnl=float(trade_record.get("realized_pnl", 0.0)),
+                        regime_pass=bool(trade_record.get("regime_pass", True)),
+                    )
+                    session.add(t_row)
+        except Exception as e:
+            logger.warning(f"Failed to persist trade to DB: {e}")
+
+    def _persist_order_to_db(self, order_dict: Dict[str, Any]):
+        """Persists order audit row or rejection into PostgreSQL."""
+        try:
+            with transaction_context() as session:
+                order_id = order_dict["order_id"]
+                existing = session.query(PaperOrder).filter(PaperOrder.order_id == order_id).first()
+                s_date = datetime.date.fromisoformat(order_dict["signal_date"]) if isinstance(order_dict["signal_date"], str) else order_dict["signal_date"]
+                e_date = None
+                if order_dict.get("exec_date"):
+                    e_date = datetime.date.fromisoformat(order_dict["exec_date"]) if isinstance(order_dict["exec_date"], str) else order_dict["exec_date"]
+                if not existing:
+                    row = PaperOrder(
+                        order_id=order_id,
+                        strategy_id=order_dict["strategy_id"],
+                        symbol=order_dict["symbol"],
+                        side=order_dict["side"],
+                        order_type=order_dict.get("order_type", "MARKET"),
+                        requested_shares=int(order_dict["requested_shares"]),
+                        status=order_dict["status"],
+                        rejection_reason=order_dict.get("rejection_reason"),
+                        signal_date=s_date,
+                        exec_date=e_date,
+                    )
+                    session.add(row)
+                else:
+                    existing.status = order_dict["status"]
+                    existing.rejection_reason = order_dict.get("rejection_reason")
+                    if e_date:
+                        existing.exec_date = e_date
+        except Exception as e:
+            logger.warning(f"Failed to persist order to DB: {e}")
+
+    def _persist_rebalance_audit_to_db(self, audit_dict: Dict[str, Any]):
+        """Persists rebalance audit trail into PostgreSQL."""
+        try:
+            with transaction_context() as session:
+                s_date_raw = audit_dict["signal_date"]
+                s_date = datetime.date.fromisoformat(s_date_raw) if isinstance(s_date_raw, str) else s_date_raw
+                existing = session.query(PaperRebalanceAudit).filter(PaperRebalanceAudit.signal_date == s_date).first()
+                if not existing:
+                    row = PaperRebalanceAudit(
+                        signal_date=s_date,
+                        is_bull_regime=bool(audit_dict["is_bull_regime"]),
+                        nsei_close=float(audit_dict["nsei_close"]),
+                        nsei_sma200=float(audit_dict["nsei_sma200"]),
+                        candidate_targets_json=json.dumps(audit_dict.get("candidate_targets", [])),
+                        control_targets_json=json.dumps(audit_dict.get("control_targets", [])),
+                        candidate_top5_json=json.dumps(audit_dict.get("candidate_top5_ranked", [])),
+                        control_top5_json=json.dumps(audit_dict.get("control_top5_ranked", [])),
+                    )
+                    session.add(row)
+        except Exception as e:
+            logger.warning(f"Failed to persist rebalance audit to DB: {e}")
+
     def _load_or_create_state(self, name: str) -> PortfolioState:
+        # 1. Try DB first if use_db is enabled
+        if self.use_db:
+            db_state = self._load_state_from_db(name)
+            if db_state is not None:
+                logger.info(f"Restored {name} state from PostgreSQL database.")
+                self._persist_state_files(db_state)
+                return db_state
+
+        # 2. Try filesystem
         state_file = self.state_dir / f"{name}_state.json"
         if state_file.exists():
             try:
                 with open(state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 state = PortfolioState.from_dict(data)
-                # Load trade history if ledger exists
                 ledger_file = self.state_dir / f"{name}_trade_ledger.csv"
                 if ledger_file.exists():
                     state.trade_history = pd.read_csv(ledger_file).to_dict(orient="records")
@@ -206,16 +531,25 @@ class Cycle4PaperEngine:
                 if daily_file.exists():
                     state.daily_history = pd.read_csv(daily_file).to_dict(orient="records")
                 logger.info(f"Restored {name} state from {state_file}")
+                if self.use_db:
+                    self._persist_state_to_db(state)
                 return state
             except Exception as e:
-                logger.warning(f"Failed to load {name} state ({e}), re-initializing.")
+                logger.warning(f"Failed to load {name} state from file ({e}), re-initializing.")
 
+        # 3. Create new state
         state = PortfolioState(name=name, initial_capital=self.initial_capital)
         self._persist_state(state)
         return state
 
     def _persist_state(self, state: PortfolioState):
-        """Persists portfolio state and ledgers atomically."""
+        """Persists portfolio state and ledgers both to PostgreSQL and atomically to files."""
+        if self.use_db:
+            self._persist_state_to_db(state)
+        self._persist_state_files(state)
+
+    def _persist_state_files(self, state: PortfolioState):
+        """Persists portfolio state and ledgers atomically to disk."""
         state_file = self.state_dir / f"{state.name}_state.json"
         with open(state_file, "w", encoding="utf-8") as f:
             json.dump(state.to_dict(), f, indent=2, default=json_serializer)
@@ -478,6 +812,20 @@ class Cycle4PaperEngine:
                 }
                 executed_trades.append(trade_record)
                 state.trade_history.append(trade_record)
+                if self.use_db:
+                    self._persist_trade_to_db(trade_record)
+                    self._persist_order_to_db({
+                        "order_id": f"ORD_{state.name}_{exec_date}_{sym}_LIQUIDATE",
+                        "strategy_id": state.name,
+                        "symbol": sym,
+                        "side": "SELL",
+                        "order_type": "MARKET",
+                        "requested_shares": shares,
+                        "status": "FILLED",
+                        "rejection_reason": None,
+                        "signal_date": exec_date,
+                        "exec_date": exec_date,
+                    })
                 del state.holdings[sym]
                 sold_scrip_count += 1
 
@@ -517,6 +865,19 @@ class Cycle4PaperEngine:
                     affordable_shares = int(math.floor(state.cash / (fill_buy * 1.002)))
                     if affordable_shares <= 0:
                         logger.info(f"[{state.name}] Insufficient cash (INR {state.cash:.2f}) to buy {sym}; skipping.")
+                        if self.use_db:
+                            self._persist_order_to_db({
+                                "order_id": f"ORD_REJ_{state.name}_{exec_date}_{sym}",
+                                "strategy_id": state.name,
+                                "symbol": sym,
+                                "side": "BUY",
+                                "order_type": "MARKET",
+                                "requested_shares": target_shares,
+                                "status": "REJECTED",
+                                "rejection_reason": f"INSUFFICIENT_CASH (INR {state.cash:.2f} available, required INR {total_req:.2f})",
+                                "signal_date": exec_date,
+                                "exec_date": exec_date,
+                            })
                         continue
                     delta_shares = affordable_shares
                     trade_val = round(delta_shares * fill_buy, 2)
@@ -560,6 +921,20 @@ class Cycle4PaperEngine:
                 }
                 executed_trades.append(trade_record)
                 state.trade_history.append(trade_record)
+                if self.use_db:
+                    self._persist_trade_to_db(trade_record)
+                    self._persist_order_to_db({
+                        "order_id": f"ORD_{state.name}_{exec_date}_{sym}_{trade_record['action']}",
+                        "strategy_id": state.name,
+                        "symbol": sym,
+                        "side": "BUY",
+                        "order_type": "MARKET",
+                        "requested_shares": delta_shares,
+                        "status": "FILLED",
+                        "rejection_reason": None,
+                        "signal_date": exec_date,
+                        "exec_date": exec_date,
+                    })
 
             elif delta_shares < 0:
                 # Trim position
@@ -604,6 +979,20 @@ class Cycle4PaperEngine:
                 }
                 executed_trades.append(trade_record)
                 state.trade_history.append(trade_record)
+                if self.use_db:
+                    self._persist_trade_to_db(trade_record)
+                    self._persist_order_to_db({
+                        "order_id": f"ORD_{state.name}_{exec_date}_{sym}_TRIM",
+                        "strategy_id": state.name,
+                        "symbol": sym,
+                        "side": "SELL",
+                        "order_type": "MARKET",
+                        "requested_shares": trim_shares,
+                        "status": "FILLED",
+                        "rejection_reason": None,
+                        "signal_date": exec_date,
+                        "exec_date": exec_date,
+                    })
 
         return executed_trades
 
@@ -677,6 +1066,8 @@ class Cycle4PaperEngine:
         }
 
         state.daily_history.append(daily_record)
+        if self.use_db:
+            self._persist_daily_to_db(state, daily_record)
         self._persist_state(state)
         return daily_record
 
@@ -829,18 +1220,21 @@ def run_cycle4_daily_step(
         engine._persist_pending_rebalances()
 
         # Audit log planned rebalance orders
+        audit_payload = {
+            "signal_date": date_str,
+            "is_bull_regime": is_bull,
+            "nsei_close": round(nsei_close, 2),
+            "nsei_sma200": round(nsei_sma200, 2),
+            "candidate_targets": engine.pending_rebalances["candidate"],
+            "control_targets": engine.pending_rebalances["control"],
+            "candidate_top5_ranked": [x["symbol"] for x in candidate_ranked[:5]],
+            "control_top5_ranked": [x["symbol"] for x in control_ranked[:5]],
+        }
+        if engine.use_db:
+            engine._persist_rebalance_audit_to_db(audit_payload)
         audit_file = engine.state_dir / "rebalance_orders_audit.jsonl"
         with open(audit_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps({
-                "signal_date": date_str,
-                "is_bull_regime": is_bull,
-                "nsei_close": round(nsei_close, 2),
-                "nsei_sma200": round(nsei_sma200, 2),
-                "candidate_targets": engine.pending_rebalances["candidate"],
-                "control_targets": engine.pending_rebalances["control"],
-                "candidate_top5_ranked": [x["symbol"] for x in candidate_ranked[:5]],
-                "control_top5_ranked": [x["symbol"] for x in control_ranked[:5]],
-            }, default=json_serializer) + "\n")
+            f.write(json.dumps(audit_payload, default=json_serializer) + "\n")
 
     # 7. Mark to market at Close
     cand_daily = engine.mark_to_market_session(

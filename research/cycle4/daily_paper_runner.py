@@ -22,6 +22,7 @@ if str(backend_dir) not in sys.path:
 
 from app.engine.cycle4_paper import Cycle4PaperEngine, run_cycle4_daily_step, json_serializer
 from app.engine.calendars import is_exchange_holiday
+from app.settings import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,17 @@ def load_market_data(target_date: Optional[datetime.date] = None) -> Tuple[pd.Da
 
 
 def main():
+    if not settings.forward_paper_trading_enabled:
+        logger.warning(
+            "Manual paper trading execution blocked: FORWARD_PAPER_TRADING_ENABLED is False. "
+            "Phase 4 strategy-validation freeze is in effect. Forward paper trading requires explicit owner approval."
+        )
+        print(json.dumps({
+            "status": "BLOCKED",
+            "reason": "FORWARD_PAPER_TRADING_ENABLED is False (Phase 5.1 safety gate)",
+        }))
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Cycle 4 Daily Paper-Trading Runner")
     parser.add_argument("--date", type=str, default=None, help="Trading session date (YYYY-MM-DD). Defaults to today.")
     parser.add_argument("--force-rebalance", action="store_true", help="Force month-end rebalance calculation today.")

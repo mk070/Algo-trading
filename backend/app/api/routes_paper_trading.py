@@ -15,10 +15,11 @@ Phase 4 strategy-validation freeze is in effect. No new replay execution is perm
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 
 from app.engine.ai_research_assistant import ai_research_assistant
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -294,4 +295,348 @@ def get_ai_research_notes(symbol: Optional[str] = None):
         regime_status="BULL_REGIME",
     )
     return notes
+
+
+# ---------------------------------------------------------------------------
+# Prospective Paper-Trading Endpoints (Cycle 4)
+# Strictly Read-Only — Returns Saved Real Records Only — No Execution on GET
+# ---------------------------------------------------------------------------
+
+_PROSPECTIVE_STRATEGY_MAP = {
+    "candidate": "candidate_reg_alpha_buf30",
+    "candidate_reg_alpha_buf30": "candidate_reg_alpha_buf30",
+    "cand1_reg_alpha_buf30": "candidate_reg_alpha_buf30",
+    "control": "control_c1b_buf30",
+    "control_c1b_buf30": "control_c1b_buf30",
+    "cand2_c1b_buf30": "control_c1b_buf30",
+}
+
+
+def _load_prospective_state_db(name: str) -> Optional[Dict[str, Any]]:
+    """Loads prospective portfolio state from Neon PostgreSQL."""
+    try:
+        from app.db import transaction_context
+        from app.models import PaperAccount, PaperHolding, PaperTrade, PaperDailyHistory
+        with transaction_context() as session:
+            acc = session.query(PaperAccount).filter(PaperAccount.strategy_id == name).first()
+            if not acc:
+                return None
+            holdings = session.query(PaperHolding).filter(PaperHolding.strategy_id == name).all()
+            holdings_dict = {
+                h.symbol: {
+                    "shares": h.shares,
+                    "avg_cost": round(h.avg_cost, 2),
+                    "invested_cost": round(h.invested_cost, 2),
+                }
+                for h in holdings
+            }
+            trades_count = session.query(PaperTrade).filter(PaperTrade.strategy_id == name).count()
+            sessions_count = session.query(PaperDailyHistory).filter(PaperDailyHistory.strategy_id == name).count()
+            return {
+                "name": acc.strategy_id,
+                "initial_capital": round(acc.initial_capital, 2),
+                "cash": round(acc.cash, 2),
+                "holdings": holdings_dict,
+                "realized_pnl": round(acc.realized_pnl, 2),
+                "unrealized_pnl": round(acc.unrealized_pnl, 2),
+                "total_equity": round(acc.total_equity, 2),
+                "peak_equity": round(acc.peak_equity, 2),
+                "cumulative_costs_paid": round(acc.cumulative_costs_paid, 2),
+                "cost_pct_of_capital": round((acc.cumulative_costs_paid / acc.initial_capital) * 100.0, 2) if acc.initial_capital > 0 else 0.0,
+                "last_processed_date": str(acc.last_processed_date) if acc.last_processed_date else None,
+                "trades_count": trades_count,
+                "sessions_count": sessions_count,
+            }
+    except Exception as exc:
+        logger.warning("Failed to load prospective state from DB for %s: %s", name, exc)
+        return None
+
+
+def _load_prospective_state(name: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Loads prospective state from Neon PostgreSQL first, falling back to local files.
+    Returns (state_dict, source).
+    """
+    # If state dir was redirected (e.g. in test fixture to tmp_path), do not query DB
+    if CYCLE4_STATE_DIR != Path("research/cycle4/state"):
+        path = CYCLE4_STATE_DIR / f"{name}_state.json"
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f), "PROSPECTIVE_STATE_FILES"
+            except Exception as exc:
+                logger.warning("Failed to load prospective state %s: %s", path, exc)
+        return None, "NONE"
+
+    # 1. Query PostgreSQL
+    db_state = _load_prospective_state_db(name)
+    if db_state is not None:
+        return db_state, "NEON_POSTGRESQL"
+
+    # 2. Fallback to local filesystem state files
+    path = CYCLE4_STATE_DIR / f"{name}_state.json"
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f), "PROSPECTIVE_STATE_FILES"
+        except Exception as exc:
+            logger.warning("Failed to load prospective state %s: %s", path, exc)
+    return None, "NONE"
+
+
+def _load_prospective_csv(name: str, kind: str) -> List[Dict[str, Any]]:
+    path = CYCLE4_STATE_DIR / f"{name}_{kind}.csv"
+    if path.exists():
+        try:
+            import pandas as pd
+            return pd.read_csv(path).fillna("").to_dict(orient="records")
+        except Exception as exc:
+            logger.warning("Failed to load prospective csv %s: %s", path, exc)
+    return []
+
+
+def _load_prospective_daily(name: str) -> List[Dict[str, Any]]:
+    """Loads prospective daily history from PostgreSQL first, falling back to daily_ledger CSV."""
+    if CYCLE4_STATE_DIR == Path("research/cycle4/state"):
+        try:
+            from app.db import transaction_context
+            from app.models import PaperDailyHistory
+            with transaction_context() as session:
+                rows = (
+                    session.query(PaperDailyHistory)
+                    .filter(PaperDailyHistory.strategy_id == name)
+                    .order_by(PaperDailyHistory.session_date.asc())
+                    .all()
+                )
+                if rows:
+                    return [
+                        {
+                            "date": str(r.session_date),
+                            "portfolio": r.strategy_id,
+                            "cash": r.cash,
+                            "invested_value": r.invested_value,
+                            "total_equity": r.total_equity,
+                            "peak_equity": r.peak_equity,
+                            "drawdown_pct": r.drawdown_pct,
+                            "cumulative_return_pct": r.cumulative_return_pct,
+                            "cumulative_costs": r.cumulative_costs,
+                            "cost_pct_of_capital": r.cost_pct_of_capital,
+                            "realized_pnl": r.realized_pnl,
+                            "unrealized_pnl": r.unrealized_pnl,
+                            "holdings_count": r.holdings_count,
+                            "benchmark_close": r.benchmark_close,
+                            "benchmark_daily_return": r.benchmark_daily_return,
+                            "regime_status": r.regime_status,
+                            "valuation_status": r.valuation_status,
+                            "is_complete_valuation": r.is_complete_valuation,
+                            "missing_price_symbols": r.missing_price_symbols or "[]",
+                            "stale_price_carry_forwards": r.stale_price_carry_forwards or "{}",
+                        }
+                        for r in rows
+                    ]
+        except Exception as exc:
+            logger.warning("Failed to load prospective daily history from DB for %s: %s", name, exc)
+
+    return _load_prospective_csv(name, "daily_ledger")
+
+
+def _load_prospective_trades(name: str) -> List[Dict[str, Any]]:
+    """Loads prospective trade history from PostgreSQL first, falling back to trade_ledger CSV."""
+    if CYCLE4_STATE_DIR == Path("research/cycle4/state"):
+        try:
+            from app.db import transaction_context
+            from app.models import PaperTrade
+            with transaction_context() as session:
+                rows = (
+                    session.query(PaperTrade)
+                    .filter(PaperTrade.strategy_id == name)
+                    .order_by(PaperTrade.exec_date.asc(), PaperTrade.id.asc())
+                    .all()
+                )
+                if rows:
+                    return [
+                        {
+                            "exec_date": str(r.exec_date),
+                            "portfolio": r.strategy_id,
+                            "symbol": r.symbol,
+                            "side": r.side,
+                            "action": r.action,
+                            "shares": r.shares,
+                            "ref_open": r.ref_open,
+                            "fill_price": r.fill_price,
+                            "gross_turnover": r.gross_turnover,
+                            "costs": json.loads(r.costs_json) if r.costs_json else {},
+                            "net_cash_delta": r.net_cash_delta,
+                            "realized_pnl": r.realized_pnl,
+                            "regime_pass": r.regime_pass,
+                        }
+                        for r in rows
+                    ]
+        except Exception as exc:
+            logger.warning("Failed to load prospective trade history from DB for %s: %s", name, exc)
+
+    return _load_prospective_csv(name, "trade_ledger")
+
+
+def _load_prospective_orders_audit() -> List[Dict[str, Any]]:
+    """Loads rebalance orders audit from PostgreSQL first, falling back to JSONL file."""
+    if CYCLE4_STATE_DIR == Path("research/cycle4/state"):
+        try:
+            from app.db import transaction_context
+            from app.models import PaperRebalanceAudit
+            with transaction_context() as session:
+                rows = (
+                    session.query(PaperRebalanceAudit)
+                    .order_by(PaperRebalanceAudit.signal_date.asc())
+                    .all()
+                )
+                if rows:
+                    return [
+                        {
+                            "signal_date": str(r.signal_date),
+                            "is_bull_regime": r.is_bull_regime,
+                            "nsei_close": r.nsei_close,
+                            "nsei_sma200": r.nsei_sma200,
+                            "candidate_targets": json.loads(r.candidate_targets_json) if r.candidate_targets_json else [],
+                            "control_targets": json.loads(r.control_targets_json) if r.control_targets_json else [],
+                            "candidate_top5_ranked": json.loads(r.candidate_top5_json) if r.candidate_top5_json else [],
+                            "control_top5_ranked": json.loads(r.control_top5_json) if r.control_top5_json else [],
+                        }
+                        for r in rows
+                    ]
+        except Exception as exc:
+            logger.warning("Failed to load prospective rebalance audit from DB: %s", exc)
+
+    path = CYCLE4_STATE_DIR / "rebalance_orders_audit.jsonl"
+    if path.exists():
+        try:
+            lines = []
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        lines.append(json.loads(line))
+            return lines
+        except Exception as exc:
+            logger.warning("Failed to load rebalance orders audit %s: %s", path, exc)
+    return []
+
+
+@router.get("/paper-trading/prospective/overview")
+def get_prospective_paper_overview():
+    """
+    Returns the real saved state for prospective paper trading (Cycle 4).
+    Separated strictly from historical replay.
+    Does not trigger any execution.
+    """
+    cand_state, cand_src = _load_prospective_state("candidate_reg_alpha_buf30")
+    ctrl_state, ctrl_src = _load_prospective_state("control_c1b_buf30")
+    cand_daily = _load_prospective_daily("candidate_reg_alpha_buf30")
+    ctrl_daily = _load_prospective_daily("control_c1b_buf30")
+
+    has_data = cand_state is not None or ctrl_state is not None
+    data_src = cand_src if cand_state else (ctrl_src if ctrl_state else "NONE")
+
+    if not settings.forward_paper_trading_enabled:
+        study_status = "AWAITING_OWNER_APPROVAL"
+    elif has_data:
+        study_status = "RUNNING"
+    else:
+        study_status = "NOT_STARTED"
+
+    last_date = None
+    if cand_state and cand_state.get("last_processed_date"):
+        last_date = cand_state.get("last_processed_date")
+    elif ctrl_state and ctrl_state.get("last_processed_date"):
+        last_date = ctrl_state.get("last_processed_date")
+
+    is_complete_val = None
+    missing_symbols = []
+    if cand_daily:
+        latest_daily = cand_daily[-1]
+        is_complete_val = bool(latest_daily.get("is_complete_valuation", True))
+        try:
+            missing_raw = latest_daily.get("missing_price_symbols", "[]")
+            missing_symbols = json.loads(missing_raw) if isinstance(missing_raw, str) else missing_raw
+        except Exception:
+            missing_symbols = []
+
+    benchmark_comp = None
+    if cand_daily:
+        first_b = cand_daily[0].get("benchmark_close")
+        last_b = cand_daily[-1].get("benchmark_close")
+        if first_b and last_b and float(first_b) > 0:
+            b_return_pct = round(((float(last_b) / float(first_b)) - 1.0) * 100.0, 2)
+            benchmark_comp = {
+                "symbol": "NIFTYBEES.NS",
+                "start_close": float(first_b),
+                "latest_close": float(last_b),
+                "cumulative_return_pct": b_return_pct,
+                "sessions_count": len(cand_daily),
+            }
+
+    return {
+        "disclaimer": "Simulated Research Capital (INR 17,500.00 each) — Forward Paper Observation Only. No real funds.",
+        "study_status": study_status,
+        "forward_paper_trading_enabled": settings.forward_paper_trading_enabled,
+        "data_source": data_src,
+        "data_freshness": {
+            "last_processed_date": last_date,
+            "status": "AWAITING_OWNER_APPROVAL" if not settings.forward_paper_trading_enabled else ("DATA_SYNCHRONIZED" if has_data else "NO_DATA"),
+            "valuation_completeness": is_complete_val,
+            "missing_price_symbols": missing_symbols,
+        },
+        "candidate": cand_state,
+        "control": ctrl_state,
+        "benchmark": benchmark_comp,
+    }
+
+
+@router.get("/paper-trading/prospective/strategy/{strategy_id}")
+def get_prospective_strategy_detail(strategy_id: str):
+    """
+    Returns detailed account state, holdings, daily equity history, trades, and orders
+    for a prospective strategy (candidate or control).
+    """
+    canonical = _PROSPECTIVE_STRATEGY_MAP.get(strategy_id)
+    if not canonical:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown prospective strategy_id '{strategy_id}'. Valid IDs: ['candidate', 'control', 'candidate_reg_alpha_buf30', 'control_c1b_buf30']",
+        )
+
+    acc_state, acc_src = _load_prospective_state(canonical)
+    daily = _load_prospective_daily(canonical)
+    trades = _load_prospective_trades(canonical)
+    orders_audit = _load_prospective_orders_audit()
+
+    if not settings.forward_paper_trading_enabled:
+        study_status = "AWAITING_OWNER_APPROVAL"
+    elif acc_state:
+        study_status = "RUNNING"
+    else:
+        study_status = "NOT_STARTED"
+
+    is_complete_val = None
+    if daily:
+        latest_daily = daily[-1]
+        is_complete_val = bool(latest_daily.get("is_complete_valuation", True))
+
+    holdings = acc_state.get("holdings", {}) if acc_state else {}
+
+    return {
+        "strategy_id": canonical,
+        "study_status": study_status,
+        "forward_paper_trading_enabled": settings.forward_paper_trading_enabled,
+        "data_source": acc_src,
+        "account": acc_state,
+        "holdings": holdings,
+        "orders_count": len(orders_audit),
+        "trades_count": len(trades),
+        "daily_history": daily[-250:],
+        "trades_journal": trades[-100:],
+        "orders_journal": orders_audit[-100:],
+        "last_processed_date": acc_state.get("last_processed_date") if acc_state else None,
+        "valuation_completeness": is_complete_val,
+        "disclaimer": "Simulated Research Capital (INR 17,500.00) — Prospective Paper Observation Only.",
+    }
 
