@@ -77,6 +77,15 @@ def test_production_fails_closed_when_app_token_unconfigured(client, monkeypatch
     assert "Production authentication is not configured" in resp.json().get("detail", "")
 
 
+def test_production_fails_closed_when_app_token_is_placeholder(client, monkeypatch):
+    monkeypatch.setattr(settings, "env", "production")
+    monkeypatch.setattr(settings, "app_token", "demo-token-change-in-prod")
+    # Even if request sends the placeholder token as Bearer, it is rejected with 401
+    resp = client.get("/api/positions", headers={"Authorization": "Bearer demo-token-change-in-prod"})
+    assert resp.status_code == 401
+    assert "Production authentication is not configured" in resp.json().get("detail", "")
+
+
 def test_cloud_environment_render_triggers_production_auth_gate(client, monkeypatch):
     monkeypatch.setattr(settings, "env", "development")  # Even if env is omitted/dev!
     monkeypatch.setenv("RENDER", "true")

@@ -283,7 +283,11 @@ class AppSettings(BaseSettings):
         if self.is_production:
             token = (self.app_token or "").strip()
             if not token or token == "demo-token-change-in-prod":
-                raise ValueError("APP_TOKEN must be set to a non-placeholder value when in production or deployed on cloud hosts")
+                import logging
+                logging.getLogger("swing_algo.settings").warning(
+                    "SECURITY NOTICE: APP_TOKEN is unset or set to placeholder in production/cloud. "
+                    "All protected API endpoints will fail closed with HTTP 401 until a custom APP_TOKEN is configured in the environment."
+                )
         return self
 
     def load_yaml_configs(self):
