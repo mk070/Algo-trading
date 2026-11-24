@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, Generator, Optional
 
 import psycopg2
+from psycopg2.extensions import register_adapter, AsIs
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DatabaseError, OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -13,6 +14,20 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Register numpy scalar adapters for psycopg2 globally to prevent schema "np" does not exist errors
+try:
+    import numpy as np
+
+    register_adapter(np.int64, lambda v: AsIs(int(v)))
+    register_adapter(np.int32, lambda v: AsIs(int(v)))
+    register_adapter(np.integer, lambda v: AsIs(int(v)))
+    register_adapter(np.float64, lambda v: AsIs(float(v)))
+    register_adapter(np.float32, lambda v: AsIs(float(v)))
+    register_adapter(np.floating, lambda v: AsIs(float(v)))
+    register_adapter(np.bool_, lambda v: AsIs("TRUE" if v else "FALSE"))
+except Exception as _np_err:
+    logger.debug(f"NumPy psycopg2 adapter registration skipped: {_np_err}")
 
 # Base declarative class for all SQLAlchemy ORM models
 Base = declarative_base()

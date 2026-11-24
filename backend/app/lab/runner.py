@@ -16,6 +16,8 @@ import threading
 import uuid
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
 # Queue holding job specifications for sequential processing
@@ -125,31 +127,55 @@ def _execute_job(run_id: str, strategy_id: str, holding_days: int, params: Dict,
             max_positions=max_positions,
         )
 
-        # Persist results
+        # Persist results with explicit primitive type casting
+        def _to_float(v):
+            return float(v) if v is not None else None
+
+        def _to_int(v):
+            return int(v) if v is not None else None
+
+        def _to_bool(v):
+            return bool(v) if v is not None else False
+
+        def _clean_summary_for_json(d):
+            clean = {}
+            for k, v in d.items():
+                if v is None:
+                    clean[k] = None
+                elif isinstance(v, (np.floating, float)):
+                    clean[k] = float(v)
+                elif isinstance(v, (np.integer, int)):
+                    clean[k] = int(v)
+                elif isinstance(v, (np.bool_, bool)):
+                    clean[k] = bool(v)
+                else:
+                    clean[k] = str(v)
+            return clean
+
         with transaction_context() as db:
             result = LabResult(
                 run_id=run_id,
                 strategy_id=strategy_id,
-                holding_days=holding_days,
+                holding_days=_to_int(holding_days),
                 config_hash=config_hash,
-                total_trades=summary["total_trades"],
-                win_rate=summary.get("win_rate"),
-                expectancy_r=summary.get("expectancy_r"),
-                median_net_expectancy=summary.get("median_net_expectancy"),
-                avg_win_r=summary.get("avg_win_r"),
-                avg_loss_r=summary.get("avg_loss_r"),
-                profit_factor=summary.get("profit_factor"),
-                cagr_pct=summary.get("cagr_pct"),
-                max_drawdown_pct=summary.get("max_drawdown_pct"),
-                sharpe_ratio=summary.get("sharpe_ratio"),
-                total_pnl=summary.get("total_pnl"),
-                total_costs=summary.get("total_costs"),
-                sample_ok=summary.get("sample_ok", False),
-                sample_label=summary.get("sample_label"),
-                half1_expectancy=summary.get("half1_expectancy"),
-                half2_expectancy=summary.get("half2_expectancy"),
-                half_consistency=summary.get("half_consistency"),
-                metrics_json=json.dumps(summary),
+                total_trades=_to_int(summary["total_trades"]),
+                win_rate=_to_float(summary.get("win_rate")),
+                expectancy_r=_to_float(summary.get("expectancy_r")),
+                median_net_expectancy=_to_float(summary.get("median_net_expectancy")),
+                avg_win_r=_to_float(summary.get("avg_win_r")),
+                avg_loss_r=_to_float(summary.get("avg_loss_r")),
+                profit_factor=_to_float(summary.get("profit_factor")),
+                cagr_pct=_to_float(summary.get("cagr_pct")),
+                max_drawdown_pct=_to_float(summary.get("max_drawdown_pct")),
+                sharpe_ratio=_to_float(summary.get("sharpe_ratio")),
+                total_pnl=_to_float(summary.get("total_pnl")),
+                total_costs=_to_float(summary.get("total_costs")),
+                sample_ok=_to_bool(summary.get("sample_ok", False)),
+                sample_label=str(summary.get("sample_label")) if summary.get("sample_label") is not None else None,
+                half1_expectancy=_to_float(summary.get("half1_expectancy")),
+                half2_expectancy=_to_float(summary.get("half2_expectancy")),
+                half_consistency=_to_float(summary.get("half_consistency")),
+                metrics_json=json.dumps(_clean_summary_for_json(summary)),
             )
             db.add(result)
 
@@ -169,20 +195,20 @@ def _execute_job(run_id: str, strategy_id: str, holding_days: int, params: Dict,
                 trade_rec = LabTrade(
                     run_id=run_id,
                     strategy_id=strategy_id,
-                    holding_days=holding_days,
-                    symbol=t.symbol,
+                    holding_days=_to_int(holding_days),
+                    symbol=str(t.symbol),
                     entry_date=entry_date,
                     exit_date=exit_date,
-                    entry_price=t.entry_price,
-                    exit_price=t.exit_price,
-                    stop_price=t.stop_price,
-                    qty=t.qty,
-                    gross_pnl=t.gross_pnl,
-                    costs=t.costs,
-                    net_pnl=t.net_pnl,
-                    r_multiple=t.r_multiple,
-                    exit_reason=t.exit_reason,
-                    holding_days_actual=t.holding_days_actual,
+                    entry_price=_to_float(t.entry_price),
+                    exit_price=_to_float(t.exit_price),
+                    stop_price=_to_float(t.stop_price),
+                    qty=_to_int(t.qty) or 0,
+                    gross_pnl=_to_float(t.gross_pnl),
+                    costs=_to_float(t.costs),
+                    net_pnl=_to_float(t.net_pnl),
+                    r_multiple=_to_float(t.r_multiple),
+                    exit_reason=str(t.exit_reason) if t.exit_reason is not None else None,
+                    holding_days_actual=_to_int(t.holding_days_actual),
                     signal_date=entry_date,
                     planned_exit_date=exit_date,
                     reason_text=reason,
