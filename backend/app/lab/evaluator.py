@@ -137,6 +137,9 @@ class ClosedTrade:
 def evaluate_study(
     study_id: str,
     db,
+    preloaded_bars: Optional[Dict[str, pd.DataFrame]] = None,
+    preloaded_data_through_date: Optional[datetime.date] = None,
+    allow_stale_for_test: bool = False,
 ) -> Dict[str, Any]:
     """
     Deterministic non-liquidating forward paper evaluator.
@@ -164,12 +167,37 @@ def evaluate_study(
     max_positions = study.max_positions
     kill_threshold = study.kill_switch_threshold_pct / 100.0
 
-    # 2. Load bars — from Neon DB (most current) with parquet fallback
-    from app.engine.research_loader import load_research_bars_for_paper
-    bars_dict, data_through_date = load_research_bars_for_paper()
+    # 2. Load bars — use preloaded if provided (e.g. nightly batch), else load from Neon DB
+    if preloaded_bars is not None:
+        bars_dict = preloaded_bars
+        data_through_date = preloaded_data_through_date
+    else:
+        from app.engine.research_loader import load_research_bars_for_paper
+        bars_dict, data_through_date = load_research_bars_for_paper(db=db)
 
     if not bars_dict:
         return {"status": "ERROR", "reason": "No bars available for evaluation"}
+
+    # 2b. Stale data check against exchange calendar (unless marked is_test or explicitly allowed)
+    is_test_study = getattr(study, "is_test", False) or allow_stale_for_test
+    if not is_test_study:
+        from app.engine.calendars import get_last_completed_trading_session
+        expected_last_session = get_last_completed_trading_session("IN")
+        if data_through_date is None or data_through_date < expected_last_session:
+            logger.warning(
+                f"[Lab Evaluator] STALE DATA for study {study_id}: latest bar {data_through_date} "
+                f"< expected last completed session {expected_last_session}."
+            )
+            return {
+                "status": "STALE_DATA",
+                "study_id": study_id,
+                "reason": (
+                    f"Market data through {data_through_date} is older than expected last "
+                    f"completed NSE session ({expected_last_session}). Evaluation halted to avoid misleading results."
+                ),
+                "data_through_date": str(data_through_date) if data_through_date else None,
+                "expected_session_date": str(expected_last_session),
+            }
 
     # 3. Registry hash for audit
     registry_hash = _compute_registry_hash(study_strategies)

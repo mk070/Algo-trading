@@ -106,24 +106,87 @@ def load_research_bars(
 
 # ─── Forward Paper Evaluation Loader ─────────────────────────────────────────
 
+_paper_bars_cache: Dict[str, Any] = {
+    "cached_at": None,
+    "bars_dict": None,
+    "data_through_date": None,
+}
+PAPER_CACHE_TTL_SECONDS = 600  # 10 minutes
+
+
+def get_indian_paper_universe_symbols() -> List[str]:
+    """Returns canonical list of Indian symbols for forward paper evaluation.
+
+    Reads symbols from research snapshot manifest if available, fallback to liquid universe.
+    """
+    manifest_path = DATA_DIR / "research" / "research_snapshot_manifest.json"
+    if manifest_path.exists():
+        try:
+            import json
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Manifest contains both US and IN; filter out obvious US symbols
+            us_known = {
+                "AAPL", "ABBV", "AMD", "AMZN", "AVGO", "BLDR", "BRK.B", "COST",
+                "CRM", "CVX", "DECK", "ELF", "FIX", "FND", "GOOGL", "HD", "HUBB",
+                "IBKR", "ISRG", "LLY", "META", "MSFT", "NVDA", "NVO", "ORCL", "PANW",
+                "PLTR", "PWR", "SMCI", "TSLA", "V", "VRT", "WMT", "BSE:SENSEX"
+            }
+            symbols = [s for s in data.get("symbols", []) if s not in us_known]
+            if symbols:
+                return sorted(symbols)
+        except Exception as e:
+            logger.warning(f"[paper_loader] Failed to read manifest symbols: {e}")
+
+    # Fallback to liquid Indian equities
+    try:
+        from app.engine.universe import universe_manager
+        univ = universe_manager.load_universe("IN")
+        if univ:
+            return sorted([s.symbol for s in univ[:100]])
+    except Exception:
+        pass
+
+    return []
+
+
 def load_research_bars_for_paper(
     db=None,
+    symbols: Optional[List[str]] = None,
     min_history_bars: int = 220,
+    max_sessions: int = 400,
+    force_refresh: bool = False,
 ) -> Tuple[Dict[str, pd.DataFrame], Optional[datetime.date]]:
     """Load bars for forward paper evaluation from Neon PostgreSQL (most current).
 
-    Returns (bars_dict, data_through_date):
-    - bars_dict: symbol → DataFrame with columns [date, open, high, low, close, volume]
-                 sorted ascending by date, filtered to IN-market symbols only.
-    - data_through_date: the max date available across all symbols (or None if no data).
+    Optimized for Neon free plan:
+    - Filters by Indian instruments in SQL.
+    - Selects only required OHLCV columns.
+    - Limits to last ~400 sessions (min_date ~600 calendar days ago).
+    - In-process TTL cache (10 min) to avoid duplicate egress on repeated queries.
+    - Tracks and logs egress byte/row count (target < 10 MB per run).
 
-    Falls back gracefully to parquet if Neon query fails.
-    Does NOT use _cached_parquet_df so as never to pollute the backtest cache with live data.
+    Returns (bars_dict, data_through_date).
     """
+    global _paper_bars_cache
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # 1. Check in-process cache
+    if not force_refresh and _paper_bars_cache["cached_at"] is not None:
+        age = (now - _paper_bars_cache["cached_at"]).total_seconds()
+        if age < PAPER_CACHE_TTL_SECONDS and _paper_bars_cache["bars_dict"]:
+            logger.debug(f"[paper_loader] Using in-process cache ({age:.0f}s old)")
+            return _paper_bars_cache["bars_dict"], _paper_bars_cache["data_through_date"]
+
     bars_dict: Dict[str, pd.DataFrame] = {}
     data_through_date: Optional[datetime.date] = None
 
-    # Prefer Neon DB as the authoritative live source
+    target_symbols = symbols or get_indian_paper_universe_symbols()
+
+    # Calculate min_date for ~400 trading sessions (approx 600 calendar days)
+    today = datetime.date.today()
+    min_date = today - datetime.timedelta(days=int(max_sessions * 1.5))
+
     _db = db
     _owns_ctx = False
     if _db is None:
@@ -134,32 +197,50 @@ def load_research_bars_for_paper(
             pass
 
     def _query_db(session) -> Tuple[Dict[str, pd.DataFrame], Optional[datetime.date]]:
-        """Query bars_daily from Neon, return (bars_dict, max_date)."""
         try:
-            # Only IN-market instruments to avoid US symbols in NSE universe
             from app.models import Instrument
-            # Try to restrict to IN market
-            try:
-                in_symbols = {
-                    r.symbol for r in session.query(Instrument.symbol).filter(
-                        Instrument.market == "IN"
-                    ).all()
-                }
-            except Exception:
-                in_symbols = set()  # fallback: accept everything
+            # Project only needed columns in SQL
+            q = (
+                session.query(
+                    DailyBar.symbol,
+                    DailyBar.date,
+                    DailyBar.open,
+                    DailyBar.high,
+                    DailyBar.low,
+                    DailyBar.close,
+                    DailyBar.split_adj_open,
+                    DailyBar.split_adj_high,
+                    DailyBar.split_adj_low,
+                    DailyBar.split_adj_close,
+                    DailyBar.volume,
+                )
+                .join(Instrument, Instrument.symbol == DailyBar.symbol)
+                .filter(
+                    Instrument.market == "IN",
+                    DailyBar.date >= min_date,
+                )
+            )
+            if target_symbols:
+                q = q.filter(DailyBar.symbol.in_(target_symbols))
 
-            query = session.query(DailyBar).order_by(DailyBar.symbol, DailyBar.date.asc())
-            rows = query.all()
+            q = q.order_by(DailyBar.symbol.asc(), DailyBar.date.asc())
+            rows = q.all()
+
+            row_count = len(rows)
+            # Estimate egress size: 11 fields * avg ~8 bytes = ~88 bytes/row
+            egress_mb = (row_count * 88) / (1024 * 1024)
+            logger.info(
+                f"[paper_loader] Neon SQL egress: {row_count} rows (~{egress_mb:.2f} MB) "
+                f"across requested symbols since {min_date}. Target: <10 MB."
+            )
+
             if not rows:
                 return {}, None
 
             result_dict: Dict[str, list] = {}
-            max_date: Optional[datetime.date] = None
+            max_d: Optional[datetime.date] = None
 
             for r in rows:
-                # Skip US symbols if we have an in_symbols set
-                if in_symbols and r.symbol not in in_symbols:
-                    continue
                 row_dict = {
                     "date": r.date,
                     "open": float(r.split_adj_open or r.open or 0),
@@ -169,22 +250,21 @@ def load_research_bars_for_paper(
                     "volume": float(r.volume or 0),
                 }
                 result_dict.setdefault(r.symbol, []).append(row_dict)
-                if r.date and (max_date is None or r.date > max_date):
-                    max_date = r.date
+                if r.date and (max_d is None or r.date > max_d):
+                    max_d = r.date
 
-            # Build DataFrames and filter to minimum history
             out: Dict[str, pd.DataFrame] = {}
-            for sym, rows_list in result_dict.items():
-                df = pd.DataFrame(rows_list)
+            for sym, items in result_dict.items():
+                df = pd.DataFrame(items)
                 df["date"] = pd.to_datetime(df["date"]).dt.date
                 df = df.sort_values("date").reset_index(drop=True)
                 if len(df) >= min_history_bars:
                     out[sym] = df
 
-            return out, max_date
+            return out, max_d
 
         except Exception as e:
-            logger.warning(f"[paper_loader] DB query failed: {e}")
+            logger.warning(f"[paper_loader] Neon SQL query failed: {e}")
             return {}, None
 
     if _db is not None:
@@ -197,15 +277,17 @@ def load_research_bars_for_paper(
         except Exception as e:
             logger.warning(f"[paper_loader] DB session failed: {e}")
 
-    # Fall back to parquet if DB unavailable
+    # Fallback to local parquet snapshot if DB returned nothing
     if not bars_dict:
-        logger.warning("[paper_loader] DB unavailable — falling back to parquet snapshot")
+        logger.warning("[paper_loader] DB unavailable — falling back to local parquet snapshot")
         snapshot_path = get_research_snapshot_path()
         if snapshot_path and snapshot_path.exists():
             try:
                 raw = pd.read_parquet(snapshot_path)
                 if "date" in raw.columns:
                     raw["date"] = pd.to_datetime(raw["date"]).dt.date
+                if target_symbols:
+                    raw = raw[raw["symbol"].isin(target_symbols)]
                 for sym, grp in raw.groupby("symbol"):
                     df = grp.sort_values("date").reset_index(drop=True)
                     if len(df) >= min_history_bars:
@@ -216,6 +298,14 @@ def load_research_bars_for_paper(
                     logger.info(f"[paper_loader] Parquet fallback loaded {len(bars_dict)} symbols through {data_through_date}")
             except Exception as e:
                 logger.error(f"[paper_loader] Parquet fallback also failed: {e}")
+
+    # Update cache
+    if bars_dict:
+        _paper_bars_cache = {
+            "cached_at": now,
+            "bars_dict": bars_dict,
+            "data_through_date": data_through_date,
+        }
 
     logger.info(f"[paper_loader] Loaded {len(bars_dict)} symbols for paper eval, data through {data_through_date}")
     return bars_dict, data_through_date

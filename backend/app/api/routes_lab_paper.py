@@ -60,8 +60,13 @@ def trigger_evaluate(study_id: str, db: Session = Depends(get_db)):
         result = evaluate_study(study_id=study_id, db=db)
         if result.get("status") == "ERROR":
             raise HTTPException(status_code=500, detail=result.get("reason", "Evaluation error"))
-        if result.get("status") == "SKIPPED":
-            return {"status": "SKIPPED", "reason": result.get("reason")}
+        if result.get("status") in ("SKIPPED", "STALE_DATA"):
+            return {
+                "status": result.get("status"),
+                "reason": result.get("reason"),
+                "data_through_date": result.get("data_through_date"),
+                "expected_session_date": result.get("expected_session_date"),
+            }
         evaluation_id = persist_evaluation_result(study_id=study_id, result=result, db=db)
         db.commit()
         return {
@@ -215,6 +220,8 @@ def get_study_paper(study_id: str, db: Session = Depends(get_db)):
             "is_stale": stale_sessions > 3 if stale_sessions >= 0 else True,
         },
         "last_evaluation_id": last_eval.id if last_eval else None,
+        "last_evaluated_at": last_eval.completed_at.isoformat() if (last_eval and last_eval.completed_at) else None,
+        "data_through_date": str(last_data_date) if last_data_date else None,
         "disclaimer": (
             "⚠ Survivorship bias warning: results use the current universe, not the universe "
             "as it existed on the signal date. Past strategy performance does not guarantee future results."
@@ -297,20 +304,43 @@ def get_tomorrow_orders(study_id: str, db: Session = Depends(get_db)):
 
 @router.post("/jobs/nightly")
 def run_nightly_evaluation(db: Session = Depends(get_db)):
-    """Nightly batch: evaluate all ACTIVE studies.
+    """Nightly batch: ingest missing Indian bars, then evaluate all ACTIVE studies.
 
-    Requires LAB_PAPER_ENABLED=true. Called by GitHub Actions cron at ~15:47 IST.
+    Execution order:
+    1. Ingest missing Indian bars for paper universe (Angel One -> YFinance).
+    2. Load bars once from Neon DB across all studies.
+    3. Check exchange calendar: if data is stale, return STALE_DATA and do NOT persist.
+    4. Deterministically evaluate each active study using preloaded bars.
+    5. Idempotently persist results.
+
+    Requires LAB_PAPER_ENABLED=true. Called by GitHub Actions cron.
     """
     _require_lab_paper()
     from app.lab.models_lab import LabStudy
     from app.lab.evaluator import evaluate_study
     from app.lab.persist import persist_evaluation_result
+    from app.lab.ingest_paper import refresh_indian_paper_bars
+    from app.engine.research_loader import load_research_bars_for_paper
 
+    # 1. Ingest missing Indian daily bars
+    logger.info("[nightly] Step 1: Ingesting missing Indian daily bars...")
+    ingest_summary = refresh_indian_paper_bars(db)
+
+    # 2. Pre-load bars once across all studies (force_refresh to bypass cache)
+    logger.info("[nightly] Step 2: Loading research bars once for all studies...")
+    bars_dict, data_through_date = load_research_bars_for_paper(db=db, force_refresh=True)
+
+    # 3. Evaluate each active study
     studies = db.query(LabStudy).filter(LabStudy.status == "ACTIVE").all()
     results = []
     for study in studies:
         try:
-            result = evaluate_study(study_id=study.id, db=db)
+            result = evaluate_study(
+                study_id=study.id,
+                db=db,
+                preloaded_bars=bars_dict,
+                preloaded_data_through_date=data_through_date,
+            )
             if result.get("status") == "OK":
                 eval_id = persist_evaluation_result(study_id=study.id, result=result, db=db)
                 db.commit()
@@ -324,14 +354,21 @@ def run_nightly_evaluation(db: Session = Depends(get_db)):
             else:
                 results.append({
                     "study_id": study.id,
+                    "study_name": study.name,
                     "status": result.get("status"),
                     "reason": result.get("reason"),
+                    "data_through_date": result.get("data_through_date"),
                 })
         except Exception as e:
             logger.exception(f"[nightly] Study {study.id} failed: {e}")
             results.append({"study_id": study.id, "status": "ERROR", "error": str(e)})
 
-    return {"evaluated": len(studies), "results": results}
+    return {
+        "evaluated": len(studies),
+        "data_through_date": str(data_through_date) if data_through_date else None,
+        "ingest_summary": ingest_summary,
+        "results": results,
+    }
 
 
 # ─── Chart data for trade cards ───────────────────────────────────────────────

@@ -78,15 +78,11 @@ export const TradeCardList: React.FC<TradeCardListProps> = ({
         const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
         if (studyId) qs.set('study_id', studyId);
         if (strategyFilter) qs.set('strategy_id', strategyFilter);
-        try {
-          const r = await fetchJson<{ total: number; items: TradeCardData[] }>(
-            `${API_BASE}/lab/trades/paper?${qs}`
-          );
-          paperTotal = r.total;
-          results.push(...r.items);
-        } catch {
-          // paper endpoint may not have data yet
-        }
+        const r = await fetchJson<{ total: number; items: TradeCardData[] }>(
+          `${API_BASE}/lab/trades/paper?${qs}`
+        );
+        paperTotal = r.total;
+        results.push(...r.items);
       }
 
       setTrades(results);

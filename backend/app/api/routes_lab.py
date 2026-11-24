@@ -467,6 +467,18 @@ def get_study(study_id: str, db: Session = Depends(get_db)):
         ]
         checklists[sid] = build_promotion_checklist({}, strat_trades)
 
+    # Last evaluation audit
+    from app.lab.models_lab import LabEvaluation
+    from app.engine.research_loader import get_paper_data_staleness
+    last_eval = (
+        db.query(LabEvaluation)
+        .filter(LabEvaluation.study_id == study_id, LabEvaluation.status == "DONE")
+        .order_by(LabEvaluation.completed_at.desc())
+        .first()
+    )
+    last_data_date = last_eval.data_through_date if last_eval else None
+    stale_sessions = get_paper_data_staleness(last_data_date)
+
     return {
         "id": study.id,
         "name": study.name,
@@ -475,6 +487,13 @@ def get_study(study_id: str, db: Session = Depends(get_db)):
         "capital": study.capital,
         "kill_switch_threshold_pct": study.kill_switch_threshold_pct,
         "kill_switch_triggered": study.kill_switch_triggered,
+        "last_evaluated_at": last_eval.completed_at.isoformat() if (last_eval and last_eval.completed_at) else None,
+        "data_through_date": str(last_data_date) if last_data_date else None,
+        "staleness": {
+            "last_data_date": str(last_data_date) if last_data_date else None,
+            "missed_sessions": stale_sessions,
+            "is_stale": stale_sessions > 3 if stale_sessions >= 0 else True,
+        },
         "strategies": strategies_in_study,
         "daily": [
             {

@@ -46,6 +46,16 @@ export const ChartModal: React.FC<ChartModalProps> = ({
   const [tradeChartLoading, setTradeChartLoading] = useState(false);
   const [tradeChartError, setTradeChartError] = useState<string | null>(null);
 
+  // Escape key listener for modal accessibility
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Fetch trade chart data when in trade-card mode
   useEffect(() => {
     if (!isOpen || !tradeContext) return;

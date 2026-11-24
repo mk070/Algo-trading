@@ -317,6 +317,31 @@ def is_session_completed(market: str, now: Optional[datetime.datetime] = None) -
     return False
 
 
+def get_last_completed_trading_session(market: str = "IN", now: Optional[datetime.datetime] = None) -> datetime.date:
+    """Returns the date of the most recent fully completed trading session.
+
+    Accounts for exchange closures, weekends, and early closes (Muhurat etc.).
+    If the session on `now`'s local date is currently open or pre-open, returns
+    the prior completed session.
+    """
+    m = market.upper()
+    now_utc = now or datetime.datetime.now(datetime.timezone.utc)
+    tz_name = "Asia/Kolkata" if m in ("IN", "NSE") else "America/New_York"
+    tz = ZoneInfo(tz_name)
+    now_local = now_utc.astimezone(tz)
+    today = now_local.date()
+
+    # If today was a trading day and has completed, today is the last completed session
+    if not is_exchange_holiday(m, today) and is_session_completed(m, now_utc):
+        return today
+
+    # Otherwise step back day by day until finding an open trading day
+    cur = today - datetime.timedelta(days=1)
+    while is_exchange_holiday(m, cur):
+        cur -= datetime.timedelta(days=1)
+    return cur
+
+
 def get_completed_sessions_held_count(
     market: str,
     entry_date: datetime.date,

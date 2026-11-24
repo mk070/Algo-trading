@@ -2,8 +2,8 @@ name: Lab Paper Nightly Evaluation
 
 on:
   schedule:
-    # 15:47 IST (UTC+5:30) = 10:17 UTC, Mon–Fri
-    - cron: '17 10 * * 1-5'
+    # Mon–Fri at 17:15 IST (11:45 UTC) and retry run at 18:45 IST (13:15 UTC)
+    - cron: '45 11,13 * * 1-5'
   workflow_dispatch:
     inputs:
       study_id:
@@ -20,14 +20,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Validate required repository secrets
+        run: |
+          MISSING=""
+          if [ -z "${{ secrets.BACKEND_URL }}" ]; then
+            MISSING="BACKEND_URL $MISSING"
+          fi
+          if [ -z "${{ secrets.API_TOKEN }}" ]; then
+            MISSING="API_TOKEN $MISSING"
+          fi
+          if [ -n "$MISSING" ]; then
+            echo "::error::Required secret(s) missing: $MISSING. Execution aborted without fallback."
+            exit 1
+          fi
+
       - name: Call nightly evaluation endpoint
         run: |
           BACKEND_URL="${{ secrets.BACKEND_URL }}"
-          if [ -z "$BACKEND_URL" ]; then
-            BACKEND_URL="https://algo-trading-g9j5.onrender.com"
-          fi
-
-          echo "Triggering nightly evaluation at $BACKEND_URL/api/lab/jobs/nightly"
+          echo "Triggering nightly ingestion and evaluation at $BACKEND_URL/api/lab/jobs/nightly"
 
           curl -f --retry 3 --retry-delay 30 --max-time 300 \
             -X POST "${BACKEND_URL}/api/lab/jobs/nightly" \
@@ -38,13 +48,19 @@ jobs:
           echo "Response:"
           cat /tmp/eval_result.json
 
-          # Fail if no 'evaluated' key in response
+          # Parse and assert response structure
           python3 -c "
           import json, sys
           with open('/tmp/eval_result.json') as f:
               data = json.load(f)
+          print(f\"Data through date: {data.get('data_through_date')}\")
+          print(f\"Ingest summary: {data.get('ingest_summary')}\")
           print(f\"Evaluated {data.get('evaluated', 0)} studies\")
           errors = [r for r in data.get('results', []) if r.get('status') == 'ERROR']
+          stale = [r for r in data.get('results', []) if r.get('status') == 'STALE_DATA']
           if errors:
-              print(f'WARNING: {len(errors)} study evaluation(s) failed:', errors)
+              print(f'WARNING: {len(errors)} study evaluation(s) failed with ERROR:', errors)
+              sys.exit(1)
+          if stale:
+              print(f'NOTICE: {len(stale)} study evaluation(s) suspended due to STALE_DATA:', stale)
           "

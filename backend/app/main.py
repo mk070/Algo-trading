@@ -113,14 +113,27 @@ async def lifespan(app: FastAPI):
                 from app.lab.models_lab import LabStudy
                 from app.lab.evaluator import evaluate_study
                 from app.lab.persist import persist_evaluation_result
-                logger.info("[Lab] Running startup forward paper catch-up...")
+                from app.lab.ingest_paper import refresh_indian_paper_bars
+                from app.engine.research_loader import load_research_bars_for_paper
+
+                logger.info("[Lab] Running startup forward paper catch-up: refreshing Indian bars first...")
                 with transaction_context() as db:
+                    refresh_indian_paper_bars(db)
+                    bars_dict, data_through_date = load_research_bars_for_paper(db=db, force_refresh=True)
+
                     active_studies = db.query(LabStudy).filter(LabStudy.status == "ACTIVE").all()
                     for study in active_studies:
                         try:
-                            res = evaluate_study(study_id=study.id, db=db)
+                            res = evaluate_study(
+                                study_id=study.id,
+                                db=db,
+                                preloaded_bars=bars_dict,
+                                preloaded_data_through_date=data_through_date,
+                            )
                             if res.get("status") == "OK":
                                 persist_evaluation_result(study_id=study.id, result=res, db=db)
+                            elif res.get("status") == "STALE_DATA":
+                                logger.warning(f"[Lab] Catchup suspended for {study.id}: data is stale ({res.get('reason')})")
                         except Exception as study_err:
                             logger.warning(f"[Lab] Catchup failed for study {study.id}: {study_err}")
                 logger.info("[Lab] Startup forward paper catch-up complete.")

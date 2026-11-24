@@ -36,6 +36,8 @@ export interface TradeCardData {
   exit_reason?: string | null;
   reason_text?: string | null;
   trade_key?: string;
+  data_through_date?: string | null;
+  evaluated_at?: string | null;
 }
 
 function statusBadge(trade: TradeCardData) {
@@ -214,6 +216,14 @@ export const TradeCard: React.FC<{ trade: TradeCardData; className?: string }> =
             <span>Click to chart</span>
           </div>
         )}
+
+        {/* Card footer: data through date */}
+        <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-800/60 mt-2">
+          <span>Data through: <span className="text-slate-400 font-mono">{trade.data_through_date || trade.exec_date || trade.entry_date || '—'}</span></span>
+          {trade.source === 'paper' && (
+            <span className="text-slate-500">Forward Paper</span>
+          )}
+        </div>
       </div>
 
       {/* Chart modal */}

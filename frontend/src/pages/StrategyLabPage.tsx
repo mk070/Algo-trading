@@ -83,6 +83,13 @@ interface StudyDetail extends StudySummary {
   recent_trades: any[];
   promotion_checklists: Record<string, any>;
   disclaimer: string;
+  last_evaluated_at?: string | null;
+  data_through_date?: string | null;
+  staleness?: {
+    last_data_date?: string | null;
+    missed_sessions: number;
+    is_stale: boolean;
+  };
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -671,13 +678,27 @@ const PaperTab: React.FC = () => {
 
           {studyDetail && !detailLoading && (
             <div className="space-y-5">
+              {/* Stale data warning banner */}
+              {studyDetail.staleness?.is_stale && (
+                <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-950/40 border border-amber-800/80 text-amber-300 text-xs">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+                  <div>
+                    <strong>Stale Market Data Notice:</strong> Market data is through{' '}
+                    <span className="font-mono font-bold text-white">{studyDetail.staleness.last_data_date || 'N/A'}</span>{' '}
+                    ({studyDetail.staleness.missed_sessions} missed trading session{studyDetail.staleness.missed_sessions !== 1 ? 's' : ''}). Forward paper evaluation is suspended until market bars are refreshed.
+                  </div>
+                </div>
+              )}
+
               {/* Study summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                 {[
                   { label: 'Status', value: studyDetail.status },
                   { label: 'Start Date', value: studyDetail.start_date },
                   { label: 'Capital', value: fmtINR(studyDetail.capital) },
                   { label: 'Kill Switch', value: studyDetail.kill_switch_triggered ? '🛑 TRIGGERED' : '✓ OK' },
+                  { label: 'Data Through', value: studyDetail.data_through_date || '—' },
+                  { label: 'Last Evaluated', value: studyDetail.last_evaluated_at ? new Date(studyDetail.last_evaluated_at).toLocaleDateString() : '—' },
                 ].map(({ label, value }) => (
                   <div key={label} className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
                     <div className="text-xs text-slate-400 mb-1">{label}</div>
