@@ -14,6 +14,7 @@ import { NewsPage } from './pages/NewsPage';
 import { PositionsPage } from './pages/PositionsPage';
 import { PaperTradingPage } from './pages/PaperTradingPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { StrategyLabPage } from './pages/StrategyLabPage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
 import { WatchlistPage } from './pages/WatchlistPage';
 import { HeatmapPage } from './pages/HeatmapPage';
@@ -326,6 +327,7 @@ export const AppContent: React.FC = () => {
             <Route path="/heatmap" element={<HeatmapPage currentMarket={currentMarket} onMarketChange={handleMarketChange} />} />
             <Route path="/positions" element={<PositionsPage currentMarket={currentMarket} />} />
             <Route path="/paper-trading" element={<PaperTradingPage />} />
+            <Route path="/strategy-lab" element={<StrategyLabPage />} />
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/backtests" element={<BacktestsPage currentMarket={currentMarket} />} />
             <Route path="/news" element={<NewsPage currentMarket={currentMarket} />} />

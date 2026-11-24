@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     group: 'Research',
     items: [
+      { to: '/strategy-lab', label: 'Strategy Lab', icon: FlaskConical },
       { to: '/backtests', label: 'Backtests', icon: Activity },
       { to: '/news', label: 'News & Sentiment', icon: Newspaper },
     ],

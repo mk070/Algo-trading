@@ -715,3 +715,18 @@ class PaperRebalanceAudit(Base):
     control_top5_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, server_default=func.now())
 
+
+# Lab models are defined in app/lab/models_lab.py and imported here
+# so Alembic and Base.metadata can discover them.
+from app.lab.models_lab import (  # noqa: F401
+    LabStrategy,
+    LabRun,
+    LabResult,
+    LabTrade,
+    LabStudy,
+    LabStudyStrategy,
+    LabPaperHolding,
+    LabPaperTrade,
+    LabPaperDaily,
+    LabPlanItem,
+)

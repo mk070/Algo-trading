@@ -1,0 +1,176 @@
+# Strategy Lab — Swing Strategy Registry
+# Canonical source of truth for all 10 registered strategies.
+# DB table `lab_strategies` is a synchronized copy of this YAML.
+# Never edit the DB directly; modify this file and run sync.
+# Version is a content-hash of parameters; never manually set it.
+#
+# IMPORTANT: Backtest on current Nifty stocks may contain survivorship bias.
+# Rankings screen ideas; forward paper results provide prospective evidence.
+
+meta:
+  version: "1.0"
+  universe: "India NSE cash equities — research_universe_v1.csv"
+  data_source: "data/research/research_snapshot_20261106.parquet"
+  cost_model: "zerodha_delivery"  # Exact Zerodha delivery costs
+  slippage_pct: 0.10              # 10 bps round-trip slippage
+  market: "IN"
+
+strategies:
+  - id: "S01"
+    name: "Trend Pullback to 20 EMA (RSI14 turn)"
+    description: >
+      Stock in uptrend (above SMA50, SMA150, SMA200). Price pulls back to touch
+      or slightly pierce 20 EMA. RSI14 dips below 45 then turns up (bullish hook).
+      Entry on next-day open with ATR-based stop below recent swing low.
+    enabled: true
+    parameters:
+      ema_len: 20
+      rsi_len: 14
+      rsi_dip_below: 45.0
+      rsi_hook_up: true
+      touch_tolerance_pct: 2.0    # price within 2% of EMA counts as touch
+      trend_sma_fast: 50
+      trend_sma_slow: 200
+      stop_atr_mult: 1.5
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 210
+
+  - id: "S02"
+    name: "Donchian-20 Breakout + Volume"
+    description: >
+      Price breaks above the 20-day Donchian channel high with volume at least
+      1.5x the 20-day average. Stock must be above SMA50. Entry at breakout
+      close+slippage; stop below the channel low.
+    enabled: true
+    parameters:
+      donchian_len: 20
+      vol_multiplier: 1.5
+      trend_sma: 50
+      stop_at_channel_low: true
+      stop_atr_mult: 1.5          # alternative: ATR-based stop
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 70
+
+  - id: "S03"
+    name: "55-Day-High Breakout (Control)"
+    description: >
+      Price breaks above the 55-day high on volume >= 1.3x avg-20. Stock must be
+      in uptrend (above SMA50 and SMA200). Stop below the 55-day low. This is
+      the baseline control strategy.
+    enabled: true
+    parameters:
+      lookback: 55
+      vol_multiplier: 1.3
+      trend_sma_fast: 50
+      trend_sma_slow: 200
+      stop_atr_mult: 2.0
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 110
+
+  - id: "S04"
+    name: "RSI(2) Dip in Uptrend"
+    description: >
+      Short-term mean-reversion: RSI(2) drops below 10 (oversold) while price
+      remains above SMA200 (macro uptrend). Entry next-day open; fixed 4-day
+      or 7-day time exit. No stop (pure time exit model for research).
+    enabled: true
+    parameters:
+      rsi_len: 2
+      rsi_oversold: 10.0
+      trend_sma: 200
+      holding_days: [4, 7]        # short time exits only
+    min_history_bars: 210
+
+  - id: "S05"
+    name: "Three Down Closes in Uptrend"
+    description: >
+      Three consecutive lower closes while stock is above SMA50 and SMA200.
+      Short-term momentum fade / mean-reversion. Entry next-day open;
+      ATR-based stop below the third down-close low.
+    enabled: true
+    parameters:
+      consecutive_down: 3
+      trend_sma_fast: 50
+      trend_sma_slow: 200
+      stop_atr_mult: 1.5
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 210
+
+  - id: "S06"
+    name: "Bollinger Lower-Band Reclaim"
+    description: >
+      Price touches or breaches the lower Bollinger Band (20, 2σ) and then
+      reclaims it (closes back above). Stock is above SMA200. Entry on reclaim
+      close; stop 1 ATR below the band touch low.
+    enabled: true
+    parameters:
+      bb_len: 20
+      bb_std: 2.0
+      trend_sma: 200
+      stop_atr_mult: 1.5
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 230
+
+  - id: "S07"
+    name: "Gap-Up + Volume Pivot"
+    description: >
+      Stock gaps up at open by at least 2% above prior close, with volume
+      at least 2x the 20-day average. Stock must be above SMA50. Entry at
+      open; stop below the prior-day low.
+    enabled: true
+    parameters:
+      min_gap_pct: 2.0
+      vol_multiplier: 2.0
+      trend_sma: 50
+      stop_prior_low: true
+      stop_atr_mult: 1.5          # fallback if prior-low < entry-ATR
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 70
+
+  - id: "S08"
+    name: "52-Week-High Breakout with Relative Strength"
+    description: >
+      Price breaks to a new 52-week high. Relative strength (63-day return)
+      must be in the top 30% of universe. Volume >= 1.3x avg-20.
+      Stop 1 ATR below the breakout close.
+    enabled: true
+    parameters:
+      lookback_days: 252
+      rs_lookback_days: 63
+      rs_min_percentile: 0.70     # top 30% = percentile >= 0.70
+      vol_multiplier: 1.3
+      stop_atr_mult: 1.5
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 265
+
+  - id: "S09"
+    name: "NR7 Breakout"
+    description: >
+      Today's range (high-low) is the narrowest of the last 7 days (NR7).
+      Stock is above SMA50. Next-day entry at prior-day high + 0.1% (buy-stop
+      trigger). Stop below the NR7 day's low.
+    enabled: true
+    parameters:
+      nr_bars: 7
+      trend_sma: 50
+      entry_buffer_pct: 0.10
+      stop_at_nr_low: true
+      stop_atr_mult: 1.5          # fallback stop
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 70
+
+  - id: "S10"
+    name: "EMA 9/21 Cross in Uptrend"
+    description: >
+      EMA9 crosses above EMA21 (golden cross on short-term MAs) while price
+      is above SMA200. Volume on crossover day >= 1.2x avg-20. Entry on
+      next-day open; stop 1.5 ATR below EMA21.
+    enabled: true
+    parameters:
+      ema_fast: 9
+      ema_slow: 21
+      trend_sma: 200
+      vol_multiplier: 1.2
+      stop_atr_mult: 1.5
+      holding_days: [4, 7, 10, 15]
+    min_history_bars: 230
