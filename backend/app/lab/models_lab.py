@@ -116,6 +116,12 @@ class LabTrade(Base):
     r_multiple = Column(Float, nullable=True)
     exit_reason = Column(String(100), nullable=True)
     holding_days_actual = Column(Integer, nullable=True)
+    # Fields added in migration 010
+    signal_date = Column(Date, nullable=True)
+    planned_exit_date = Column(Date, nullable=True)
+    reason_text = Column(Text, nullable=True)
+    signal_context_json = Column(Text, nullable=True)
+    data_through_date = Column(Date, nullable=True)
 
     __table_args__ = (
         Index("ix_lab_trades_run_strategy", "run_id", "strategy_id"),
@@ -137,6 +143,7 @@ class LabStudy(Base):
     strategies_json = Column(Text, nullable=False)
     kill_switch_threshold_pct = Column(Float, nullable=False, default=10.0)
     kill_switch_triggered = Column(Boolean, nullable=False, default=False)
+    is_test = Column(Boolean, nullable=False, default=False)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
@@ -201,6 +208,18 @@ class LabPaperTrade(Base):
     r_multiple = Column(Float, nullable=True)
     exit_reason = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    # Fields added in migration 010
+    trade_key = Column(String(128), nullable=True)
+    config_hash = Column(String(64), nullable=True)
+    signal_date = Column(Date, nullable=True)
+    stop_price = Column(Float, nullable=True)
+    planned_exit_date = Column(Date, nullable=True)
+    gross_pnl = Column(Float, nullable=True, default=0.0)
+    net_pnl = Column(Float, nullable=True, default=0.0)
+    reason_text = Column(Text, nullable=True)
+    signal_context_json = Column(Text, nullable=True)
+    data_through_date = Column(Date, nullable=True)
+    holding_days_target = Column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_lab_paper_trades_study_strategy", "study_id", "strategy_id"),
@@ -254,3 +273,75 @@ class LabPlanItem(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+
+
+# ── New models added in migration 010 ────────────────────────────────────────
+
+class LabTomorrowOrder(Base):
+    """Planned next-session entry orders from the paper evaluator."""
+    __tablename__ = "lab_tomorrow_orders"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_key = Column(String(128), nullable=False)
+    study_id = Column(String(64), ForeignKey("lab_studies.id", ondelete="CASCADE"), nullable=False, index=True)
+    strategy_id = Column(String(10), nullable=False)
+    config_hash = Column(String(64), nullable=False)
+    symbol = Column(String(50), nullable=False)
+    signal_date = Column(Date, nullable=False)
+    signal_reason = Column(Text, nullable=True)
+    signal_context_json = Column(Text, nullable=True)
+    planned_entry = Column(Float, nullable=False)
+    stop_price = Column(Float, nullable=True)
+    research_qty = Column(Integer, nullable=True)
+    practical_qty = Column(Integer, nullable=True)
+    planned_exit_date = Column(Date, nullable=True)
+    holding_days_target = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=False, default="PENDING")
+    data_through_date = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_lab_tomorrow_orders_study", "study_id"),
+    )
+
+
+class LabEvaluation(Base):
+    """Audit log of each paper evaluation run."""
+    __tablename__ = "lab_evaluations"
+
+    id = Column(String(64), primary_key=True)
+    study_id = Column(String(64), ForeignKey("lab_studies.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="RUNNING")
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    data_through_date = Column(Date, nullable=True)
+    registry_hash = Column(String(64), nullable=True)
+    engine_version = Column(String(32), nullable=True)
+    trade_count = Column(Integer, nullable=True)
+    open_count = Column(Integer, nullable=True)
+    equity_row_count = Column(Integer, nullable=True)
+    error_detail = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_lab_evaluations_study_started", "study_id", "started_at"),
+    )
+
+
+class LabPaperBenchmark(Base):
+    """Daily benchmark equity rows (NIFTYBEES / random control)."""
+    __tablename__ = "lab_paper_benchmarks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    study_id = Column(String(64), ForeignKey("lab_studies.id", ondelete="CASCADE"), nullable=False, index=True)
+    benchmark_type = Column(String(30), nullable=False)
+    session_date = Column(Date, nullable=False)
+    equity = Column(Float, nullable=False)
+    cumulative_return_pct = Column(Float, nullable=True)
+    benchmark_close = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_lab_paper_benchmarks_study", "study_id"),
+    )

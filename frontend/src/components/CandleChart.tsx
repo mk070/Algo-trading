@@ -50,6 +50,23 @@ export interface CandleChartProps {
   strategyOverlay?: StrategyOverlay | null;
   onClose?: () => void;
   fullHeight?: boolean;
+  /** Trade markers from paper/backtest evaluator (trade-card mode). */
+  tradeMarkers?: Array<{
+    date: string;
+    price: number;
+    type: 'SIGNAL' | 'BUY' | 'SELL' | 'PLANNED_EXIT';
+    label: string;
+    color: string;
+  }>;
+  /** Stop/entry date-bounded segments (not full-width price lines). */
+  tradeSegments?: Array<{
+    startDate: string;
+    endDate: string;
+    price: number;
+    type: 'STOP' | 'ENTRY';
+    color: string;
+    style?: 'dashed' | 'solid';
+  }>;
 }
 
 interface ChartPreferences {
@@ -119,6 +136,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   strategyOverlay: propStrategyOverlay,
   onClose,
   fullHeight = false,
+  tradeMarkers,
+  tradeSegments,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
@@ -613,6 +632,38 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       ];
 
       createSeriesMarkers(candleSeries, markers);
+    }
+
+    // 7b. Trade card markers (trade-card mode)
+    if (tradeMarkers && tradeMarkers.length > 0 && cleanBars.length > 0) {
+      const seriesMarkers: SeriesMarker<Time>[] = tradeMarkers.map((m) => ({
+        time: m.date as Time,
+        position: m.type === 'SELL' ? 'aboveBar' : 'belowBar',
+        color: m.color,
+        shape: m.type === 'BUY' ? 'arrowUp' : m.type === 'SELL' ? 'arrowDown' : 'circle',
+        text: m.label,
+      }));
+      createSeriesMarkers(candleSeries, seriesMarkers);
+    }
+
+    // 7c. Trade segments — stop/entry date-bounded lines (not full-width price lines)
+    // Rendered as separate LineSeries spanning only entry→exit dates
+    if (tradeSegments && tradeSegments.length > 0) {
+      for (const seg of tradeSegments) {
+        const segBars = cleanBars.filter(
+          (b) => String(b.time) >= seg.startDate && String(b.time) <= seg.endDate
+        );
+        if (segBars.length === 0) continue;
+        const segSeries = chart.addSeries(LineSeries, {
+          color: seg.color,
+          lineWidth: 1,
+          lineStyle: seg.style === 'dashed' ? LineStyle.Dashed : LineStyle.Solid,
+          crosshairMarkerVisible: false,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+        segSeries.setData(segBars.map((b) => ({ time: b.time as Time, value: seg.price })));
+      }
     }
 
     // 8. Crosshair hover inspection

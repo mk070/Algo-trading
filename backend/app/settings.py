@@ -248,6 +248,9 @@ class AppSettings(BaseSettings):
     # Paper Trading Scheduler Gate (Phase 5: Default Disabled until explicitly approved by owner)
     forward_paper_trading_enabled: bool = Field(default=False, alias="FORWARD_PAPER_TRADING_ENABLED")
 
+    # Strategy Lab forward paper evaluation gate (default disabled; set LAB_PAPER_ENABLED=true to activate)
+    lab_paper_enabled: bool = Field(default=False, alias="LAB_PAPER_ENABLED")
+
     # News & Regulatory Disclosures
     sec_user_agent: str = Field(
         default="AlgoTrading Research research@example.com",

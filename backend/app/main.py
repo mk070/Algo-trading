@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.api.routes_backtest import router as backtest_router
 from app.api.routes_data import router as data_router
 from app.api.routes_lab import router as lab_router
+from app.api.routes_lab_paper import router as lab_paper_router
 from app.api.routes_news import router as news_router
 from app.api.routes_paper_trading import router as paper_trading_router
 from app.api.routes_plan import router as plan_router
@@ -96,6 +97,38 @@ async def lifespan(app: FastAPI):
 
     # Start scheduler
     start_scheduler()
+
+    # Recover any interrupted Strategy Lab backtest jobs from prior runs
+    try:
+        from app.lab.runner import recover_interrupted_jobs
+        recover_interrupted_jobs()
+    except Exception as e:
+        logger.warning(f"Lab job recovery warning: {e}")
+
+    # Startup catch-up for forward paper trading if enabled
+    if settings.lab_paper_enabled:
+        def _async_lab_catchup():
+            try:
+                from app.db import transaction_context
+                from app.lab.models_lab import LabStudy
+                from app.lab.evaluator import evaluate_study
+                from app.lab.persist import persist_evaluation_result
+                logger.info("[Lab] Running startup forward paper catch-up...")
+                with transaction_context() as db:
+                    active_studies = db.query(LabStudy).filter(LabStudy.status == "ACTIVE").all()
+                    for study in active_studies:
+                        try:
+                            res = evaluate_study(study_id=study.id, db=db)
+                            if res.get("status") == "OK":
+                                persist_evaluation_result(study_id=study.id, result=res, db=db)
+                        except Exception as study_err:
+                            logger.warning(f"[Lab] Catchup failed for study {study.id}: {study_err}")
+                logger.info("[Lab] Startup forward paper catch-up complete.")
+            except Exception as catchup_err:
+                logger.warning(f"[Lab] Startup catch-up failed: {catchup_err}")
+
+        threading.Thread(target=_async_lab_catchup, daemon=True, name="lab_paper_catchup").start()
+
     yield
     # Shutdown
     logger.info("Shutting down background scheduler...")
@@ -164,6 +197,7 @@ app.include_router(data_router, prefix="/api", tags=["Historical Data & Ingestio
 app.include_router(universe_router, prefix="/api", tags=["Universe & Coverage"], dependencies=protected_api)
 app.include_router(paper_trading_router, prefix="/api", tags=["Paper Trading & Research"], dependencies=protected_api)
 app.include_router(lab_router, dependencies=protected_api)
+app.include_router(lab_paper_router, dependencies=protected_api)
 
 
 from pathlib import Path

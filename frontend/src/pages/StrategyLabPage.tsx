@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUpDown, CheckCircle2, ChevronDown, ChevronRight,
-  CircleDot, FlaskConical, Loader2, Play, RefreshCw, Send, Trophy, XCircle,
+  CircleDot, FlaskConical, LayoutList, Loader2, Play, RefreshCw, Send, Trophy, XCircle,
 } from 'lucide-react';
 import { fetchJson, API_BASE } from '../api/client';
+import { TradeCardList } from '../components/TradeCardList';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -843,12 +844,13 @@ const PaperTab: React.FC = () => {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type TabId = 'backtest' | 'rank' | 'paper';
+type TabId = 'backtest' | 'rank' | 'paper' | 'cards';
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'backtest', label: 'Backtest', icon: <Activity className="w-4 h-4" /> },
   { id: 'rank', label: 'Rank & Send to Paper', icon: <ArrowUpDown className="w-4 h-4" /> },
   { id: 'paper', label: 'Paper & Manual Promotion', icon: <FlaskConical className="w-4 h-4" /> },
+  { id: 'cards', label: 'Trade Cards', icon: <LayoutList className="w-4 h-4" /> },
 ];
 
 export const StrategyLabPage: React.FC = () => {
@@ -887,6 +889,7 @@ export const StrategyLabPage: React.FC = () => {
         {tab === 'backtest' && <BacktestTab />}
         {tab === 'rank' && <RankTab />}
         {tab === 'paper' && <PaperTab />}
+        {tab === 'cards' && <TradeCardList />}
       </div>
     </div>
   );

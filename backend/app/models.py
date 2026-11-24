@@ -729,4 +729,7 @@ from app.lab.models_lab import (  # noqa: F401
     LabPaperTrade,
     LabPaperDaily,
     LabPlanItem,
+    LabTomorrowOrder,
+    LabEvaluation,
+    LabPaperBenchmark,
 )

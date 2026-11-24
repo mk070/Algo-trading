@@ -1,0 +1,50 @@
+name: Lab Paper Nightly Evaluation
+
+on:
+  schedule:
+    # 15:47 IST (UTC+5:30) = 10:17 UTC, Mon–Fri
+    - cron: '17 10 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      study_id:
+        description: 'Optional study ID to evaluate (leave blank for all active studies)'
+        required: false
+
+concurrency:
+  group: lab-nightly
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: Trigger nightly paper evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Call nightly evaluation endpoint
+        run: |
+          BACKEND_URL="${{ secrets.BACKEND_URL }}"
+          if [ -z "$BACKEND_URL" ]; then
+            BACKEND_URL="https://algo-trading-g9j5.onrender.com"
+          fi
+
+          echo "Triggering nightly evaluation at $BACKEND_URL/api/lab/jobs/nightly"
+
+          curl -f --retry 3 --retry-delay 30 --max-time 300 \
+            -X POST "${BACKEND_URL}/api/lab/jobs/nightly" \
+            -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -o /tmp/eval_result.json
+
+          echo "Response:"
+          cat /tmp/eval_result.json
+
+          # Fail if no 'evaluated' key in response
+          python3 -c "
+          import json, sys
+          with open('/tmp/eval_result.json') as f:
+              data = json.load(f)
+          print(f\"Evaluated {data.get('evaluated', 0)} studies\")
+          errors = [r for r in data.get('results', []) if r.get('status') == 'ERROR']
+          if errors:
+              print(f'WARNING: {len(errors)} study evaluation(s) failed:', errors)
+          "
