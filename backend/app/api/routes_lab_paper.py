@@ -70,9 +70,10 @@ def trigger_evaluate(study_id: str, db: Session = Depends(get_db)):
         evaluation_id = persist_evaluation_result(study_id=study_id, result=result, db=db)
         db.commit()
         return {
-            "status": "OK",
+            "status": result.get("status"),
             "evaluation_id": evaluation_id,
             "study_id": study_id,
+            "stale_symbols": result.get("stale_symbols", []),
             "data_through_date": result.get("data_through_date"),
             "closed_trades": len(result.get("closed_trades", [])),
             "open_positions": len(result.get("open_positions", [])),
@@ -120,10 +121,18 @@ def get_study_paper(study_id: str, db: Session = Depends(get_db)):
     )
     last_eval = (
         db.query(LabEvaluation)
-        .filter(LabEvaluation.study_id == study_id, LabEvaluation.status == "DONE")
+        .filter(LabEvaluation.study_id == study_id, LabEvaluation.status.in_(["DONE", "PARTIAL_STALE"]))
         .order_by(LabEvaluation.completed_at.desc())
         .first()
     )
+
+    stale_symbols = []
+    if last_eval and last_eval.error_detail:
+        try:
+            detail_obj = json.loads(last_eval.error_detail)
+            stale_symbols = detail_obj.get("stale_symbols", [])
+        except Exception:
+            pass
 
     # Compute staleness
     from app.engine.research_loader import get_paper_data_staleness
@@ -161,6 +170,7 @@ def get_study_paper(study_id: str, db: Session = Depends(get_db)):
                 "stop_price": h.stop_price,
                 "avg_cost": h.avg_cost,
                 "unrealized_pnl": h.unrealized_pnl,
+                "is_stale_data": h.symbol in stale_symbols,
             }
             for h in holdings
         ],
@@ -218,6 +228,8 @@ def get_study_paper(study_id: str, db: Session = Depends(get_db)):
             "last_data_date": str(last_data_date) if last_data_date else None,
             "missed_sessions": stale_sessions,
             "is_stale": stale_sessions > 3 if stale_sessions >= 0 else True,
+            "status": last_eval.status if last_eval else "UNKNOWN",
+            "stale_symbols": stale_symbols,
         },
         "last_evaluation_id": last_eval.id if last_eval else None,
         "last_evaluated_at": last_eval.completed_at.isoformat() if (last_eval and last_eval.completed_at) else None,
@@ -341,14 +353,15 @@ def run_nightly_evaluation(db: Session = Depends(get_db)):
                 preloaded_bars=bars_dict,
                 preloaded_data_through_date=data_through_date,
             )
-            if result.get("status") == "OK":
+            if result.get("status") in ("OK", "PARTIAL_STALE"):
                 eval_id = persist_evaluation_result(study_id=study.id, result=result, db=db)
                 db.commit()
                 results.append({
                     "study_id": study.id,
                     "study_name": study.name,
-                    "status": "OK",
+                    "status": result.get("status"),
                     "evaluation_id": eval_id,
+                    "stale_symbols": result.get("stale_symbols", []),
                     "data_through_date": result.get("data_through_date"),
                 })
             else:
@@ -665,3 +678,58 @@ def list_paper_trades(
         })
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+# ─── All backtest trades (paginated) ──────────────────────────────────────────
+
+@router.get("/trades/backtest")
+def list_backtest_trades(
+    strategy_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+):
+    """List backtest trades with optional filters. Used by TradeCardList."""
+    from app.lab.models_lab import LabTrade
+
+    q = db.query(LabTrade)
+    if strategy_id:
+        q = q.filter(LabTrade.strategy_id == strategy_id)
+    if run_id:
+        q = q.filter(LabTrade.run_id == run_id)
+
+    total = q.count()
+    trades = (
+        q.order_by(LabTrade.entry_date.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for t in trades:
+        items.append({
+            "id": t.id,
+            "source": "backtest",
+            "strategy_id": t.strategy_id,
+            "symbol": t.symbol,
+            "side": "BUY",
+            "qty": t.qty,
+            "entry_date": str(t.entry_date) if t.entry_date else None,
+            "exit_date": str(t.exit_date) if t.exit_date else None,
+            "entry_price": t.entry_price,
+            "exit_price": t.exit_price,
+            "stop_price": t.stop_price,
+            "net_pnl": t.net_pnl,
+            "gross_pnl": t.gross_pnl,
+            "r_multiple": t.r_multiple,
+            "exit_reason": t.exit_reason,
+            "reason_text": getattr(t, "reason_text", None),
+            "signal_date": str(getattr(t, "signal_date", None)) if getattr(t, "signal_date", None) else str(t.entry_date),
+            "planned_exit_date": str(getattr(t, "planned_exit_date", None)) if getattr(t, "planned_exit_date", None) else str(t.exit_date),
+            "holding_days_target": t.holding_days,
+        })
+
+    return {"total": total, "page": page, "page_size": page_size, "items": items}
+

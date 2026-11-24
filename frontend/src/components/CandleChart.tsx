@@ -156,6 +156,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const [lastQuoteTime, setLastQuoteTime] = useState<string | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(!initialBars || initialBars.length === 0);
+  const [isChartReady, setIsChartReady] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
@@ -246,26 +247,40 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     }
   }, [symbol, market, timeframe]);
 
+  // Sync initialBars if prop updates
+  useEffect(() => {
+    if (initialBars && initialBars.length > 0) {
+      setChartBars(initialBars);
+      setLoading(false);
+    }
+  }, [initialBars]);
+
   // Initial fetch and on timeframe switch
   useEffect(() => {
+    if (initialBars && initialBars.length > 0) {
+      setChartBars(initialBars);
+      setLoading(false);
+      return;
+    }
     isInitialLoadRef.current = true;
     userPanRangeRef.current = null;
     fetchBarsData(false);
-  }, [fetchBarsData]);
+  }, [fetchBarsData, initialBars]);
 
-  // Periodic 60-second bar dataset sync (paused when tab hidden or outside market hours)
+  // Periodic 60-second bar dataset sync (paused when tab hidden or outside market hours, disabled in trade-card mode)
   useEffect(() => {
+    if (initialBars && initialBars.length > 0) return;
     const timer = setInterval(() => {
       if (isTabVisible() && isMarketOpenClient(market)) {
         fetchBarsData(true);
       }
     }, 60000);
     return () => clearInterval(timer);
-  }, [fetchBarsData, market]);
+  }, [fetchBarsData, market, initialBars]);
 
-  // 10s Live Quote Streaming Loop (paused when tab hidden or outside market hours)
+  // 10s Live Quote Streaming Loop (paused when tab hidden or outside market hours, disabled in trade-card mode)
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || (initialBars && initialBars.length > 0)) return;
 
     let isMounted = true;
     const streamTick = async () => {
@@ -723,7 +738,21 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     });
     resizeObserver.observe(container);
 
+    // Expose test debug object if in test or trade-card mode
+    if (typeof window !== 'undefined') {
+      (window as any).__chartDebug = {
+        bars: cleanBars,
+        markers: tradeMarkers || [],
+        segments: tradeSegments || [],
+      };
+    }
+    setIsChartReady(true);
+
     return () => {
+      setIsChartReady(false);
+      if (typeof window !== 'undefined') {
+        delete (window as any).__chartDebug;
+      }
       resizeObserver.disconnect();
       if (chartInstanceRef.current) {
         chartInstanceRef.current.remove();
@@ -742,6 +771,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     strategyData,
     fullHeight,
     isExpanded,
+    initialBars,
+    tradeMarkers,
+    tradeSegments,
   ]);
 
   // Handle click on drawing overlay
@@ -1437,7 +1469,11 @@ export const CandleChart: React.FC<CandleChartProps> = ({
             )}
 
             {/* Lightweight Charts mounting DOM container */}
-            <div ref={chartContainerRef} className={`w-full ${isExpanded ? "h-full min-h-[460px] sm:min-h-[720px]" : "h-[400px] sm:h-[560px] min-h-[380px] sm:min-h-[560px]"}`} />
+            <div
+              ref={chartContainerRef}
+              data-testid={isChartReady && !loading ? "chart-ready" : undefined}
+              className={`w-full ${isExpanded ? "h-full min-h-[460px] sm:min-h-[720px]" : "h-[400px] sm:h-[560px] min-h-[380px] sm:min-h-[560px]"}`}
+            />
 
         {/* SVG Drawing Overlay */}
         <svg

@@ -44,7 +44,7 @@ def persist_evaluation_result(
     )
     from app.lab.evaluator import ClosedTrade, OpenPosition
 
-    if result.get("status") != "OK":
+    if result.get("status") not in ("OK", "PARTIAL_STALE"):
         raise ValueError(f"Cannot persist non-OK result: {result}")
 
     evaluation_id = str(uuid.uuid4())
@@ -214,10 +214,13 @@ def persist_evaluation_result(
     total_open = len(open_positions)
     total_daily = sum(len(rows) for rows in daily_equity.values())
 
+    stale_syms = result.get("stale_symbols", [])
+    error_detail = json.dumps({"stale_symbols": stale_syms}) if stale_syms else None
+
     eval_rec = LabEvaluation(
         id=evaluation_id,
         study_id=study_id,
-        status="DONE",
+        status="PARTIAL_STALE" if result.get("status") == "PARTIAL_STALE" else "DONE",
         started_at=now,
         completed_at=now,
         data_through_date=data_through,
@@ -226,6 +229,7 @@ def persist_evaluation_result(
         trade_count=total_closed,
         open_count=total_open,
         equity_row_count=total_daily,
+        error_detail=error_detail,
     )
     db.add(eval_rec)
 

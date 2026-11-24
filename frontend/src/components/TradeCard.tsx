@@ -7,6 +7,7 @@
  */
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   ArrowUpRight, BarChart3, Calendar, ChevronRight,
   TrendingDown, TrendingUp, X,
 } from 'lucide-react';
@@ -38,6 +39,8 @@ export interface TradeCardData {
   trade_key?: string;
   data_through_date?: string | null;
   evaluated_at?: string | null;
+  is_stale_data?: boolean;
+  stale_reason?: string | null;
 }
 
 function statusBadge(trade: TradeCardData) {
@@ -111,6 +114,16 @@ export const TradeCard: React.FC<{ trade: TradeCardData; className?: string }> =
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {trade.is_stale_data && (
+              <span
+                data-testid="stale-symbol-badge"
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-900/60 text-amber-300 border border-amber-700 flex items-center gap-1"
+                title={trade.stale_reason || 'Latest bar missing. Exits not checked.'}
+              >
+                <AlertCircle className="w-2.5 h-2.5" />
+                STALE DATA
+              </span>
+            )}
             {statusBadge(trade)}
             <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
           </div>

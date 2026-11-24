@@ -73,16 +73,39 @@ export const TradeCardList: React.FC<TradeCardListProps> = ({
       let paperTotal = 0;
       let backtestTotal = 0;
 
+      let loadErrors: string[] = [];
+
       if (sourceFilter !== 'backtest') {
-        // Load paper trades
-        const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-        if (studyId) qs.set('study_id', studyId);
-        if (strategyFilter) qs.set('strategy_id', strategyFilter);
-        const r = await fetchJson<{ total: number; items: TradeCardData[] }>(
-          `${API_BASE}/lab/trades/paper?${qs}`
-        );
-        paperTotal = r.total;
-        results.push(...r.items);
+        try {
+          const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+          if (studyId) qs.set('study_id', studyId);
+          if (strategyFilter) qs.set('strategy_id', strategyFilter);
+          const r = await fetchJson<{ total: number; items: TradeCardData[] }>(
+            `${API_BASE}/lab/trades/paper?${qs}`
+          );
+          paperTotal = r.total || 0;
+          results.push(...(r.items || []));
+        } catch (e: any) {
+          loadErrors.push(e.message || 'Failed to load paper trades');
+        }
+      }
+
+      if (sourceFilter !== 'paper') {
+        try {
+          const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+          if (strategyFilter) qs.set('strategy_id', strategyFilter);
+          const r = await fetchJson<{ total: number; items: TradeCardData[] }>(
+            `${API_BASE}/lab/trades/backtest?${qs}`
+          );
+          backtestTotal = r.total || 0;
+          results.push(...(r.items || []));
+        } catch (e: any) {
+          // Normal if backtest endpoint not loaded
+        }
+      }
+
+      if (results.length === 0 && loadErrors.length > 0) {
+        setError(loadErrors[0]);
       }
 
       setTrades(results);

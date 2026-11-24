@@ -276,3 +276,122 @@ def test_persist_evaluation_idempotent():
     eval_id_1 = persist_evaluation_result("study_abc", res_payload, mock_db)
     assert eval_id_1 is not None
     assert mock_db.flush.called
+
+
+# ─── 9. Per-Symbol Freshness & Partial Stale Handling ───────────────────────
+
+def test_per_symbol_freshness_partial_stale():
+    """Verify that when a held symbol lacks the latest bar session,
+    the evaluator returns PARTIAL_STALE, lists the stale symbol, flags the open position,
+    and does not mark exits as checked for that symbol."""
+    from app.lab.evaluator import evaluate_study
+    from app.lab.models_lab import LabStudy, LabStudyStrategy, LabPaperHolding
+    from app.lab.persist import persist_evaluation_result
+
+    study_id = "study_stale_fixture"
+    expected_session = datetime.date(2026, 11, 24)
+
+    # 1. Mock DB and objects
+    mock_db = MagicMock()
+    mock_study = MagicMock()
+    mock_study.id = study_id
+    mock_study.status = "ACTIVE"
+    mock_study.start_date = datetime.date(2026, 11, 1)
+    mock_study.capital = 500000.0
+    mock_study.risk_pct = 0.5
+    mock_study.max_positions = 5
+    mock_study.kill_switch_threshold_pct = 15.0
+    mock_study.is_test = False
+
+    mock_strat = MagicMock()
+    mock_strat.strategy_id = "S01"
+    mock_strat.holding_days = 4
+    mock_strat.config_hash = "hash_s01"
+    mock_strat.parameters_json = json.dumps({"ema_len": 20, "rsi_len": 14, "trend_sma": 200, "stop_atr_mult": 1.5})
+
+    # Holding in TCS (should be checked for exit)
+    mock_holding = MagicMock()
+    mock_holding.study_id = study_id
+    mock_holding.strategy_id = "S01"
+    mock_holding.symbol = "TCS"
+    mock_holding.entry_date = datetime.date(2026, 11, 15)
+    mock_holding.entry_price = 3500.0
+    mock_holding.stop_price = 3400.0
+    mock_holding.qty = 10
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == LabStudy:
+            m.filter.return_value.first.return_value = mock_study
+        elif model == LabStudyStrategy:
+            m.filter.return_value.all.return_value = [mock_strat]
+        elif model == LabPaperHolding:
+            m.filter.return_value.all.return_value = [mock_holding]
+        else:
+            m.filter.return_value.first.return_value = None
+            m.filter.return_value.all.return_value = []
+        return m
+
+    mock_db.query.side_effect = query_side_effect
+
+    # 2. Build bars: RELIANCE is fresh (through 2026-11-24), but TCS is stale (stops at 2026-11-20)
+    dates_full = [datetime.date(2026, 11, 1) + datetime.timedelta(days=i) for i in range(24)]
+    dates_stale = dates_full[:19]  # missing last 5 days up to 2026-11-24
+
+    df_reliance = pd.DataFrame({
+        "date": dates_full,
+        "open": [2500.0] * len(dates_full),
+        "high": [2550.0] * len(dates_full),
+        "low": [2480.0] * len(dates_full),
+        "close": [2520.0] * len(dates_full),
+        "volume": [100000.0] * len(dates_full),
+        "atr14": [30.0] * len(dates_full),
+    })
+
+    df_tcs_stale = pd.DataFrame({
+        "date": dates_stale,
+        "open": [3500.0] * len(dates_stale),
+        "high": [3550.0] * len(dates_stale),
+        "low": [3480.0] * len(dates_stale),
+        "close": [3520.0] * len(dates_stale),
+        "volume": [80000.0] * len(dates_stale),
+        "atr14": [40.0] * len(dates_stale),
+    })
+
+    mock_bars = {
+        "RELIANCE": df_reliance,
+        "TCS": df_tcs_stale,
+    }
+
+    # 3. Patch calendar to report 2026-11-24 as expected completed session
+    with patch("app.engine.calendars.get_last_completed_trading_session", return_value=expected_session), \
+         patch("app.lab.ingest_paper.refresh_indian_paper_bars") as mock_ingest:
+        
+        result = evaluate_study(
+            study_id=study_id,
+            db=mock_db,
+            preloaded_bars=mock_bars,
+            preloaded_data_through_date=expected_session,
+            allow_stale_for_test=False,
+        )
+
+    # 4. Assertions
+    assert result["status"] == "PARTIAL_STALE", f"Expected PARTIAL_STALE, got {result.get('status')}"
+    assert "TCS" in result["stale_symbols"], f"Expected TCS in stale_symbols, got {result.get('stale_symbols')}"
+    assert mock_ingest.called, "Expected targeted re-ingest to be attempted for missing symbol"
+
+    # Held TCS position must remain open and flagged as stale
+    open_positions = result["open_positions"]
+    tcs_open = [p for p in open_positions if p.symbol == "TCS"]
+    assert len(tcs_open) == 1, "TCS position should not have been closed"
+    assert tcs_open[0].is_stale_data is True, "TCS position should have is_stale_data = True"
+
+    # Closed trades should not have any exited TCS trade
+    closed_tcs = [t for t in result["closed_trades"] if t.symbol == "TCS"]
+    assert len(closed_tcs) == 0, "No exit should be recorded for stale TCS"
+
+    # 5. Assert persist_evaluation_result accepts PARTIAL_STALE and persists cleanly
+    eval_id = persist_evaluation_result(study_id, result, mock_db)
+    assert eval_id is not None
+    assert mock_db.flush.called
+

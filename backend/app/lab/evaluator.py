@@ -21,7 +21,7 @@ import logging
 import math
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import numpy as np
 import pandas as pd
@@ -108,6 +108,7 @@ class OpenPosition:
     signal_context: Dict[str, Any]
     trade_key: str
     days_held: int = 0
+    is_stale_data: bool = False
 
 
 @dataclass
@@ -180,6 +181,7 @@ def evaluate_study(
 
     # 2b. Stale data check against exchange calendar (unless marked is_test or explicitly allowed)
     is_test_study = getattr(study, "is_test", False) or allow_stale_for_test
+    expected_last_session = None
     if not is_test_study:
         from app.engine.calendars import get_last_completed_trading_session
         expected_last_session = get_last_completed_trading_session("IN")
@@ -198,6 +200,77 @@ def evaluate_study(
                 "data_through_date": str(data_through_date) if data_through_date else None,
                 "expected_session_date": str(expected_last_session),
             }
+
+    # 2c. Per-symbol freshness check for open positions and symbols with signals
+    stale_symbols: Set[str] = set()
+    existing_holdings = (
+        db.query(LabPaperHolding).filter(LabPaperHolding.study_id == study_id).all()
+        if db else []
+    )
+    held_symbols = {h.symbol for h in existing_holdings}
+
+    # Collect held symbols and latest bar signal symbols
+    critical_symbols = set(held_symbols)
+    for ss in study_strategies:
+        s_fn = SIGNAL_FUNCTIONS.get(ss.strategy_id)
+        s_params = json.loads(ss.parameters_json) if ss.parameters_json else {}
+        if not s_fn:
+            continue
+        for sym, df in bars_dict.items():
+            if len(df) < 50:
+                continue
+            try:
+                sig = s_fn(df, s_params)
+                if len(sig) > 0 and bool(sig.iloc[-1]):
+                    critical_symbols.add(sym)
+            except Exception:
+                pass
+
+    if not is_test_study and expected_last_session and critical_symbols:
+        missing_symbols = []
+        for sym in critical_symbols:
+            df = bars_dict.get(sym)
+            if df is None or df.empty or "date" not in df.columns:
+                missing_symbols.append(sym)
+                continue
+            sym_max = df["date"].max()
+            if hasattr(sym_max, "date"):
+                sym_max = sym_max.date()
+            if sym_max < expected_last_session:
+                missing_symbols.append(sym)
+
+        if missing_symbols:
+            logger.warning(
+                f"[Lab Evaluator] Per-symbol staleness detected for study {study_id}: "
+                f"{len(missing_symbols)} critical symbol(s) lack data through {expected_last_session}: {missing_symbols}. "
+                f"Attempting targeted re-ingest..."
+            )
+            try:
+                from app.lab.ingest_paper import refresh_indian_paper_bars
+                from app.engine.research_loader import load_research_bars_for_paper
+                refresh_indian_paper_bars(db=db, symbols=missing_symbols, lookback_sessions=5)
+                reloaded, _ = load_research_bars_for_paper(db=db, symbols=missing_symbols, force_refresh=True)
+                for s, d in reloaded.items():
+                    bars_dict[s] = d
+            except Exception as e:
+                logger.error(f"[Lab Evaluator] Targeted re-ingest error: {e}")
+
+            for sym in missing_symbols:
+                df = bars_dict.get(sym)
+                if df is None or df.empty or "date" not in df.columns:
+                    stale_symbols.add(sym)
+                    continue
+                sym_max = df["date"].max()
+                if hasattr(sym_max, "date"):
+                    sym_max = sym_max.date()
+                if sym_max < expected_last_session:
+                    stale_symbols.add(sym)
+
+            if stale_symbols:
+                logger.warning(
+                    f"[Lab Evaluator] PARTIAL_STALE: Symbols still lacking latest session: {stale_symbols}. "
+                    f"Exits will not be checked for these symbols."
+                )
 
     # 3. Registry hash for audit
     registry_hash = _compute_registry_hash(study_strategies)
@@ -231,16 +304,20 @@ def evaluate_study(
             data_through_date=data_through_date,
             reason_text_template=reason_text_template,
             db=db,
+            stale_symbols=stale_symbols,
         )
         all_closed.extend(closed)
         all_open.extend(open_pos)
         tomorrow_orders_by_strategy[strategy_id] = tomorrow
         daily_equity_by_strategy[strategy_id] = daily
 
+    status = "PARTIAL_STALE" if stale_symbols else "OK"
     return {
-        "status": "OK",
+        "status": status,
         "study_id": study_id,
+        "stale_symbols": sorted(list(stale_symbols)),
         "data_through_date": str(data_through_date) if data_through_date else None,
+        "expected_session_date": str(expected_last_session) if expected_last_session else None,
         "registry_hash": registry_hash,
         "engine_version": ENGINE_VERSION,
         "closed_trades": all_closed,
@@ -265,6 +342,7 @@ def _evaluate_strategy(
     data_through_date: Optional[datetime.date],
     reason_text_template: str,
     db,
+    stale_symbols: Optional[Set[str]] = None,
 ) -> Tuple[List[ClosedTrade], List[OpenPosition], List[Dict], List[Dict]]:
     """
     Evaluate one strategy for one study.
@@ -361,6 +439,10 @@ def _evaluate_strategy(
         # ── 1. Process exits for open positions ───────────────────────────────
         to_close: List[Tuple[str, float, Any, str]] = []
         for sym, pos in list(open_positions.items()):
+            if stale_symbols and sym in stale_symbols:
+                # Per-symbol staleness: do not mark exits as checked on missing session
+                pos.is_stale_data = True
+                continue
             if sym not in enriched_dict:
                 continue
             df = enriched_dict[sym]
@@ -434,7 +516,7 @@ def _evaluate_strategy(
         is_latest_bar = (today == study_dates[-1]) if study_dates else False
 
         for sym in syms_today:
-            if sym in open_positions:
+            if sym in open_positions or (stale_symbols and sym in stale_symbols):
                 continue
             if len(open_positions) >= max_positions:
                 break

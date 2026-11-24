@@ -71,11 +71,11 @@ const MOCK_TRADES = [
     qty: 15,
     signal_date: '2026-11-12', // Thursday
     entry_date: '2026-11-13',  // Friday
-    exec_date: '2026-11-17',   // Tuesday (gap down open)
+    exec_date: '2026-11-17',   // Tuesday (gap down open at 1400, below stop 1450)
     exit_date: '2026-11-17',
     fill_price: 1500.0,
     entry_price: 1500.0,
-    exit_price: 1398.6,
+    exit_price: 1398.6,       // Fill at open (1400) * (1 - 0.001 slippage) = 1398.6
     stop_price: 1450.0,
     planned_exit_date: '2026-11-19',
     holding_days_target: 4,
@@ -138,6 +138,7 @@ const MOCK_TRADES = [
   },
 ];
 
+// 10 valid weekday bars spanning 2026-11-09 through 2026-11-20
 const MOCK_CHART_BARS = [
   { time: '2026-11-09', open: 2480, high: 2510, low: 2470, close: 2490, volume: 100000 },
   { time: '2026-11-10', open: 2490, high: 2520, low: 2485, close: 2505, volume: 120000 },
@@ -146,6 +147,23 @@ const MOCK_CHART_BARS = [
   { time: '2026-11-13', open: 2555, high: 2580, low: 2540, close: 2575, volume: 130000 },
   { time: '2026-11-16', open: 2575, high: 2620, low: 2570, close: 2610, volume: 150000 },
   { time: '2026-11-17', open: 2610, high: 2660, low: 2605, close: 2650, volume: 180000 },
+  { time: '2026-11-18', open: 2650, high: 2670, low: 2630, close: 2640, volume: 90000 },
+  { time: '2026-11-19', open: 2640, high: 2660, low: 2620, close: 2635, volume: 95000 },
+  { time: '2026-11-20', open: 2635, high: 2650, low: 2610, close: 2625, volume: 85000 },
+];
+
+const MOCK_CHART_BARS_INFY = [
+  { time: '2026-11-09', open: 1480, high: 1510, low: 1470, close: 1490, volume: 100000 },
+  { time: '2026-11-10', open: 1490, high: 1520, low: 1485, close: 1505, volume: 120000 },
+  { time: '2026-11-11', open: 1500, high: 1540, low: 1495, close: 1530, volume: 140000 },
+  { time: '2026-11-12', open: 1510, high: 1530, low: 1490, close: 1515, volume: 110000 },
+  { time: '2026-11-13', open: 1500, high: 1525, low: 1490, close: 1510, volume: 130000 },
+  { time: '2026-11-16', open: 1490, high: 1500, low: 1460, close: 1465, volume: 150000 },
+  // 2026-11-17: Gaps down at open 1400 (below stop 1450)
+  { time: '2026-11-17', open: 1400, high: 1410, low: 1380, close: 1390, volume: 220000 },
+  { time: '2026-11-18', open: 1390, high: 1410, low: 1380, close: 1400, volume: 120000 },
+  { time: '2026-11-19', open: 1400, high: 1420, low: 1395, close: 1415, volume: 100000 },
+  { time: '2026-11-20', open: 1415, high: 1430, low: 1405, close: 1420, volume: 95000 },
 ];
 
 test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () => {
@@ -157,7 +175,28 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     }
   });
 
-  test('1. Render seeded study with Winner, Stop-out, Gap-through-stop, Time exit, and Open trade', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
+    // Intercept standard quote and bars APIs to prevent unhandled background calls
+    await page.route('**/api/quotes*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+    });
+    await page.route('**/api/bars*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ bars: MOCK_CHART_BARS, symbol: 'RELIANCE', market: 'IN' }),
+      });
+    });
+    await page.route('**/api/lab/trades/backtest*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 0, items: [] }),
+      });
+    });
+  });
+
+  test('1. Render seeded study with Winner, Stop-out, Gap-through-stop, Time exit, and Open trade with verified chart rendering', async ({ page }) => {
     // Intercept paper trades endpoint
     await page.route('**/api/lab/trades/paper*', async (route) => {
       await route.fulfill({
@@ -176,11 +215,20 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     await page.route('**/api/lab/trade/**/chart*', async (route) => {
       const url = route.request().url();
       let trade = MOCK_TRADES[0];
-      if (url.includes('/1/chart')) trade = MOCK_TRADES[0];
-      else if (url.includes('/2/chart')) trade = MOCK_TRADES[1];
-      else if (url.includes('/3/chart')) trade = MOCK_TRADES[2];
-      else if (url.includes('/4/chart')) trade = MOCK_TRADES[3];
-      else if (url.includes('/5/chart')) trade = MOCK_TRADES[4];
+      let bars = MOCK_CHART_BARS;
+
+      if (url.includes('/1/chart')) {
+        trade = MOCK_TRADES[0];
+      } else if (url.includes('/2/chart')) {
+        trade = MOCK_TRADES[1];
+      } else if (url.includes('/3/chart')) {
+        trade = MOCK_TRADES[2];
+        bars = MOCK_CHART_BARS_INFY;
+      } else if (url.includes('/4/chart')) {
+        trade = MOCK_TRADES[3];
+      } else if (url.includes('/5/chart')) {
+        trade = MOCK_TRADES[4];
+      }
 
       const markers = [
         { date: trade.signal_date, price: trade.entry_price, type: 'SIGNAL', label: 'Signal', color: '#a78bfa' },
@@ -197,7 +245,7 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
       if (trade.stop_price && trade.entry_date) {
         segments.push({
           startDate: trade.entry_date,
-          endDate: trade.exit_date || trade.planned_exit_date || '2026-11-23',
+          endDate: trade.exit_date || trade.planned_exit_date || '2026-11-20',
           price: trade.stop_price,
           type: 'STOP',
           color: '#ef4444',
@@ -210,7 +258,7 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
         contentType: 'application/json',
         body: JSON.stringify({
           symbol: trade.symbol,
-          bars: MOCK_CHART_BARS,
+          bars,
           markers,
           segments,
           trade_info: trade,
@@ -247,34 +295,66 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     // ── Open Winner Card ──
     await main.getByText('RELIANCE').click();
     await expect(page.getByText('TRADE VIEW')).toBeVisible();
-    await expect(page.getByText('Signal:').first()).toBeVisible();
-    await expect(page.getByText('2026-11-10').first()).toBeVisible();
-    await expect(page.getByText('Entry:').first()).toBeVisible();
-    await expect(page.getByText('2026-11-11').first()).toBeVisible();
-    await expect(page.getByText(/2500\.00/).first()).toBeVisible();
-    await expect(page.getByText(/2420\.00/).first()).toBeVisible();
-    await expect(page.getByText('Planned exit:').first()).toBeVisible();
 
-    // Screenshot 2: Winner Modal Chart
+    // Explicit wait for chart-ready signal (series & markers rendered)
+    const chartReady = page.locator('[data-testid="chart-ready"]');
+    await expect(chartReady).toBeVisible({ timeout: 10000 });
+
+    // Fail if loading spinner is still visible
+    await expect(page.getByText('Loading 1D candlestick bars...')).not.toBeVisible();
+    await expect(page.getByText('Loading trade chart…')).not.toBeVisible();
+
+    // Fail if canvas is not attached or has 0 dimensions
+    const canvas = page.locator('canvas').first();
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(200);
+    expect(box!.height).toBeGreaterThan(200);
+
+    // Read chart debug state from live series
+    const debugState: any = await page.evaluate(() => (window as any).__chartDebug);
+    expect(debugState).toBeDefined();
+    expect(debugState.bars.length).toBeGreaterThan(0);
+    expect(debugState.markers.length).toBe(4);
+
+    // Assert BUY and SELL markers match fills
+    const buyM = debugState.markers.find((m: any) => m.type === 'BUY');
+    expect(buyM.price).toBe(2500.0);
+    expect(buyM.date).toBe('2026-11-11');
+
+    const sellM = debugState.markers.find((m: any) => m.type === 'SELL');
+    expect(sellM.price).toBe(2650.0);
+    expect(sellM.date).toBe('2026-11-17');
+
+    // Screenshot 2: Winner Modal Chart (TAKEN STRICTLY AFTER chart-ready)
     await page.screenshot({ path: path.join(screenshotsDir, '02_trade_card_modal_winner.png') });
     await page.getByTitle('Close (Esc)').click();
     await expect(page.getByText('TRADE VIEW')).not.toBeVisible();
 
-    // ── Open Gap-through-stop Card ──
+    // ── Open Gap-through-stop Card (INFY) ──
     await main.getByText('INFY').click();
     await expect(page.getByText('TRADE VIEW')).toBeVisible();
-    await expect(page.getByText('Gap-through stop')).toBeVisible();
-    await expect(page.getByText('2026-11-13').first()).toBeVisible();
-    await expect(page.getByText(/1500\.00/).first()).toBeVisible();
 
-    // Screenshot 3: Gap-through-stop Modal Chart
+    // Explicit wait for chart-ready signal
+    await expect(page.locator('[data-testid="chart-ready"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Loading 1D candlestick bars...')).not.toBeVisible();
+    await expect(page.getByText('Loading trade chart…')).not.toBeVisible();
+
+    // Assert gap-through-stop shows open price as fill from live debug state
+    const infyDebug: any = await page.evaluate(() => (window as any).__chartDebug);
+    expect(infyDebug).toBeDefined();
+    const infySell = infyDebug.markers.find((m: any) => m.type === 'SELL');
+    expect(infySell).toBeDefined();
+    expect(infySell.price).toBe(1398.6); // Filled at open 1400 * (1 - 0.001)
+
+    // Screenshot 3: Gap-through-stop Modal Chart (TAKEN STRICTLY AFTER chart-ready)
     await page.screenshot({ path: path.join(screenshotsDir, '03_trade_card_modal_gap_stop.png') });
     await page.getByTitle('Close (Esc)').click();
     await expect(page.getByText('TRADE VIEW')).not.toBeVisible();
   });
 
-  test('2. Verify assertion rules: marker counts, prices match fill, bounded segments, no weekend dates', async ({ page }) => {
-    let capturedResponse: any = null;
+  test('2. Verify assertion rules from real chart series: marker counts, prices match fill, bounded segments, no weekend dates', async ({ page }) => {
     await page.route('**/api/lab/trade/paper/1/chart*', async (route) => {
       const body = {
         symbol: 'RELIANCE',
@@ -290,7 +370,6 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
         ],
         trade_info: MOCK_TRADES[0],
       };
-      capturedResponse = body;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
 
@@ -303,21 +382,40 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     await page.getByRole('main').getByText('RELIANCE').click();
 
     await expect(page.getByText('TRADE VIEW')).toBeVisible();
+    await expect(page.locator('[data-testid="chart-ready"]')).toBeVisible({ timeout: 10000 });
 
-    // Assert marker counts
-    expect(capturedResponse.markers.length).toBe(4);
+    // Read chart series state directly from window.__chartDebug
+    const chartState: any = await page.evaluate(() => (window as any).__chartDebug);
+    expect(chartState).toBeDefined();
 
-    // Assert marker prices match fill price
-    const buyMarker = capturedResponse.markers.find((m: any) => m.type === 'BUY');
+    // 1. Assert marker counts
+    expect(chartState.markers.length).toBe(4);
+
+    // 2. Assert BUY marker date and price equal trade entry_fill
+    const buyMarker = chartState.markers.find((m: any) => m.type === 'BUY');
     expect(buyMarker.price).toBe(MOCK_TRADES[0].fill_price);
+    expect(buyMarker.date).toBe(MOCK_TRADES[0].entry_date);
 
-    // Assert stop segment spans entry to exit only (bounded, not full chart)
-    const stopSegment = capturedResponse.segments.find((s: any) => s.type === 'STOP');
+    // 3. Assert SELL marker equals exit_fill
+    const sellMarker = chartState.markers.find((m: any) => m.type === 'SELL');
+    expect(sellMarker.price).toBe(MOCK_TRADES[0].exit_price);
+    expect(sellMarker.date).toBe(MOCK_TRADES[0].exit_date);
+
+    // 4. Assert stop segment starts on entry bar and ends on exit bar (bounded, not full width)
+    const stopSegment = chartState.segments.find((s: any) => s.type === 'STOP');
+    expect(stopSegment).toBeDefined();
     expect(stopSegment.startDate).toBe('2026-11-11');
     expect(stopSegment.endDate).toBe('2026-11-17');
+    expect(stopSegment.price).toBe(2420);
 
-    // Assert NO weekend dates on markers
-    for (const marker of capturedResponse.markers) {
+    // 5. Assert markers sit on bars that exist in chartBars
+    for (const marker of chartState.markers) {
+      const sitsOnExistingBar = chartState.bars.some((b: any) => String(b.time) === marker.date);
+      expect(sitsOnExistingBar).toBe(true);
+    }
+
+    // 6. Assert NO weekend dates on markers (Mon-Fri only)
+    for (const marker of chartState.markers) {
       const d = new Date(marker.date);
       const dayOfWeek = d.getUTCDay();
       expect(dayOfWeek).toBeGreaterThanOrEqual(1); // Mon=1
@@ -325,8 +423,8 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     }
   });
 
-  test('3. Verify Stale Data Banner on Paper Tab', async ({ page }) => {
-    // Intercept study list and details with stale data
+  test('3. Verify Stale Data Banner and Partial Stale Notice on Paper Tab', async ({ page }) => {
+    // Intercept study list and details with stale data and partial stale symbols
     await page.route('**/api/lab/study', async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
@@ -358,10 +456,14 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
             last_data_date: '2026-11-18',
             missed_sessions: 4,
             is_stale: true,
+            status: 'PARTIAL_STALE',
+            stale_symbols: ['TCS'],
           },
           strategies: [{ strategy_id: 'S01', holding_days: 4 }],
           daily: [],
-          holdings: [],
+          holdings: [
+            { symbol: 'TCS', strategy_id: 'S01', qty: 10, entry_date: '2026-11-15', entry_price: 3500.0, stop_price: 3400.0, avg_cost: 3500.0, unrealized_pnl: 0.0, is_stale_data: true },
+          ],
           recent_trades: [],
           promotion_checklists: {},
           disclaimer: 'Warning: Survivorship bias',
@@ -377,6 +479,11 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
     await expect(banner).toBeVisible();
     await expect(page.getByText('2026-11-18').first()).toBeVisible();
     await expect(page.getByText('4 missed trading sessions')).toBeVisible();
+
+    // Verify Partial Stale Symbol Notice is visible
+    const partialNotice = page.locator('[data-testid="partial-stale-banner"]');
+    await expect(partialNotice).toBeVisible();
+    await expect(partialNotice.getByText('TCS')).toBeVisible();
 
     // Screenshot 4: Stale Data Banner
     await page.screenshot({ path: path.join(screenshotsDir, '04_stale_data_banner.png') });
@@ -417,5 +524,89 @@ test.describe('Strategy Lab — Reusable Trade Cards & Click-to-Chart E2E', () =
 
     // Screenshot 6: Error State
     await page.screenshot({ path: path.join(screenshotsDir, '06_error_state.png') });
+  });
+
+  test('6. Verify backtest trade click-to-chart with verified chart-ready and debug state', async ({ page }) => {
+    const mockBtTrade = {
+      id: 101,
+      source: 'backtest',
+      strategy_id: 'S01',
+      symbol: 'SBIN',
+      entry_date: '2026-11-11',
+      exit_date: '2026-11-17',
+      signal_date: '2026-11-10',
+      entry_price: 600.0,
+      exit_price: 630.0,
+      stop_price: 580.0,
+      planned_exit_date: '2026-11-17',
+      net_pnl: 1500.0,
+      r_multiple: 1.5,
+      exit_reason: 'TIME_EXIT',
+      holding_days_target: 4,
+      qty: 50,
+      reason_text: 'EMA20 pullback backtest trade',
+    };
+
+    await page.route('**/api/lab/trades/backtest*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 1, items: [mockBtTrade] }),
+      });
+    });
+
+    await page.route('**/api/lab/trades/paper*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ total: 0, items: [] }),
+      });
+    });
+
+    await page.route('**/api/lab/trade/backtest/101/chart*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          symbol: 'SBIN',
+          bars: MOCK_CHART_BARS,
+          markers: [
+            { date: '2026-11-10', price: 600, type: 'SIGNAL', label: 'Signal', color: '#a78bfa' },
+            { date: '2026-11-11', price: 600, type: 'BUY', label: 'Buy @ ₹600.00', color: '#34d399' },
+            { date: '2026-11-17', price: 630, type: 'SELL', label: 'TIME_EXIT', color: '#60a5fa' },
+          ],
+          segments: [
+            { startDate: '2026-11-11', endDate: '2026-11-17', price: 580, type: 'STOP', color: '#ef4444', style: 'dashed' },
+          ],
+          trade_info: mockBtTrade,
+        }),
+      });
+    });
+
+    await page.goto('/strategy-lab');
+    await page.getByRole('button', { name: /Trade Cards/i }).click();
+
+    // Select "Backtest only" source filter
+    await page.locator('select').first().selectOption('backtest');
+
+    // Wait for SBIN to appear in main
+    const sbin = page.getByRole('main').getByText('SBIN');
+    await expect(sbin).toBeVisible({ timeout: 5000 });
+    await sbin.click();
+
+    await expect(page.getByText('TRADE VIEW')).toBeVisible();
+    await expect(page.locator('[data-testid="chart-ready"]')).toBeVisible({ timeout: 10000 });
+
+    const debugState: any = await page.evaluate(() => (window as any).__chartDebug);
+    expect(debugState).toBeDefined();
+    expect(debugState.bars.length).toBe(10);
+    expect(debugState.markers.length).toBe(3);
+
+    const buy = debugState.markers.find((m: any) => m.type === 'BUY');
+    expect(buy.price).toBe(600.0);
+    expect(buy.date).toBe('2026-11-11');
+
+    await page.getByTitle('Close (Esc)').click();
+    await expect(page.getByText('TRADE VIEW')).not.toBeVisible();
   });
 });

@@ -89,6 +89,8 @@ interface StudyDetail extends StudySummary {
     last_data_date?: string | null;
     missed_sessions: number;
     is_stale: boolean;
+    status?: string | null;
+    stale_symbols?: string[];
   };
 }
 
@@ -686,6 +688,18 @@ const PaperTab: React.FC = () => {
                     <strong>Stale Market Data Notice:</strong> Market data is through{' '}
                     <span className="font-mono font-bold text-white">{studyDetail.staleness.last_data_date || 'N/A'}</span>{' '}
                     ({studyDetail.staleness.missed_sessions} missed trading session{studyDetail.staleness.missed_sessions !== 1 ? 's' : ''}). Forward paper evaluation is suspended until market bars are refreshed.
+                  </div>
+                </div>
+              )}
+
+              {/* Partial stale symbol notice */}
+              {studyDetail.staleness?.stale_symbols && studyDetail.staleness.stale_symbols.length > 0 && (
+                <div data-testid="partial-stale-banner" className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-950/50 border border-amber-700/80 text-amber-300 text-xs">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+                  <div>
+                    <strong>Partial Stale Data Notice:</strong> Missing latest session bar for symbol(s):{' '}
+                    <span className="font-mono font-bold text-white">{studyDetail.staleness.stale_symbols.join(', ')}</span>.
+                    Exits are not marked as checked and are safely held.
                   </div>
                 </div>
               )}
