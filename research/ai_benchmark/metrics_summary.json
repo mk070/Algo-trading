@@ -1,0 +1,440 @@
+{
+  "gemini-4-hydrogen": {
+    "model_id": "gemini-4-hydrogen",
+    "status": "BLOCKED_FREE_TIER",
+    "total_evaluated": 0,
+    "api_failure_rate": 1.0,
+    "invalid_json_rate": 0.0,
+    "company_id_accuracy": 0.0,
+    "symbol_accuracy": 0.0,
+    "category_accuracy": 0.0,
+    "factual_summary_accuracy": 0.0,
+    "sentiment_accuracy": 0.0,
+    "sentiment_macro_f1": 0.0,
+    "materiality_accuracy": 0.0,
+    "citation_accuracy": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "decision_consistency": 0.0,
+    "overall_weighted_score": 0.0,
+    "avg_latency": 0.0,
+    "median_latency": 0.0,
+    "avg_input_tokens": 0,
+    "avg_output_tokens": 0,
+    "sentiment_confusion_matrix": {
+      "POSITIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEGATIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEUTRAL": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "MIXED": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "UNCERTAIN": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      }
+    },
+    "per_class_sentiment": {
+      "POSITIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEGATIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEUTRAL": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "MIXED": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "UNCERTAIN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  },
+  "gemini-3.8-flash": {
+    "model_id": "gemini-3.8-flash",
+    "status": "BLOCKED_FREE_TIER",
+    "total_evaluated": 0,
+    "api_failure_rate": 1.0,
+    "invalid_json_rate": 0.0,
+    "company_id_accuracy": 0.0,
+    "symbol_accuracy": 0.0,
+    "category_accuracy": 0.0,
+    "factual_summary_accuracy": 0.0,
+    "sentiment_accuracy": 0.0,
+    "sentiment_macro_f1": 0.0,
+    "materiality_accuracy": 0.0,
+    "citation_accuracy": 0.0,
+    "unsupported_claim_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "decision_consistency": 0.0,
+    "overall_weighted_score": 0.0,
+    "avg_latency": 0.0,
+    "median_latency": 0.0,
+    "avg_input_tokens": 0,
+    "avg_output_tokens": 0,
+    "sentiment_confusion_matrix": {
+      "POSITIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEGATIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEUTRAL": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "MIXED": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "UNCERTAIN": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      }
+    },
+    "per_class_sentiment": {
+      "POSITIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEGATIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEUTRAL": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "MIXED": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "UNCERTAIN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  },
+  "gemini-3.1-flash-lite": {
+    "model_id": "gemini-3.1-flash-lite",
+    "status": "VERIFIED",
+    "total_evaluated": 13,
+    "valid_json_count": 12,
+    "api_failure_rate": 0.0769,
+    "invalid_json_rate": 0.0,
+    "company_id_accuracy": 1.0,
+    "symbol_accuracy": 1.0,
+    "category_accuracy": 0.6667,
+    "factual_summary_accuracy": 0.8333,
+    "sentiment_accuracy": 0.5833,
+    "sentiment_macro_f1": 0.5778,
+    "materiality_accuracy": 0.6667,
+    "citation_accuracy": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "hallucination_rate": 0.1667,
+    "decision_consistency": 0.6,
+    "overall_weighted_score": 80.58,
+    "avg_latency": 3.54,
+    "median_latency": 2.78,
+    "avg_input_tokens": 1020.9,
+    "avg_output_tokens": 701.4,
+    "sentiment_confusion_matrix": {
+      "POSITIVE": {
+        "POSITIVE": 1,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 2,
+        "UNCERTAIN": 0
+      },
+      "NEGATIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 1,
+        "NEUTRAL": 0,
+        "MIXED": 1,
+        "UNCERTAIN": 0
+      },
+      "NEUTRAL": {
+        "POSITIVE": 1,
+        "NEGATIVE": 1,
+        "NEUTRAL": 5,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "MIXED": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "UNCERTAIN": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      }
+    },
+    "per_class_sentiment": {
+      "POSITIVE": {
+        "precision": 0.5,
+        "recall": 0.333,
+        "f1": 0.4
+      },
+      "NEGATIVE": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5
+      },
+      "NEUTRAL": {
+        "precision": 1.0,
+        "recall": 0.714,
+        "f1": 0.833
+      },
+      "MIXED": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "UNCERTAIN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  },
+  "nvidia/nemotron-3-ultra-550b-a55b": {
+    "model_id": "nvidia/nemotron-3-ultra-550b-a55b",
+    "status": "VERIFIED",
+    "total_evaluated": 13,
+    "valid_json_count": 11,
+    "api_failure_rate": 0.0,
+    "invalid_json_rate": 0.1538,
+    "company_id_accuracy": 1.0,
+    "symbol_accuracy": 1.0,
+    "category_accuracy": 0.8182,
+    "factual_summary_accuracy": 1.0,
+    "sentiment_accuracy": 0.1818,
+    "sentiment_macro_f1": 0.1786,
+    "materiality_accuracy": 0.6364,
+    "citation_accuracy": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "decision_consistency": 1.0,
+    "overall_weighted_score": 75.94,
+    "avg_latency": 36.36,
+    "median_latency": 36.58,
+    "avg_input_tokens": 1120.0,
+    "avg_output_tokens": 1299.2,
+    "sentiment_confusion_matrix": {
+      "POSITIVE": {
+        "POSITIVE": 1,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 1,
+        "UNCERTAIN": 0
+      },
+      "NEGATIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 2,
+        "UNCERTAIN": 0
+      },
+      "NEUTRAL": {
+        "POSITIVE": 4,
+        "NEGATIVE": 1,
+        "NEUTRAL": 1,
+        "MIXED": 0,
+        "UNCERTAIN": 1
+      },
+      "MIXED": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "UNCERTAIN": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      }
+    },
+    "per_class_sentiment": {
+      "POSITIVE": {
+        "precision": 0.2,
+        "recall": 0.5,
+        "f1": 0.286
+      },
+      "NEGATIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEUTRAL": {
+        "precision": 1.0,
+        "recall": 0.143,
+        "f1": 0.25
+      },
+      "MIXED": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "UNCERTAIN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  },
+  "nvidia/nemotron-3.5-super-vl-120b-a12b": {
+    "model_id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    "status": "PRELIMINARY",
+    "total_evaluated": 13,
+    "valid_json_count": 2,
+    "api_failure_rate": 0.0,
+    "invalid_json_rate": 0.8462,
+    "company_id_accuracy": 1.0,
+    "symbol_accuracy": 1.0,
+    "category_accuracy": 1.0,
+    "factual_summary_accuracy": 1.0,
+    "sentiment_accuracy": 0.5,
+    "sentiment_macro_f1": 0.3333,
+    "materiality_accuracy": 1.0,
+    "citation_accuracy": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "hallucination_rate": 0.0,
+    "decision_consistency": 0.8,
+    "overall_weighted_score": 52.21,
+    "avg_latency": 16.31,
+    "median_latency": 15.61,
+    "avg_input_tokens": 1120.0,
+    "avg_output_tokens": 1981.5,
+    "sentiment_confusion_matrix": {
+      "POSITIVE": {
+        "POSITIVE": 1,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEGATIVE": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "NEUTRAL": {
+        "POSITIVE": 1,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "MIXED": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      },
+      "UNCERTAIN": {
+        "POSITIVE": 0,
+        "NEGATIVE": 0,
+        "NEUTRAL": 0,
+        "MIXED": 0,
+        "UNCERTAIN": 0
+      }
+    },
+    "per_class_sentiment": {
+      "POSITIVE": {
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.667
+      },
+      "NEGATIVE": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "NEUTRAL": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "MIXED": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "UNCERTAIN": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  }
+}

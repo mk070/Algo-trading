@@ -1,0 +1,53 @@
+{
+  "gemini-3.1-flash-lite": {
+    "success": true,
+    "latency_sec": 2.08,
+    "parsed_json": {
+      "company_name": "Infosys Limited",
+      "canonical_symbol": "INFY",
+      "event_category": "MIXED",
+      "revenue_inr_crore": 40986,
+      "net_profit_inr_crore": 6506,
+      "operating_margin_pct": 21.1,
+      "interim_dividend_per_share": 21.0,
+      "record_date": "2026-10-29",
+      "guidance_revision": "Revised FY27 revenue growth guidance upwards to 3.75% - 4.50% from 3.00% - 4.00%",
+      "materiality": "HIGH",
+      "sentiment": "POSITIVE",
+      "verified_citations": [
+        "Revenue from Operations stood at Rs 40,986 Crore",
+        "Consolidated Net Profit (Profit After Tax) stood at Rs 6,506 Crore",
+        "Operating Margin expanding to 21.1%",
+        "Interim Dividend of Rs 21.00 per equity share",
+        "revised its FY27 revenue growth guidance upwards to 3.75% - 4.50%"
+      ]
+    },
+    "error": null
+  },
+  "nvidia/nemotron-3.5-super-vl-120b-a12b": {
+    "success": true,
+    "latency_sec": 12.89,
+    "parsed_json": {
+      "company_name": "Infosys Limited",
+      "canonical_symbol": "INFY",
+      "event_category": "MIXED",
+      "revenue_inr_crore": 40986,
+      "net_profit_inr_crore": 6506,
+      "operating_margin_pct": 21.1,
+      "interim_dividend_per_share": 21.0,
+      "record_date": "2026-10-29",
+      "guidance_revision": "Revised FY27 revenue growth guidance upwards to 3.75% - 4.50% in constant currency terms (previously guided at 3.00% - 4.00%).",
+      "materiality": "HIGH",
+      "sentiment": "POSITIVE",
+      "verified_citations": [
+        "Revenue from Operations stood at Rs 40,986 Crore",
+        "Consolidated Net Profit (Profit After Tax) stood at Rs 6,506 Crore",
+        "Operating Margin expanding to 21.1%",
+        "Interim Dividend of Rs 21.00 per equity share",
+        "Record Date for the purpose of payment of the Interim Dividend has been fixed as October 29, 2026.",
+        "The company has revised its FY27 revenue growth guidance upwards to 3.75% - 4.50% in constant currency terms (previously guided at 3.00% - 4.00%)."
+      ]
+    },
+    "error": null
+  }
+}

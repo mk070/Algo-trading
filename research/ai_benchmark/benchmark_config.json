@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "prompt_version": "v1.0-standardized",
+  "dataset_path": "research/ai_benchmark/news_dataset_v1.jsonl",
+  "ground_truth_path": "research/ai_benchmark/ground_truth_v1.json",
+  "results_path": "research/ai_benchmark/benchmark_results.jsonl",
+  "config_hash": "a1b2c3d4e5f6_zero_cost_v1",
+  "temperature": 0.0,
+  "max_output_tokens": 2048,
+  "models": [
+    {
+      "id": "gemini-4-hydrogen",
+      "provider": "google",
+      "status": "BLOCKED_FREE_TIER",
+      "reason": "HTTP 503 UNAVAILABLE on free tier (capacity overloaded). Requires paid API tier for guaranteed throughput."
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "provider": "google",
+      "status": "BLOCKED_FREE_TIER",
+      "reason": "HTTP 503 UNAVAILABLE on free tier (capacity overloaded). Excluded from execution."
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "provider": "google",
+      "status": "ELIGIBLE",
+      "reason": "Verified active free tier ($0/req, 15 RPM, 1500 RPD)."
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b",
+      "provider": "nvidia",
+      "status": "ELIGIBLE",
+      "reason": "Verified active free credits on build.nvidia.com ($0/req, 40 RPM limit)."
+    },
+    {
+      "id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "provider": "nvidia",
+      "status": "ELIGIBLE",
+      "reason": "Verified active free credits on build.nvidia.com ($0/req, multimodal vision/text support)."
+    }
+  ]
+}
