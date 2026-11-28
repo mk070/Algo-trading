@@ -15,6 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { AiResearchCard } from '../components/AiResearchCard';
 import { CandleChart } from '../components/CandleChart';
 import { MarketPulseWidget } from '../components/MarketPulseWidget';
 import { SignalCard } from '../components/SignalCard';
@@ -384,15 +385,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ currentMarket, onM
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {actionableSignals.map((sig) => (
-              <SignalCard
-                key={sig.id || sig.symbol}
-                signal={sig}
-                onOpenChart={handleOpenChart}
-                onTakeTrade={(s) => setTradeModalSignal(s)}
-              />
-            ))}
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {actionableSignals.map((sig) => (
+                <SignalCard
+                  key={sig.id || sig.symbol}
+                  signal={sig}
+                  onOpenChart={handleOpenChart}
+                  onTakeTrade={(s) => setTradeModalSignal(s)}
+                />
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-violet-400" />
+                  AI Research — Shortlisted Opportunities
+                </h3>
+                <span className="text-[11px] text-slate-500">Informational only · Cached assessments</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Array.from(new Map(actionableSignals.map((s) => [s.symbol, s])).values())
+                  .slice(0, 6)
+                  .map((sig) => (
+                    <AiResearchCard
+                      key={`ai-${sig.symbol}`}
+                      symbol={sig.symbol}
+                      market={currentMarket}
+                      variant="summary"
+                    />
+                  ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

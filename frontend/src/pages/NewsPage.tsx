@@ -23,6 +23,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { AiResearchCard } from '../components/AiResearchCard';
 import { ChartModal } from '../components/ChartModal';
 import { EarningsAnalysisResult } from '../types';
 
@@ -41,6 +42,7 @@ export const NewsPage: React.FC<NewsPageProps> = ({ currentMarket = 'US' }) => {
   const [searchSymbol, setSearchSymbol] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
+  const [expandedAiEventId, setExpandedAiEventId] = useState<number | null>(null);
 
   // Earnings Analyst state
   const [earningsSymbol, setEarningsSymbol] = useState(currentMarket === 'IN' ? 'RELIANCE' : 'AAPL');
@@ -361,8 +363,8 @@ export const NewsPage: React.FC<NewsPageProps> = ({ currentMarket = 'US' }) => {
                       </div>
                     )}
 
-                    {e.url && (
-                      <div>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      {e.url ? (
                         <a
                           href={e.url}
                           target="_blank"
@@ -371,6 +373,26 @@ export const NewsPage: React.FC<NewsPageProps> = ({ currentMarket = 'US' }) => {
                         >
                           View Official Disclosure Source <ExternalLink className="w-3 h-3" />
                         </a>
+                      ) : <span />}
+                      {e.id && (e.severity === 'RED' || e.severity === 'AMBER' || e.materiality === 'HIGH' || e.materiality === 'MEDIUM') && (
+                        <button
+                          onClick={() => setExpandedAiEventId(expandedAiEventId === e.id ? null : e.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-violet-950/60 hover:bg-violet-900/60 border border-violet-800/70 text-[11px] font-semibold text-violet-300 transition-colors"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          {expandedAiEventId === e.id ? 'Hide AI Analysis' : 'AI Event Analysis'}
+                        </button>
+                      )}
+                    </div>
+
+                    {expandedAiEventId === e.id && (
+                      <div className="mt-1">
+                        <AiResearchCard
+                          symbol={e.symbol}
+                          market={currentMarket}
+                          variant="news"
+                          newsEventId={e.id}
+                        />
                       </div>
                     )}
                   </div>

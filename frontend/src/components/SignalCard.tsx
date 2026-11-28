@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Copy, Check, ExternalLink, GitCommit, LockKeyhole, ShieldAlert, Sparkles, TrendingUp, BookOpen, X, AlertTriangle, Info } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { AiResearchCard } from './AiResearchCard';
 import { ResearchDesk } from './ResearchDesk';
 import { tradingViewChartUrl } from '../utils/tradingView';
 import { DecisionAudit, Signal, OpportunityDossier } from '../types';
@@ -641,6 +642,13 @@ export const SignalCard: React.FC<SignalCardProps> = ({
                     </div>
                   </div>
                 )}
+
+                {/* Full Multi-Agent AI Research Summary (Stock Detail View) */}
+                <AiResearchCard
+                  symbol={signal.symbol}
+                  market={signal.market}
+                  variant="full"
+                />
 
                 {/* Unverified Catalysts / Rumors if present */}
                 {dossier.evidence && dossier.evidence.unverified_catalysts && dossier.evidence.unverified_catalysts.length > 0 && (

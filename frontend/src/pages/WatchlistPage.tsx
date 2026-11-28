@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { AiResearchCard } from '../components/AiResearchCard';
 import { ChartModal } from '../components/ChartModal';
 import { FundamentalReport } from '../components/FundamentalReport';
 import { isTabVisible, isMarketOpenClient } from '../utils/polling';
@@ -282,6 +283,9 @@ function StockRow({
                   <span><strong className="text-slate-400">Note:</strong> {row.notes}</span>
                 </div>
               )}
+            </div>
+            <div className="mt-3">
+              <AiResearchCard symbol={row.symbol} market={market} variant="summary" />
             </div>
           </td>
         </tr>

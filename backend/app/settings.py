@@ -258,6 +258,25 @@ class AppSettings(BaseSettings):
     )
     finnhub_api_key: Optional[str] = Field(default=None, alias="FINNHUB_API_KEY")
 
+    # AI Research Agents (all default OFF — zero-cost enforcement)
+    # Enable only after verifying free-tier terms and quota.
+    # Security: keys are read from env only; never logged or committed.
+    gemini_api_key: Optional[str] = Field(default=None, alias="GEMINI_API_KEY")
+    nvidia_api_key: Optional[str] = Field(default=None, alias="NVIDIA_API_KEY")
+    ai_agents_enabled: bool = Field(default=False, alias="AI_AGENTS_ENABLED")
+    ai_news_agent_enabled: bool = Field(default=False, alias="AI_NEWS_AGENT_ENABLED")
+    ai_company_agent_enabled: bool = Field(default=False, alias="AI_COMPANY_AGENT_ENABLED")
+    ai_market_agent_enabled: bool = Field(default=False, alias="AI_MARKET_AGENT_ENABLED")
+    ai_technical_agent_enabled: bool = Field(default=False, alias="AI_TECHNICAL_AGENT_ENABLED")
+    ai_risk_agent_enabled: bool = Field(default=False, alias="AI_RISK_AGENT_ENABLED")
+    ai_decision_agent_enabled: bool = Field(default=False, alias="AI_DECISION_AGENT_ENABLED")
+    ai_gemini_enabled: bool = Field(default=False, alias="AI_GEMINI_ENABLED")
+    # NVIDIA: offline/dev evaluation ONLY — never serve live production requests
+    ai_nvidia_research_enabled: bool = Field(default=False, alias="AI_NVIDIA_RESEARCH_ENABLED")
+    ai_zero_cost_only: bool = Field(default=True, alias="AI_ZERO_COST_ONLY")
+    ai_max_daily_requests: int = Field(default=100, alias="AI_MAX_DAILY_REQUESTS")
+    ai_max_requests_per_minute: int = Field(default=10, alias="AI_MAX_REQUESTS_PER_MINUTE")
+
     # Strategy / Risk / Engine configs from YAML
     strategy_config: Dict[str, Any] = Field(default_factory=dict)
     news_rules: Dict[str, Any] = Field(default_factory=dict)

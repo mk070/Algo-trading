@@ -4,6 +4,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.api.routes_ai import router as ai_router
 from app.api.routes_backtest import router as backtest_router
 from app.api.routes_data import router as data_router
 from app.api.routes_lab import router as lab_router
@@ -211,6 +212,7 @@ app.include_router(universe_router, prefix="/api", tags=["Universe & Coverage"],
 app.include_router(paper_trading_router, prefix="/api", tags=["Paper Trading & Research"], dependencies=protected_api)
 app.include_router(lab_router, dependencies=protected_api)
 app.include_router(lab_paper_router, dependencies=protected_api)
+app.include_router(ai_router, prefix="/api", tags=["AI Research"], dependencies=protected_api)
 
 
 from pathlib import Path

@@ -502,4 +502,37 @@ export const apiClient = {
   async getProspectivePaperStrategy(strategyId: string) {
     return fetchJson(`${API_BASE}/paper-trading/prospective/strategy/${encodeURIComponent(strategyId)}`);
   },
+
+  // AI Research Agents (informational only — feature flags default OFF)
+  async getAiStatus() {
+    return fetchJson(`${API_BASE}/ai/status`);
+  },
+
+  async getAiNewsAnalysis(eventId: number) {
+    return fetchJson(`${API_BASE}/ai/news/${eventId}`);
+  },
+
+  async analyzeAiNews(eventId: number) {
+    return fetchJson(`${API_BASE}/ai/news/${eventId}/analyze`, { method: 'POST' });
+  },
+
+  async getAiResearch(symbol: string) {
+    return fetchJson(`${API_BASE}/ai/research/${encodeURIComponent(symbol)}`);
+  },
+
+  async getAiResearchFull(symbol: string) {
+    return fetchJson(`${API_BASE}/ai/research/${encodeURIComponent(symbol)}/full`);
+  },
+
+  async analyzeAiResearch(symbol: string, market: string = 'IN', newsEventId?: number) {
+    const params = new URLSearchParams({ market });
+    if (newsEventId) params.set('news_event_id', String(newsEventId));
+    return fetchJson(`${API_BASE}/ai/research/${encodeURIComponent(symbol)}/analyze?${params.toString()}`, {
+      method: 'POST',
+    });
+  },
+
+  async getAiResearchHistory(symbol: string, limit: number = 10) {
+    return fetchJson(`${API_BASE}/ai/research/${encodeURIComponent(symbol)}/history?limit=${limit}`);
+  },
 };
